@@ -24,10 +24,24 @@ export async function parseChangeOrder(
 
     // If there is an image, attach it for the Vision model
     if (imageUrl) {
-        userContent.push({
-            type: "image_url",
-            image_url: { url: imageUrl }
-        });
+        try {
+            // Resolve redirect (Twilio -> S3)
+            const response = await fetch(imageUrl, { method: 'HEAD', redirect: 'follow' });
+            const finalUrl = response.url;
+            console.log(`[AI] Resolved Image URL: ${finalUrl}`);
+
+            userContent.push({
+                type: "image_url",
+                image_url: { url: finalUrl }
+            });
+        } catch (error) {
+            console.error("[AI] Failed to resolve image URL:", error);
+            // Fallback to original URL if fetch fails
+            userContent.push({
+                type: "image_url",
+                image_url: { url: imageUrl }
+            });
+        }
     }
 
     // 2. Call Groq

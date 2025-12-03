@@ -35,3 +35,12 @@ export const changeOrders = pgTable('change_orders', {
 
     createdAt: timestamp('created_at').defaultNow(),
 });
+
+// 4. RATE CARDS
+export const rateCards = pgTable('rate_cards', {
+    id: serial('id').primaryKey(),
+    companyId: integer('company_id').references(() => companies.id),
+    positionName: text('position_name').notNull(),
+    hourlyRate: decimal('hourly_rate', { precision: 10, scale: 2 }).notNull(),
+    createdAt: timestamp('created_at').defaultNow(),
+});
