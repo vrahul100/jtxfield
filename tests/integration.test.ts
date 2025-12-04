@@ -83,9 +83,9 @@ describe('Integration Test', () => {
                 "ToZip": "",
                 "NumSegments": "1",
                 "MessageSid": "MM8ff0603ed4b66833c1fc12b019fd764a",
-                "AccountSid": "ACb4d2e407ffbe87b50e75ae7108b2d316",
+                "AccountSid": "ACmock_account_sid_12345",
                 "From": "+15102198037",
-                "MediaUrl0": "https://api.twilio.com/2010-04-01/Accounts/ACb4d2e407ffbe87b50e75ae7108b2d316/Messages/MM8ff0603ed4b66833c1fc12b019fd764a/Media/ME4537de9e37f073d58fbe93e173671a64",
+                "MediaUrl0": "https://api.twilio.com/2010-04-01/Accounts/ACmock_account_sid_12345/Messages/MM8ff0603ed4b66833c1fc12b019fd764a/Media/ME4537de9e37f073d58fbe93e173671a64",
                 "ApiVersion": "2010-04-01"
             })
         })
