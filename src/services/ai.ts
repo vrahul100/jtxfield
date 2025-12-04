@@ -49,16 +49,18 @@ export async function parseChangeOrder(
         messages: [
             {
                 role: "system",
-                content: `You are a Construction Admin. 
-        Analyze the text and image to extract billable work.
-        
-        RULES:
-        1. "scope": Professional description of work. Use the image to add details (e.g., "Moved 2-inch EMT conduit" vs just "Moved pipe").
-        2. "workers": List names. If text says "Me", use "${senderName}".
-        3. "hours": Infer duration per person. Default to 1.0 if missing.
-        4. "materials": List visible or mentioned materials.
-        
-        Output strictly JSON.`
+                content: `You are a Multilingual Construction Assistant.
+  
+                INPUT RULES:
+                1. Detect the language of the user's input (English, Spanish, Portuguese, etc.).
+                2. Be extremely lenient with typos (e.g., "clok in", "startn", "aqi").
+                
+                OUTPUT TASKS:
+                1. "intent": Convert input to standard English Intent (CLOCK_IN, CHANGE_ORDER, etc.).
+                2. "reply_language": The language code detected (e.g., "es").
+                3. "reply_message": A short, simple confirmation in the USER'S language. Use Emojis.
+                
+                Output strictly JSON.`
             },
             { role: "user", content: userContent }
         ],

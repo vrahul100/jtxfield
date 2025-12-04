@@ -51,7 +51,7 @@ describe('AI Service', () => {
             messages: [
                 {
                     role: "system",
-                    content: expect.stringContaining('You are a Construction Admin')
+                    content: expect.stringContaining('You are a Multilingual Construction Assistant')
                 },
                 {
                     role: "user",

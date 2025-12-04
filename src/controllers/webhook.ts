@@ -1,6 +1,7 @@
 import { Context } from 'hono'
 import { Sql } from 'postgres'
 import { parseChangeOrder } from '../services/ai.js'
+import { transcribeAudio } from '../services/transcribe.js'
 
 export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   let body: any
@@ -12,14 +13,37 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     body = await c.req.parseBody()
   }
   const fromPhone = body['From'] as string
-  const textBody = body['Body'] as string
-  const imageUrl = body['MediaUrl0'] as string | null
+  let textBody = body['Body'] as string || ""
+  const numMedia = parseInt(body['NumMedia'] as string || '0');
+
+  let imageUrlForAI: string | null = null;
+
+  if (numMedia > 0) {
+    for (let i = 0; i < numMedia; i++) {
+      const mediaUrl = body[`MediaUrl${i}`] as string;
+      const contentType = body[`MediaContentType${i}`] as string;
+
+      if (contentType) {
+        if (contentType.startsWith('audio/')) {
+          console.log(`🎤 Voice Note Detected [${i}]`);
+          const transcript = await transcribeAudio(mediaUrl, contentType);
+          if (transcript) {
+            textBody = `${textBody}\n[VOICE TRANSCRIPT]: ${transcript}`.trim();
+          }
+        } else if (contentType.startsWith('image/')) {
+          // For now, we only support one image for the AI vision model. 
+          // If multiple are sent, the last one will be used.
+          imageUrlForAI = mediaUrl;
+        }
+      }
+    }
+  }
 
   console.log(`[WEBHOOK] Method: ${c.req.method} | URL: ${c.req.url}`)
   console.log('[WEBHOOK] Full Body:', JSON.stringify(body, null, 2))
   console.log(`[SMS RECEIVED] From: ${fromPhone} | Body: ${textBody}`)
 
-  if (!fromPhone || !textBody) {
+  if (!fromPhone || (!textBody && !imageUrlForAI)) {
     console.log("❌ Missing From or Body")
     return c.text('Missing From or Body', 400)
   }
@@ -35,7 +59,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   console.log(`[USER AUTHENTICATED] ${user.full_name}`)
   // B. PROCESS (In prod, we would queue this. Locally, we await it.)
   console.log("🤖 Asking Groq...")
-  const aiResult = await parseChangeOrder(textBody, user.full_name, imageUrl || null)
+  const aiResult = await parseChangeOrder(textBody, user.full_name, imageUrlForAI)
 
   // C. CALCULATE REVENUE (Rate Card)
   const rates = await sql`SELECT default_hourly_rate FROM companies WHERE id = ${user.company_id}`

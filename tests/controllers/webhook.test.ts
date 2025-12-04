@@ -1,10 +1,16 @@
 import { describe, it, expect, vi } from 'vitest'
 import { handleTwilioWebhook } from '../../src/controllers/webhook'
 import * as aiService from '../../src/services/ai'
+import * as transcribeService from '../../src/services/transcribe'
 
 // Mock AI Service
 vi.mock('../../src/services/ai', () => ({
     parseChangeOrder: vi.fn()
+}))
+
+// Mock Transcribe Service
+vi.mock('../../src/services/transcribe', () => ({
+    transcribeAudio: vi.fn()
 }))
 
 describe('Webhook Controller', () => {
@@ -155,5 +161,121 @@ describe('Webhook Controller', () => {
         await handleTwilioWebhook(c, mockSql)
 
         expect(c.text).toHaveBeenCalledWith('Missing From or Body', 400)
+    })
+    it('should handle audio transcription', async () => {
+        const mockBody = {
+            "From": "+15102198037",
+            "Body": "",
+            "NumMedia": "1",
+            "MediaUrl0": "http://example.com/audio.mp3",
+            "MediaContentType0": "audio/mpeg"
+        }
+
+        const mockUser = {
+            id: 1,
+            company_id: 10,
+            phone_number: '+15102198037',
+            full_name: 'Steve'
+        }
+
+        const mockRate = { default_hourly_rate: '100.00' }
+        const mockTicket = { id: 124 }
+
+        const c = {
+            req: {
+                method: 'POST',
+                url: 'http://localhost/webhook',
+                header: vi.fn().mockReturnValue('application/json'),
+                json: vi.fn().mockResolvedValue(mockBody),
+                parseBody: vi.fn()
+            },
+            text: vi.fn()
+        } as any
+
+        const mockSql = ((strings: any) => {
+            if (strings[0].includes('SELECT * FROM users')) return [mockUser]
+            if (strings[0].includes('SELECT default_hourly_rate')) return [mockRate]
+            if (strings[0].includes('INSERT INTO change_orders')) return [mockTicket]
+            return []
+        }) as any
+
+        vi.mocked(transcribeService.transcribeAudio).mockResolvedValue('Transcribed text')
+        vi.mocked(aiService.parseChangeOrder).mockResolvedValue({
+            scope: 'Transcribed scope',
+            workers: ['Steve'],
+            hours: 1,
+            materials: []
+        })
+
+        await handleTwilioWebhook(c, mockSql)
+
+        expect(transcribeService.transcribeAudio).toHaveBeenCalledWith(
+            mockBody.MediaUrl0,
+            mockBody.MediaContentType0
+        )
+        expect(aiService.parseChangeOrder).toHaveBeenCalledWith(
+            expect.stringContaining('Transcribed text'),
+            mockUser.full_name,
+            null
+        )
+    })
+    it('should handle both audio and image in the same request', async () => {
+        const mockBody = {
+            "From": "+15102198037",
+            "Body": "Check this out",
+            "NumMedia": "2",
+            "MediaUrl0": "http://example.com/audio.mp3",
+            "MediaContentType0": "audio/mpeg",
+            "MediaUrl1": "http://example.com/image.jpg",
+            "MediaContentType1": "image/jpeg"
+        }
+
+        const mockUser = {
+            id: 1,
+            company_id: 10,
+            phone_number: '+15102198037',
+            full_name: 'Steve'
+        }
+
+        const mockRate = { default_hourly_rate: '100.00' }
+        const mockTicket = { id: 125 }
+
+        const c = {
+            req: {
+                method: 'POST',
+                url: 'http://localhost/webhook',
+                header: vi.fn().mockReturnValue('application/json'),
+                json: vi.fn().mockResolvedValue(mockBody),
+                parseBody: vi.fn()
+            },
+            text: vi.fn()
+        } as any
+
+        const mockSql = ((strings: any) => {
+            if (strings[0].includes('SELECT * FROM users')) return [mockUser]
+            if (strings[0].includes('SELECT default_hourly_rate')) return [mockRate]
+            if (strings[0].includes('INSERT INTO change_orders')) return [mockTicket]
+            return []
+        }) as any
+
+        vi.mocked(transcribeService.transcribeAudio).mockResolvedValue('Audio content')
+        vi.mocked(aiService.parseChangeOrder).mockResolvedValue({
+            scope: 'Mixed media scope',
+            workers: ['Steve'],
+            hours: 1,
+            materials: []
+        })
+
+        await handleTwilioWebhook(c, mockSql)
+
+        expect(transcribeService.transcribeAudio).toHaveBeenCalledWith(
+            mockBody.MediaUrl0,
+            mockBody.MediaContentType0
+        )
+        expect(aiService.parseChangeOrder).toHaveBeenCalledWith(
+            expect.stringContaining('Audio content'),
+            mockUser.full_name,
+            mockBody.MediaUrl1
+        )
     })
 })

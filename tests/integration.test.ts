@@ -1,15 +1,27 @@
 import { describe, it, expect, vi } from 'vitest'
 import { createApp } from '../src/app'
 
-// Mock AI Service globally for integration test
-vi.mock('../src/services/ai', () => ({
-    parseChangeOrder: vi.fn().mockResolvedValue({
-        scope: 'Integration Test Scope',
-        workers: ['Tester'],
-        hours: 1,
-        materials: []
-    })
-}))
+// Mock Groq SDK
+const { mockCreate } = vi.hoisted(() => {
+    return { mockCreate: vi.fn() }
+})
+
+vi.mock('groq-sdk', () => {
+    return {
+        default: class {
+            chat = {
+                completions: {
+                    create: mockCreate
+                }
+            }
+        }
+    }
+})
+
+// Mock global fetch for image resolution
+global.fetch = vi.fn().mockResolvedValue({
+    url: 'https://s3.amazonaws.com/final-image.jpg'
+})
 
 describe('Integration Test', () => {
     it('should process webhook end-to-end', async () => {
@@ -31,6 +43,20 @@ describe('Integration Test', () => {
             }
             return []
         }) as any
+
+        // Setup Groq Mock Response
+        mockCreate.mockResolvedValue({
+            choices: [{
+                message: {
+                    content: JSON.stringify({
+                        scope: 'Integration Test Scope',
+                        workers: ['Tester'],
+                        hours: 1,
+                        materials: []
+                    })
+                }
+            }]
+        })
 
         const app = createApp(mockSql)
 
@@ -67,5 +93,6 @@ describe('Integration Test', () => {
         expect(res.status).toBe(200)
         const text = await res.text()
         expect(text).toContain('Ticket #999 logged')
+        expect(mockCreate).toHaveBeenCalled()
     })
 })
