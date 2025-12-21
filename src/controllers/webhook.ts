@@ -1,8 +1,25 @@
 import { Context } from 'hono'
 import { Sql } from 'postgres'
-import { parseChangeOrder } from '../services/ai.js'
+import { randomUUID } from 'crypto'
+import { getQueue } from '../queue/index.js'
+import { getMediaValidator } from '../validators/MediaValidator.js'
 import { transcribeAudio } from '../services/transcribe.js'
+import { copyTwilioMedia } from '../services/mediaStorage.js'
+import { normalizeTwilioPayload } from '../utils/normalize.js'
 
+const queue = getQueue();
+const validator = getMediaValidator();
+
+interface TwilioMedia {
+  url: string;
+  contentType: string;
+}
+
+/**
+ * Handle incoming Twilio webhook.
+ * Works for both SMS and WhatsApp messages.
+ * Does quick validation, copies media to S3, transcribes audio, then queues for async processing.
+ */
 export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   let body: any
   const contentType = c.req.header('Content-Type') || ''
@@ -12,69 +29,79 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   } else {
     body = await c.req.parseBody()
   }
-  const fromPhone = body['From'] as string
-  let textBody = body['Body'] as string || ""
-  const numMedia = parseInt(body['NumMedia'] as string || '0');
 
-  let imageUrlForAI: string | null = null;
+  // 1. NORMALIZE THE MESSAGE (works for SMS and WhatsApp)
+  const normalized = normalizeTwilioPayload(body);
+  console.log(`[WEBHOOK] ${normalized.source.toUpperCase()} from ${normalized.sender}`);
 
-  if (numMedia > 0) {
-    for (let i = 0; i < numMedia; i++) {
-      const mediaUrl = body[`MediaUrl${i}`] as string;
-      const contentType = body[`MediaContentType${i}`] as string;
+  // 2. QUICK VALIDATION (fast response to Twilio)
+  const quickCheck = validator.quickValidate(body);
+  if (!quickCheck.valid) {
+    console.log(`❌ Quick validation failed: ${quickCheck.error}`)
+    return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
+  }
 
-      if (contentType) {
-        if (contentType.startsWith('audio/')) {
-          console.log(`🎤 Voice Note Detected [${i}]`);
-          const transcript = await transcribeAudio(mediaUrl, contentType);
-          if (transcript) {
-            textBody = `${textBody}\n[VOICE TRANSCRIPT]: ${transcript}`.trim();
-          }
-        } else if (contentType.startsWith('image/')) {
-          // For now, we only support one image for the AI vision model. 
-          // If multiple are sent, the last one will be used.
-          imageUrlForAI = mediaUrl;
-        }
-      }
+  // 3. COLLECT ALL MEDIA (images and audio separately)
+  const twilioImages: TwilioMedia[] = [];
+  const twilioAudio: TwilioMedia[] = [];
+
+  for (const media of normalized.media) {
+    if (media.contentType.startsWith('audio/')) {
+      twilioAudio.push(media);
+    } else if (media.contentType.startsWith('image/')) {
+      twilioImages.push(media);
     }
   }
 
-  console.log(`[WEBHOOK] Method: ${c.req.method} | URL: ${c.req.url}`)
-  console.log('[WEBHOOK] Full Body:', JSON.stringify(body, null, 2))
-  console.log(`[SMS RECEIVED] From: ${fromPhone} | Body: ${textBody}`)
-
-  if (!fromPhone || (!textBody && !imageUrlForAI)) {
-    console.log("❌ Missing From or Body")
-    return c.text('Missing From or Body', 400)
-  }
-
-  // A. AUTHENTICATE
-  const users = await sql`SELECT * FROM users WHERE phone_number = ${fromPhone}`
+  // 4. AUTHENTICATE USER
+  const users = await sql`SELECT * FROM users WHERE phone_number = ${normalized.sender}`
   if (users.length === 0) {
     console.log("❌ Unknown User")
-    return c.text('User not recognized.')
+    // Return empty TwiML to avoid Twilio retry
+    return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
   }
   const user = users[0]
-
   console.log(`[USER AUTHENTICATED] ${user.full_name}`)
-  // B. PROCESS (In prod, we would queue this. Locally, we await it.)
-  console.log("🤖 Asking Groq...")
-  const aiResult = await parseChangeOrder(textBody, user.full_name, imageUrlForAI)
 
-  // C. CALCULATE REVENUE (Rate Card)
-  const rates = await sql`SELECT default_hourly_rate FROM companies WHERE id = ${user.company_id}`
-  const rate = parseFloat(rates[0].default_hourly_rate)
-  const revenue = aiResult.hours * aiResult.workers.length * rate
+  // 5. GENERATE MESSAGE ID (needed for S3 paths)
+  const messageId = randomUUID();
 
-  // D. SAVE TO DB
-  const ticket = await sql`
-    INSERT INTO change_orders (company_id, user_id, raw_text, scope_description, estimated_revenue, status)
-    VALUES (${user.company_id}, ${user.id}, ${textBody}, ${aiResult.scope}, ${revenue}, 'PROCESSED')
-    RETURNING id
-  `
+  // 6. COPY MEDIA TO S3 (Twilio URLs expire)
+  console.log(`📦 Copying ${twilioImages.length} images and ${twilioAudio.length} audio files to S3...`);
+  const mediaResult = await copyTwilioMedia(twilioImages, twilioAudio, messageId);
 
-  console.log(`✅ Ticket #${ticket[0].id} Created | Revenue: $${revenue}`)
+  // 7. TRANSCRIBE AUDIO (if present)
+  let textBody = normalized.text;
+  if (mediaResult.audioUrl) {
+    console.log(`🎤 Transcribing audio...`);
+    const transcript = await transcribeAudio(mediaResult.audioUrl, 'audio/mpeg');
+    if (transcript) {
+      textBody = `${textBody}\n[VOICE TRANSCRIPT]: ${transcript}`.trim();
+    }
+  }
 
-  // E. REPLY TO FOREMAN
-  return c.text(`Ticket #${ticket[0].id} logged. Value: $${revenue}. Thanks ${user.full_name}!`)
+  // 8. ENQUEUE FOR ASYNC PROCESSING
+  const domain = user.domain || 'construction'  // Default to construction
+
+  try {
+    await queue.enqueue({
+      userId: user.id,
+      companyId: user.company_id,
+      domain,
+      source: normalized.source,
+      fromPhone: normalized.sender,
+      textBody,
+      imageUrl: mediaResult.imageUrl,
+      audioUrl: mediaResult.audioUrl,
+    })
+
+    console.log(`📥 Queued message ${messageId} [${normalized.source}] for ${domain} processing`)
+
+    // 9. RETURN TWIML RESPONSE
+    // Use <Message> tag to send immediate acknowledgment
+    return c.text('<Response><Message>📥 Got it! Processing your request...</Message></Response>', 200, { 'Content-Type': 'text/xml' });
+  } catch (error) {
+    console.error('❌ Failed to queue message:', error)
+    return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
+  }
 }

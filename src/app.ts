@@ -6,7 +6,7 @@ export const createApp = (sql: Sql) => {
     const app = new Hono()
 
     // 1. TWILIO WEBHOOK
-    app.post('/twilio-webhook', (c) => handleTwilioWebhook(c, sql))
+    app.post('/twhook', (c) => handleTwilioWebhook(c, sql))
 
     return app
 }

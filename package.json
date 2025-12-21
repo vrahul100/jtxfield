@@ -12,6 +12,7 @@
     "db:seed": "tsx src/data/seed.ts"
   },
   "devDependencies": {
+    "@types/aws-lambda": "^8.10.159",
     "@types/node": "^24.10.1",
     "drizzle-kit": "^0.31.7",
     "esbuild": "^0.21.4",
@@ -22,6 +23,7 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.943.0",
     "@aws-sdk/client-ses": "^3.943.0",
+    "@aws-sdk/client-sqs": "^3.956.0",
     "@hono/node-server": "^1.19.6",
     "dotenv": "^17.2.3",
     "drizzle-orm": "^0.44.7",

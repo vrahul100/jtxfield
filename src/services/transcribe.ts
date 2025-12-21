@@ -5,7 +5,14 @@ import os from 'node:os';
 import { pipeline } from 'node:stream/promises';
 import { createWriteStream } from 'node:fs';
 
-const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+// Lazy-initialize to ensure dotenv has loaded
+let groq: Groq | null = null;
+function getGroq(): Groq {
+    if (!groq) {
+        groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    }
+    return groq;
+}
 
 export async function transcribeAudio(audioUrl: string, contentType: string): Promise<string> {
     const tempFilePath = path.join(os.tmpdir(), `upload-${Date.now()}.mp3`);
@@ -26,7 +33,7 @@ export async function transcribeAudio(audioUrl: string, contentType: string): Pr
         // 2. Send to Groq Whisper
         console.log(`📤 Sending to Groq Whisper...`);
 
-        const transcription = await groq.audio.transcriptions.create({
+        const transcription = await getGroq().audio.transcriptions.create({
             file: fs.createReadStream(tempFilePath),
             model: "whisper-large-v3", // The best model for multi-language support
             response_format: "json",
