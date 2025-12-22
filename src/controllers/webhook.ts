@@ -54,14 +54,14 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   }
 
   // 4. AUTHENTICATE USER
-  const users = await sql`SELECT * FROM users WHERE phone_number = ${normalized.sender}`
-  if (users.length === 0) {
-    console.log("❌ Unknown User")
+  const members = await sql`SELECT * FROM members WHERE phone_number = ${normalized.sender}`
+  if (members.length === 0) {
+    console.log("❌ Unknown Member")
     // Return empty TwiML to avoid Twilio retry
     return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
   }
-  const user = users[0]
-  console.log(`[USER AUTHENTICATED] ${user.full_name}`)
+  const member = members[0]
+  console.log(`[MEMBER AUTHENTICATED] ${member.full_name}`)
 
   // 5. GENERATE MESSAGE ID (needed for S3 paths)
   const messageId = randomUUID();
@@ -81,12 +81,12 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   }
 
   // 8. ENQUEUE FOR ASYNC PROCESSING
-  const domain = user.domain || 'construction'  // Default to construction
+  const domain = member.domain || 'construction'  // Default to construction
 
   try {
     await queue.enqueue({
-      userId: user.id,
-      companyId: user.company_id,
+      userId: member.id,
+      companyId: member.company_id,
       domain,
       source: normalized.source,
       fromPhone: normalized.sender,

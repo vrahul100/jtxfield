@@ -27,7 +27,7 @@ describe('Integration Test', () => {
     it('should process webhook end-to-end', async () => {
         // Mock SQL
         const mockSql = ((strings: any) => {
-            if (strings[0].includes('SELECT * FROM users')) {
+            if (strings[0].includes('SELECT * FROM members')) {
                 return [{
                     id: 1,
                     company_id: 10,
@@ -38,7 +38,7 @@ describe('Integration Test', () => {
             if (strings[0].includes('SELECT default_hourly_rate')) {
                 return [{ default_hourly_rate: '50.00' }]
             }
-            if (strings[0].includes('INSERT INTO change_orders')) {
+            if (strings[0].includes('INSERT INTO txns')) {
                 return [{ id: 999 }]
             }
             return []

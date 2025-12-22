@@ -83,7 +83,7 @@ export class QueueWorker {
             // 3. Calculate revenue (for construction domain)
             let revenue = 0;
             if (message.domain === 'construction' && result.aiResult) {
-                const rates = await this.sql`SELECT default_hourly_rate FROM companies WHERE id = ${message.companyId}`;
+                const rates = await this.sql`SELECT default_hourly_rate FROM nodes WHERE id = ${message.companyId}`;
                 if (rates.length > 0) {
                     const rate = parseFloat(rates[0].default_hourly_rate);
                     const workers = result.aiResult.workers || [];
@@ -94,7 +94,7 @@ export class QueueWorker {
 
             // 4. Save to database
             const ticket = await this.sql`
-                INSERT INTO change_orders (company_id, user_id, raw_text, scope_description, estimated_revenue, status)
+                INSERT INTO txns (company_id, user_id, raw_text, scope_description, estimated_revenue, status)
                 VALUES (${message.companyId}, ${message.userId}, ${message.textBody}, ${result.aiResult?.scope || ''}, ${revenue}, 'PROCESSED')
                 RETURNING id
             `;

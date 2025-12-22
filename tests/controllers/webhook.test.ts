@@ -77,13 +77,13 @@ describe('Webhook Controller', () => {
         let callCount = 0
         const mockSql = ((strings: any, ...values: any[]) => {
             callCount++
-            if (strings[0].includes('SELECT * FROM users')) {
+            if (strings[0].includes('SELECT * FROM members')) {
                 return [mockUser]
             }
             if (strings[0].includes('SELECT default_hourly_rate')) {
                 return [mockRate]
             }
-            if (strings[0].includes('INSERT INTO change_orders')) {
+            if (strings[0].includes('INSERT INTO txns')) {
                 return [mockTicket]
             }
             return []
@@ -130,7 +130,7 @@ describe('Webhook Controller', () => {
         } as any
 
         const mockSql = ((strings: any) => {
-            if (strings[0].includes('SELECT * FROM users')) {
+            if (strings[0].includes('SELECT * FROM members')) {
                 return [] // No user found
             }
             return []
@@ -193,9 +193,9 @@ describe('Webhook Controller', () => {
         } as any
 
         const mockSql = ((strings: any) => {
-            if (strings[0].includes('SELECT * FROM users')) return [mockUser]
+            if (strings[0].includes('SELECT * FROM members')) return [mockUser]
             if (strings[0].includes('SELECT default_hourly_rate')) return [mockRate]
-            if (strings[0].includes('INSERT INTO change_orders')) return [mockTicket]
+            if (strings[0].includes('INSERT INTO txns')) return [mockTicket]
             return []
         }) as any
 
@@ -252,9 +252,9 @@ describe('Webhook Controller', () => {
         } as any
 
         const mockSql = ((strings: any) => {
-            if (strings[0].includes('SELECT * FROM users')) return [mockUser]
+            if (strings[0].includes('SELECT * FROM members')) return [mockUser]
             if (strings[0].includes('SELECT default_hourly_rate')) return [mockRate]
-            if (strings[0].includes('INSERT INTO change_orders')) return [mockTicket]
+            if (strings[0].includes('INSERT INTO txns')) return [mockTicket]
             return []
         }) as any
 

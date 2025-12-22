@@ -1,7 +1,7 @@
 // Run this with: npx tsx seed.ts
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { companies, users } from '../db/schema';
+import { nodes, members } from '../db/schema';
 import dotenv from 'dotenv';
 
 dotenv.config();
@@ -12,15 +12,15 @@ const db = drizzle(client);
 async function main() {
     console.log('🌱 Seeding...');
 
-    // 1. Create Company
-    const newCompany = await db.insert(companies).values({
+    // 1. Create Node (Company)
+    const newNode = await db.insert(nodes).values({
         name: 'Acme Electric',
         defaultHourlyRate: '85.00',
     }).returning();
 
-    // 2. Create User (REPLACE WITH YOUR PHONE NUMBER)
-    await db.insert(users).values({
-        companyId: newCompany[0].id,
+    // 2. Create Member (REPLACE WITH YOUR PHONE NUMBER)
+    await db.insert(members).values({
+        companyId: newNode[0].id,
         phoneNumber: '+15551234567',
         fullName: 'Mike the Foreman',
     });
