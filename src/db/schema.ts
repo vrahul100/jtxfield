@@ -73,8 +73,8 @@ export const txns = pgTable('txns', {
     userId: integer('user_id').references(() => members.id),
     projectId: integer('project_id').references(() => projects.id),
 
-    rawText: text('raw_text'),
-    imageUrl: text('image_url'),
+    job: text('job'),                    // AI-inferred work description from bucket
+    evidence: text('evidence'),          // JSON array of media URLs (images + audio)
 
     scopeDescription: text('scope_description'),
     estimatedRevenue: decimal('estimated_revenue', { precision: 10, scale: 2 }),

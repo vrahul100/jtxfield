@@ -142,19 +142,23 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
       await updateLastConfirmedProject(sql, member.id, projectId);
     }
 
-    // Queue for processing
-    await queueBucketForProcessing(bucket);
+    // TODO: Re-enable when ready for txn creation
+    // await queueBucketForProcessing(bucket);
 
-    // Send confirmation with project correction option
+    // Send confirmation with summary and project correction option
     const projectName = lastProject?.name || 'your current project';
+    const summaryLine = validation.summary ? `So you: "${validation.summary}"\n\n` : '';
     const confirmationMsg = lastProject
-      ? `📥 Got it! Logged to: ${projectName}\n\nType N within 5 min if wrong project.`
-      : `📥 Got it! Processing your message...`;
+      ? `${summaryLine}✅ Logged to: ${projectName}\n\nType N within 5 min if wrong project.`
+      : `${summaryLine}✅ Bucket closed! Ready for processing.`;
 
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   } else {
-    // Bucket incomplete - keep open, maybe send acknowledgment
-    return c.text('<Response><Message>📥 Received! Send more details or media if needed.</Message></Response>', 200, { 'Content-Type': 'text/xml' });
+    // Bucket incomplete - show helpful questions to guide user
+    const responseMsg = validation.questions.length > 0
+      ? validation.questions.join('\n\n')
+      : `📥 Received! Send more details to complete this.`;
+    return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 }
 

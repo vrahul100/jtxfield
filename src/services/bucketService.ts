@@ -96,14 +96,30 @@ export async function findOpenBucket(
     memberId: number,
     projectId: number | null
 ): Promise<Bucket | null> {
-    const buckets = await sql`
-        SELECT * FROM buckets 
-        WHERE member_id = ${memberId}
-          AND status = 'open'
-          AND (project_id = ${projectId} OR (project_id IS NULL AND ${projectId} IS NULL))
-        ORDER BY created_at DESC
-        LIMIT 1
-    `;
+    let buckets;
+
+    if (projectId === null) {
+        // Find open bucket with no project assigned
+        buckets = await sql`
+            SELECT * FROM buckets 
+            WHERE member_id = ${memberId}
+              AND status = 'open'
+              AND project_id IS NULL
+            ORDER BY created_at DESC
+            LIMIT 1
+        `;
+    } else {
+        // Find open bucket with specific project
+        buckets = await sql`
+            SELECT * FROM buckets 
+            WHERE member_id = ${memberId}
+              AND status = 'open'
+              AND project_id = ${projectId}
+            ORDER BY created_at DESC
+            LIMIT 1
+        `;
+    }
+
     return buckets.length > 0 ? buckets[0] as Bucket : null;
 }
 
@@ -192,6 +208,7 @@ export async function appendToBucket(
 export interface ValidationResult {
     isComplete: boolean;
     errors: string[];
+    questions: string[];  // Conversational prompts to help user
     summary: string;
 }
 
@@ -227,14 +244,27 @@ export async function validateBucket(
     `;
 
     const errors: string[] = [];
+    const questions: string[] = [];
+
+    // Build conversational questions based on what's missing
+    const hasText = fullText.trim().length > 0;
+    const hasImages = images.length > 0;
 
     // Check clarity
     if (extraction.clarityScore < 0.6) {
+        if (!hasText && hasImages) {
+            questions.push('📸 Got the photo! What work did you do?');
+        } else if (hasText && !hasImages) {
+            questions.push('📝 Can you send a photo of the completed work?');
+        } else {
+            questions.push('🤔 What specific work was done? (e.g., "Fixed wiring on floor 3")');
+        }
         errors.push('Message is unclear. Please provide more details about the work done.');
     }
 
     // Check if we have actionable content
     if (extraction.intent === 'unknown') {
+        questions.push('What did you do? (e.g., fixed, replaced, installed, inspected)');
         errors.push('Could not determine what action you want to take.');
     }
 
@@ -251,6 +281,7 @@ export async function validateBucket(
     return {
         isComplete,
         errors,
+        questions,
         summary: extraction.summary,
     };
 }
