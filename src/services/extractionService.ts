@@ -1,4 +1,5 @@
 import Groq from 'groq-sdk';
+import { getSchemaForDomain, FIELD_QUESTIONS } from '../schemas/domainSchemas.js';
 
 // Lazy-initialize to ensure dotenv has loaded
 let groq: Groq | null = null;
@@ -9,149 +10,208 @@ function getGroq(): Groq {
     return groq;
 }
 
+/**
+ * Resolve image URL by following redirects
+ * Twilio URLs return 307 redirects which Groq vision API doesn't follow
+ */
+async function resolveImageUrl(url: string): Promise<string> {
+    try {
+        const response = await fetch(url, {
+            method: 'HEAD',
+            redirect: 'manual' // Don't auto-follow, we'll extract Location
+        });
+
+        // If 307 or 3xx redirect, get Location header
+        if (response.status >= 300 && response.status < 400) {
+            const location = response.headers.get('location');
+            if (location) {
+                console.log(`[RESOLVE] Following redirect: ${url} -> ${location}`);
+                return location;
+            }
+        }
+
+        // No redirect, return original
+        return url;
+    } catch (error) {
+        console.error(`[RESOLVE] Error resolving URL, using original:`, error);
+        return url;
+    }
+}
+
 export interface ExtractionResult {
     domain: 'construction' | 'recovery' | string;
     intent: 'log' | 'recovery' | 'status' | 'unknown';
-    projectName: string | null;        // extracted project name
-    isProjectClear: boolean;           // confidence that we know which project
-    clarityScore: number;              // 0-1 semantic clarity
-    summary: string;                   // brief summary of the message
-    suggestedAction: string;           // what should happen next
+    projectName: string | null;
+    isProjectClear: boolean;
+    clarityScore: number;
+    summary: string;
+
+    // Consistency checking
+    isConsistent: boolean;               // Are text, audio, and images aligned?
+    inconsistencyReason: string | null;  // Why they don't match
+
+    // Domain-specific fields (construction)
+    workType?: string;
+    hoursWorked?: number;
+    workersCount?: number;
+    materialsUsed?: string[];
+    location?: string;
+
+    // Domain-specific fields (recovery)
+    damageType?: string;
+    affectedArea?: number;
+    urgency?: 'low' | 'medium' | 'high';
+    recoveryAction?: 'repair' | 'replace' | 'inspect' | 'emergency';
+    damageDescription?: string;
 }
 
-const EXTRACTION_PROMPT = `You are an AI assistant that extracts structured information from work-related messages.
+const CONSTRUCTION_PROMPT = `You are an AI assistant extracting construction work information.
 
-Analyze the message and extract:
-1. intent: What is the user trying to do?
-   - "log" = recording work done, time, materials, progress
-   - "recovery" = reporting damage, requesting insurance/recovery action
-   - "status" = asking about status of something
-   - "unknown" = unclear intent
+Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
+1. intent: "log" (recording work), "recovery" (damage), "status" (asking), or "unknown"
+2. projectName: The project name if mentioned, otherwise null
+3. isProjectClear: true if you're confident which project
+4. clarityScore: 0.0 to 1.0 rating of how clear the message is
+5. summary: Brief 1-line summary
+6. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "general"
+7. hoursWorked: Number of hours spent (extract from text/voice)
+8. workersCount: Number of workers (default 1)
+9. materialsUsed: Array of materials used (e.g., ["wire", "outlets"])
+10. location: Where the work was done (e.g., "floor 3", "unit 5B")
 
-2. projectName: The project/job this is about (e.g., "Acme Tower", "123 Main St renovation")
-   - Extract the project name if clearly mentioned
-   - Set to null if not mentioned or unclear
+CRITICAL CONSISTENCY CHECK:
+11. isConsistent: MUST be false if:
+    - Text says one work type (e.g., "plumbing") but image shows different work (e.g., electrical wiring, tools, materials)
+    - Voice transcript contradicts what's visible in the image
+    - Any clear mismatch between what they SAY and what the IMAGE shows
+12. inconsistencyReason: If isConsistent=false, write a clear question like:
+    "The image shows electrical wiring work, but you mentioned plumbing. Which is correct?"
+    
+IMPORTANT: If you see an image, ALWAYS analyze it carefully. Default isConsistent to FALSE if there's any doubt about image/text matching.
 
-3. isProjectClear: true if you're confident which project this is about, false if ambiguous
+Always try to extract workType and hoursWorked if the message is about logging work.
 
-4. clarityScore: 0.0 to 1.0 rating of how semantically clear and actionable the message is
+Return JSON only.`;
 
-5. summary: Brief 1-line summary of the message content
+const RECOVERY_PROMPT = `You are an AI assistant extracting recovery/damage information.
 
-6. suggestedAction: What should happen next ("process", "ask_project", "ask_clarification")
+Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
+1. intent: "log" | "recovery" | "status" | "unknown"
+2. projectName: The project name if mentioned, otherwise null
+3. isProjectClear: true if you're confident which project
+4. clarityScore: 0.0 to 1.0 rating of how clear the message is
+5. summary: Brief 1-line summary
+6. damageType: Description of damage (e.g., "water damage", "structural crack")
+7. affectedArea: Size in square feet
+8. urgency: "low" | "medium" | "high"
+9. recoveryAction: "repair" | "replace" | "inspect" | "emergency"
+10. damageDescription: Detailed description if provided
 
-Return JSON only. Example:
-{
-  "domain": "construction",
-  "intent": "log",
-  "projectName": "Acme Tower",
-  "isProjectClear": true,
-  "clarityScore": 0.9,
-  "summary": "Completed electrical wiring on floor 3",
-  "suggestedAction": "process"
-}`;
+CRITICAL CONSISTENCY CHECK:
+11. isConsistent: true if text, voice, and images all describe the same damage/issue
+12. inconsistencyReason: If isConsistent=false, explain the mismatch
+
+Always try to extract damageType, affectedArea, and urgency.
+
+Return JSON only.`;
 
 /**
  * Extract structured information from a message using AI
+ * Checks consistency across text, audio, and images
  */
 export async function extractMessageInfo(
     text: string,
-    memberDomain: string = 'construction',
-    imageUrl?: string | null
+    transcripts: string[],
+    images: string[],
+    domain: string
 ): Promise<ExtractionResult> {
-    const userContent: any[] = [
-        { type: 'text', text: `Message: "${text}"` }
-    ];
-
-    if (imageUrl) {
-        try {
-            const response = await fetch(imageUrl, { method: 'HEAD', redirect: 'follow' });
-            const finalUrl = response.url;
-            userContent.push({
-                type: 'image_url',
-                image_url: { url: finalUrl }
-            });
-        } catch (error) {
-            console.error('[Extraction] Failed to resolve image URL:', error);
-        }
-    }
+    const prompt = domain === 'recovery' ? RECOVERY_PROMPT : CONSTRUCTION_PROMPT;
 
     try {
+        // Build user message content
+        const contentParts: any[] = [];
+
+        // Add text
+        let textContent = text;
+        if (transcripts.length > 0) {
+            textContent += `\n\n[VOICE TRANSCRIPTS]:\n${transcripts.join('\n')}`;
+        }
+        contentParts.push({ type: 'text', text: textContent });
+
+        // Add images for vision analysis
+        // Resolve redirects first since Groq vision doesn't follow 307s from Twilio
+        for (const imageUrl of images.slice(0, 3)) { // Limit to 3 images
+            try {
+                // Follow redirect to get final URL
+                const finalUrl = await resolveImageUrl(imageUrl);
+                contentParts.push({
+                    type: 'image_url',
+                    image_url: { url: finalUrl }
+                });
+            } catch (error) {
+                console.error(`[EXTRACTION] Failed to resolve image URL: ${imageUrl}`, error);
+            }
+        }
+
+        const messages: any[] = [
+            { role: 'system', content: prompt },
+            { role: 'user', content: contentParts },
+        ];
+
+        // Use vision model if images provided
+        const model = images.length > 0
+            ? 'meta-llama/llama-4-scout-17b-16e-instruct'
+            : 'llama-3.3-70b-versatile';
+
+        console.log(`[EXTRACTION] Using model: ${model} (${images.length} images)`);
+
         const completion = await getGroq().chat.completions.create({
-            messages: [
-                { role: 'system', content: EXTRACTION_PROMPT },
-                { role: 'user', content: userContent }
-            ],
-            model: 'meta-llama/llama-4-scout-17b-16e-instruct',
-            temperature: 0.1,
-            response_format: { type: 'json_object' }
+            model,
+            messages,
+            temperature: 0.3,
+            response_format: { type: 'json_object' },
         });
 
-        const content = completion.choices[0]?.message?.content || '{}';
-        const result = JSON.parse(content) as Partial<ExtractionResult>;
+        const rawResponse = completion.choices[0]?.message?.content || '{}';
+        const extracted = JSON.parse(rawResponse);
 
         return {
-            domain: result.domain || memberDomain,
-            intent: result.intent || 'unknown',
-            projectName: result.projectName || null,
-            isProjectClear: result.isProjectClear ?? false,
-            clarityScore: result.clarityScore ?? 0.5,
-            summary: result.summary || text.slice(0, 100),
-            suggestedAction: result.suggestedAction || 'ask_clarification',
+            domain: extracted.domain || domain,
+            intent: extracted.intent || 'unknown',
+            projectName: extracted.projectName || null,
+            isProjectClear: extracted.isProjectClear || false,
+            clarityScore: extracted.clarityScore || 0.5,
+            summary: extracted.summary || text.slice(0, 100),
+
+            // Consistency
+            isConsistent: extracted.isConsistent !== false, // default true
+            inconsistencyReason: extracted.inconsistencyReason || null,
+
+            // Construction fields
+            workType: extracted.workType,
+            hoursWorked: extracted.hoursWorked,
+            workersCount: extracted.workersCount,
+            materialsUsed: extracted.materialsUsed,
+            location: extracted.location,
+
+            // Recovery fields
+            damageType: extracted.damageType,
+            affectedArea: extracted.affectedArea,
+            urgency: extracted.urgency,
+            recoveryAction: extracted.recoveryAction,
+            damageDescription: extracted.damageDescription,
         };
     } catch (error) {
-        console.error('[Extraction] AI call failed:', error);
+        console.error('[extractMessageInfo] Error:', error);
         return {
-            domain: memberDomain,
+            domain,
             intent: 'unknown',
             projectName: null,
             isProjectClear: false,
-            clarityScore: 0,
+            clarityScore: 0.3,
             summary: text.slice(0, 100),
-            suggestedAction: 'ask_clarification',
+            isConsistent: true,
+            inconsistencyReason: null,
         };
     }
-}
-
-/**
- * Find matching projects based on extracted name
- */
-export async function findMatchingProjects(
-    sql: any,
-    nodeId: number,
-    extractedName: string | null
-): Promise<{ id: number; name: string }[]> {
-    if (!extractedName) {
-        // Return all active projects for the node
-        const projects = await sql`
-            SELECT id, name FROM projects 
-            WHERE node_id = ${nodeId} AND is_active = true
-            ORDER BY name
-            LIMIT 10
-        `;
-        return projects;
-    }
-
-    // Try to find matching projects (case-insensitive partial match)
-    const projects = await sql`
-        SELECT id, name FROM projects 
-        WHERE node_id = ${nodeId} 
-          AND is_active = true
-          AND LOWER(name) LIKE ${`%${extractedName.toLowerCase()}%`}
-        ORDER BY name
-        LIMIT 10
-    `;
-
-    // If no matches, return all active projects
-    if (projects.length === 0) {
-        const allProjects = await sql`
-            SELECT id, name FROM projects 
-            WHERE node_id = ${nodeId} AND is_active = true
-            ORDER BY name
-            LIMIT 10
-        `;
-        return allProjects;
-    }
-
-    return projects;
 }

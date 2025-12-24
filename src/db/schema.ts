@@ -56,6 +56,7 @@ export const buckets = pgTable('buckets', {
 
     // Validation
     validationErrors: text('validation_errors'),  // JSON array of issues
+    validationAttempts: integer('validation_attempts').default(0), // Consistency check retries
     aiResponse: text('ai_response'),
 
     // Twilio tracking

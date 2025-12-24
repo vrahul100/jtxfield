@@ -1,8 +1,9 @@
 import { Sql } from 'postgres';
 import { extractMessageInfo } from './extractionService.js';
 import { getQueue } from '../queue/index.js';
+import { getSchemaForDomain, FIELD_QUESTIONS } from '../schemas/domainSchemas.js';
 
-export type BucketStatus = 'open' | 'closed' | 'processing' | 'completed' | 'failed' | 'holding' | 'awaiting_correction';
+export type BucketStatus = 'open' | 'closed' | 'processing' | 'completed' | 'failed' | 'holding' | 'awaiting_correction' | 'pending_review';
 
 export interface Bucket {
     id: number;
@@ -223,13 +224,16 @@ export async function validateBucket(
     const images = bucket.image_urls ? JSON.parse(bucket.image_urls) : [];
     const transcripts = bucket.transcripts ? JSON.parse(bucket.transcripts) : [];
 
-    // Combine text and transcripts
-    const fullText = [text, ...transcripts].filter(Boolean).join('\n');
+    console.log(`[VALIDATE] Bucket #${bucket.id} has ${images.length} image(s), ${transcripts.length} transcript(s)`);
+    if (images.length > 0) {
+        console.log(`[VALIDATE] Images:`, images);
+    }
 
     const extraction = await extractMessageInfo(
-        fullText,
-        bucket.domain || 'construction',
-        images[0] || null
+        text,
+        transcripts,
+        images,
+        bucket.domain || 'construction'
     );
 
     // Update bucket with extraction
@@ -243,32 +247,144 @@ export async function validateBucket(
         WHERE id = ${bucket.id}
     `;
 
+    // === SCHEMA-BASED VALIDATION ===
+    const schema = getSchemaForDomain(extraction.domain);
+
+    // Log extraction result in dev
+    console.log(`[VALIDATE] Extraction for bucket #${bucket.id}:`, JSON.stringify(extraction, null, 2));
+
+    const parseResult = schema.safeParse(extraction);
+
+    // Log Zod validation result
+    if (parseResult.success) {
+        console.log(`[VALIDATE] ✅ Schema validation passed for ${extraction.domain}`);
+        console.log(`[VALIDATE] Parsed data:`, JSON.stringify(parseResult.data, null, 2));
+    } else {
+        console.log(`[VALIDATE] ❌ Schema validation failed for ${extraction.domain}`);
+        console.log(`[VALIDATE] Zod errors:`, JSON.stringify(parseResult.error.format(), null, 2));
+    }
+
     const errors: string[] = [];
     const questions: string[] = [];
 
-    // Build conversational questions based on what's missing
-    const hasText = fullText.trim().length > 0;
+    // Check for inconsistency first
+    if (!extraction.isConsistent && extraction.inconsistencyReason) {
+        // Get current attempt count
+        const currentAttempts = await sql`SELECT validation_attempts FROM buckets WHERE id = ${bucket.id}`;
+        const attempts = currentAttempts[0]?.validation_attempts || 0;
+
+        if (attempts >= 2) {
+            // Asked twice - move to pending_review
+            console.log(`[VALIDATE] Asked twice about inconsistency, moving to pending_review`);
+
+            await sql`
+                UPDATE buckets SET 
+                    status = 'pending_review',
+                    validation_errors = ${JSON.stringify(['Inconsistency persists'])},
+                    updated_at = NOW()
+                WHERE id = ${bucket.id}
+            `;
+
+            questions.push('📋 Filing for review. You can keep sending updates.');
+        } else {
+            // First attempt - ask for clarification
+            questions.push(`⚠️ The details don't look right. ${extraction.inconsistencyReason}`);
+
+            // Increment attempt count
+            await sql`
+                UPDATE buckets SET 
+                    validation_attempts = validation_attempts + 1,
+                    updated_at = NOW()
+                WHERE id = ${bucket.id}
+            `;
+
+            console.log(`[VALIDATE] Asked inconsistency question (attempt ${attempts + 1}/2)`);
+        }
+
+        // Skip schema validation when there's an inconsistency
+        const isComplete = false;
+
+        await sql`
+            UPDATE buckets SET
+                validation_errors = ${JSON.stringify(['Inconsistency detected'])},
+                updated_at = NOW()
+            WHERE id = ${bucket.id}
+        `;
+
+        return {
+            isComplete,
+            errors: ['Inconsistency between image and description'],
+            questions,
+            summary: extraction.summary,
+        };
+    }
+
+    // Only check schema if consistent
+    if (!parseResult.success) {
+        // Check if we've already asked too many times
+        const currentAttempts = await sql`SELECT validation_attempts FROM buckets WHERE id = ${bucket.id}`;
+        const attempts = currentAttempts[0]?.validation_attempts || 0;
+
+        if (attempts >= 2) {
+            // Asked twice - move to pending_review
+            console.log(`[VALIDATE] Asked twice for missing fields, moving to pending_review`);
+
+            await sql`
+                UPDATE buckets SET 
+                    status = 'pending_review',
+                    validation_errors = ${JSON.stringify(['Missing fields after 2 attempts'])},
+                    updated_at = NOW()
+                WHERE id = ${bucket.id}
+            `;
+
+            return {
+                isComplete: false,
+                errors: ['Missing required fields after 2 attempts'],
+                questions: ['📋 Missing details. Filing for review. Keep sending updates.'],
+                summary: extraction.summary,
+            };
+        }
+
+        // Schema validation failed - extract missing required fields
+        const issues = parseResult.error.issues;
+
+        // Increment attempts for schema validation
+        await sql`
+            UPDATE buckets SET 
+                validation_attempts = validation_attempts + 1,
+                updated_at = NOW()
+            WHERE id = ${bucket.id}
+        `;
+
+        for (const issue of issues) {
+            const fieldPath = issue.path.join('.');
+            const fieldQuestion = FIELD_QUESTIONS[fieldPath];
+
+            if (fieldQuestion) {
+                questions.push(fieldQuestion);
+            }
+
+            errors.push(`Missing ${fieldPath}: ${issue.message}`);
+        }
+
+        console.log(`[VALIDATE] Questions to ask:`, questions);
+    }
+
+    // Additional conversational questions based on content
+    const hasText = (text || '').trim().length > 0 || transcripts.length > 0;
     const hasImages = images.length > 0;
 
-    // Check clarity
-    if (extraction.clarityScore < 0.6) {
+    if (extraction.clarityScore < 0.6 && questions.length === 0) {
         if (!hasText && hasImages) {
             questions.push('📸 Got the photo! What work did you do?');
         } else if (hasText && !hasImages) {
             questions.push('📝 Can you send a photo of the completed work?');
         } else {
-            questions.push('🤔 What specific work was done? (e.g., "Fixed wiring on floor 3")');
+            questions.push('🤔 What specific work was done?');
         }
-        errors.push('Message is unclear. Please provide more details about the work done.');
     }
 
-    // Check if we have actionable content
-    if (extraction.intent === 'unknown') {
-        questions.push('What did you do? (e.g., fixed, replaced, installed, inspected)');
-        errors.push('Could not determine what action you want to take.');
-    }
-
-    const isComplete = errors.length === 0 && extraction.clarityScore >= 0.6;
+    const isComplete = parseResult.success && errors.length === 0 && extraction.clarityScore >= 0.6;
 
     // Update validation errors
     await sql`
