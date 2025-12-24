@@ -35,10 +35,10 @@ export async function transcribeAudio(audioUrl: string, contentType: string): Pr
 
         const transcription = await getGroq().audio.transcriptions.create({
             file: fs.createReadStream(tempFilePath),
-            model: "whisper-large-v3", // The best model for multi-language support
+            model: "whisper-large-v3-turbo",
             response_format: "json",
             temperature: 0.0, // Strict decoding
-            language: "en", // Optional: Remove to enable auto-detect (Polyglot mode)
+            // language: "en", // Optional: Remove to enable auto-detect (Polyglot mode)
         });
 
         console.log(`✅ Transcript: "${transcription.text}"`);

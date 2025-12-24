@@ -150,7 +150,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     const summaryLine = validation.summary ? `So you: "${validation.summary}"\n\n` : '';
     const confirmationMsg = lastProject
       ? `${summaryLine}✅ Logged to: ${projectName}\n\nType N within 5 min if wrong project.`
-      : `${summaryLine}✅ Bucket closed! Ready for processing.`;
+      : `${summaryLine}✅ Task closed! Ready for processing.`;
 
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   } else {
