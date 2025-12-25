@@ -14,6 +14,7 @@ export const members = pgTable('members', {
     companyId: integer('company_id').references(() => nodes.id),
     phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
     fullName: varchar('full_name', { length: 100 }),
+    languagePreference: varchar('language_preference', { length: 10 }).default('en'), // en, es, etc.
     domain: varchar('domain', { length: 50 }),
 
     // Onboarding
