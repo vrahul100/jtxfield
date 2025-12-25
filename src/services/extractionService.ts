@@ -69,8 +69,8 @@ const CONSTRUCTION_PROMPT = `You are an AI assistant extracting construction wor
 
 Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
 1. intent: "log" (recording work), "recovery" (damage), "status" (asking), or "unknown"
-2. projectName: The project name if mentioned, otherwise null
-3. isProjectClear: true if you're confident which project
+2. projectName: ALWAYS extract the suspected project name if mentioned, even if you're not certain (e.g., "The Mall", "East Wing School", "Hospital Project")
+3. isProjectClear: true if you're confident which project, false if uncertain
 4. clarityScore: 0.0 to 1.0 rating of how clear the message is
 5. summary: Brief 1-line summary
 6. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "general"
@@ -89,6 +89,8 @@ CRITICAL CONSISTENCY CHECK:
     
 IMPORTANT: If you see an image, ALWAYS analyze it carefully. Default isConsistent to FALSE if there's any doubt about image/text matching.
 
+IMPORTANT: ALWAYS try to extract projectName if ANY location or project is mentioned. Even partial names like "the school" or "mall project" are valuable tags.
+
 Always try to extract workType and hoursWorked if the message is about logging work.
 
 Return JSON only.`;
@@ -97,8 +99,8 @@ const RECOVERY_PROMPT = `You are an AI assistant extracting recovery/damage info
 
 Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
 1. intent: "log" | "recovery" | "status" | "unknown"
-2. projectName: The project name if mentioned, otherwise null
-3. isProjectClear: true if you're confident which project
+2. projectName: ALWAYS extract the suspected project name if mentioned, even if uncertain (e.g., "The Mall", "East Wing School")
+3. isProjectClear: true if you're confident which project, false if uncertain
 4. clarityScore: 0.0 to 1.0 rating of how clear the message is
 5. summary: Brief 1-line summary
 6. damageType: Description of damage (e.g., "water damage", "structural crack")
@@ -110,6 +112,8 @@ Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
 CRITICAL CONSISTENCY CHECK:
 11. isConsistent: true if text, voice, and images all describe the same damage/issue
 12. inconsistencyReason: If isConsistent=false, explain the mismatch
+
+IMPORTANT: ALWAYS try to extract projectName if ANY location or project is mentioned.
 
 Always try to extract damageType, affectedArea, and urgency.
 

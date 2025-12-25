@@ -19,6 +19,7 @@ export interface Bucket {
     domain: string | null;
     intent: string | null;
     project_name_raw: string | null;
+    suspected_project_name: string | null; // AI-extracted tag for Inbox sorting
     status: BucketStatus;
     validation_errors: string | null;
     ai_response: string | null;
@@ -86,6 +87,205 @@ export async function updateLastConfirmedProject(
 }
 
 // ============================================================================
+// Inbox Project Logic
+// ============================================================================
+
+/**
+ * Ensure an Inbox project exists for a node (create if missing)
+ * Returns the Inbox project ID
+ */
+export async function ensureInboxProject(sql: Sql, nodeId: number): Promise<number> {
+    const existing = await sql`
+        SELECT id FROM projects 
+        WHERE node_id = ${nodeId} AND is_inbox = true
+        LIMIT 1
+    `;
+
+    if (existing.length > 0) {
+        return existing[0].id;
+    }
+
+    // Create Inbox project
+    const [inbox] = await sql`
+        INSERT INTO projects (node_id, name, is_inbox, is_active)
+        VALUES (${nodeId}, 'Inbox', true, true)
+        RETURNING id
+    `;
+
+    console.log(`[Inbox] Created Inbox project for node ${nodeId}`);
+    return inbox.id;
+}
+
+/**
+ * Find project by fuzzy matching aliases
+ * Checks both project name and aliases array for matches
+ */
+export async function findProjectByAlias(
+    sql: Sql,
+    nodeId: number,
+    suspectedName: string
+): Promise<{ id: number; name: string } | null> {
+    if (!suspectedName || suspectedName.trim() === '') {
+        return null;
+    }
+
+    const normalized = suspectedName.toLowerCase().trim();
+
+    // Get all active projects for the node
+    const projects = await sql`
+        SELECT id, name, aliases 
+        FROM projects 
+        WHERE node_id = ${nodeId} 
+          AND is_active = true
+          AND is_inbox = false
+    `;
+
+    for (const project of projects) {
+        // Check exact match with project name
+        if (project.name.toLowerCase() === normalized) {
+            console.log(`[Alias Match] Exact match: "${suspectedName}" → Project "${project.name}"`);
+            return { id: project.id, name: project.name };
+        }
+
+        // Check aliases if they exist
+        if (project.aliases) {
+            try {
+                const aliases: string[] = JSON.parse(project.aliases);
+                for (const alias of aliases) {
+                    if (alias.toLowerCase() === normalized) {
+                        console.log(`[Alias Match] Alias match: "${suspectedName}" → Project "${project.name}" (via alias "${alias}")`);
+                        return { id: project.id, name: project.name };
+                    }
+                }
+            } catch (e) {
+                console.error(`[Alias Match] Failed to parse aliases for project ${project.id}`);
+            }
+        }
+    }
+
+    console.log(`[Alias Match] No match found for "${suspectedName}"`);
+    return null;
+}
+
+/**
+ * Get Inbox entries grouped by suspected project name tag
+ */
+export async function getInboxEntriesByTag(
+    sql: Sql,
+    nodeId: number
+): Promise<Array<{ tag: string; count: number; bucketIds: number[] }>> {
+    // Get Inbox project ID
+    const inboxProjects = await sql`
+        SELECT id FROM projects 
+        WHERE node_id = ${nodeId} AND is_inbox = true
+        LIMIT 1
+    `;
+
+    if (inboxProjects.length === 0) {
+        return [];
+    }
+
+    const inboxId = inboxProjects[0].id;
+
+    // Group buckets by suspected project name
+    const grouped = await sql`
+        SELECT 
+            suspected_project_name as tag,
+            COUNT(*)::int as count,
+            ARRAY_AGG(id) as bucket_ids
+        FROM buckets
+        WHERE project_id = ${inboxId}
+          AND suspected_project_name IS NOT NULL
+          AND status IN ('open', 'closed', 'completed')
+        GROUP BY suspected_project_name
+        ORDER BY count DESC
+    `;
+
+    return grouped.map((g: any) => ({
+        tag: g.tag,
+        count: g.count,
+        bucketIds: g.bucket_ids
+    }));
+}
+
+/**
+ * Bulk assign tagged entries to a project
+ * Returns count of updated buckets
+ */
+export async function bulkAssignToProject(
+    sql: Sql,
+    nodeId: number,
+    suspectedName: string,
+    projectId: number
+): Promise<number> {
+    // Get Inbox project ID
+    const inboxProjects = await sql`
+        SELECT id FROM projects 
+        WHERE node_id = ${nodeId} AND is_inbox = true
+        LIMIT 1
+    `;
+
+    if (inboxProjects.length === 0) {
+        throw new Error('Inbox project not found');
+    }
+
+    const inboxId = inboxProjects[0].id;
+
+    // Update all buckets with this suspected name
+    const result = await sql`
+        UPDATE buckets
+        SET project_id = ${projectId}, updated_at = NOW()
+        WHERE project_id = ${inboxId}
+          AND suspected_project_name = ${suspectedName}
+          AND status IN ('open', 'closed', 'completed')
+    `;
+
+    console.log(`[Bulk Assign] Moved ${result.count} buckets from Inbox to Project ${projectId}`);
+    return result.count;
+}
+
+/**
+ * Add alias to a project
+ */
+export async function addProjectAlias(
+    sql: Sql,
+    projectId: number,
+    alias: string
+): Promise<void> {
+    const [project] = await sql`
+        SELECT aliases FROM projects WHERE id = ${projectId}
+    `;
+
+    if (!project) {
+        throw new Error('Project not found');
+    }
+
+    let aliases: string[] = [];
+    if (project.aliases) {
+        try {
+            aliases = JSON.parse(project.aliases);
+        } catch (e) {
+            console.error(`[Add Alias] Failed to parse existing aliases for project ${projectId}`);
+        }
+    }
+
+    // Add new alias if not already present
+    if (!aliases.some(a => a.toLowerCase() === alias.toLowerCase())) {
+        aliases.push(alias);
+
+        await sql`
+            UPDATE projects
+            SET aliases = ${JSON.stringify(aliases)}, updated_at = NOW()
+            WHERE id = ${projectId}
+        `;
+
+        console.log(`[Add Alias] Added "${alias}" to project ${projectId} (total: ${aliases.length} aliases)`);
+    } else {
+        console.log(`[Add Alias] Alias "${alias}" already exists for project ${projectId}`);
+    }
+}
+
+// ============================================================================
 // Open Bucket Logic
 // ============================================================================
 
@@ -140,12 +340,13 @@ export async function createBucket(
         audioUrls: string[];
         transcripts: string[];
         messageSid: string | null;
+        suspectedProjectName?: string | null; // NEW: AI-extracted project tag
     }
 ): Promise<Bucket> {
     const [bucket] = await sql`
         INSERT INTO buckets (
             member_id, node_id, project_id, source, from_phone, raw_text,
-            image_urls, audio_urls, transcripts, message_sids, status
+            image_urls, audio_urls, transcripts, message_sids, suspected_project_name, status
         )
         VALUES (
             ${data.memberId}, ${data.nodeId}, ${data.projectId}, ${data.source}, ${data.fromPhone},
@@ -154,6 +355,7 @@ export async function createBucket(
             ${JSON.stringify(data.audioUrls)},
             ${JSON.stringify(data.transcripts)},
             ${JSON.stringify(data.messageSid ? [data.messageSid] : [])},
+            ${data.suspectedProjectName || null},
             'open'
         )
         RETURNING *

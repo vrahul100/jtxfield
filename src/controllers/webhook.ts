@@ -15,6 +15,8 @@ import {
   addToHoldingTank,
   updateLastConfirmedProject,
   queueBucketForProcessing,
+  ensureInboxProject,
+  findProjectByAlias,
   Member,
   Bucket
 } from '../services/bucketService.js'
@@ -92,11 +94,6 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     return handleProjectCorrection(c, sql, member, normalized);
   }
 
-  // 6. GET LAST CONFIRMED PROJECT
-  const lastProject = await getLastConfirmedProject(sql, member);
-  const projectId = lastProject?.id || null;
-  console.log(`[PROJECT] ${lastProject ? lastProject.name : 'None (will ask)'}`);
-
   // 6. PROCESS MEDIA
   const { imageUrls, audioUrls, transcripts, messageSid } = await processMedia(normalized, body);
 
@@ -106,7 +103,52 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     fullText = `${fullText}\n[VOICE]: ${transcripts.join(' ')}`.trim();
   }
 
-  // 7. FIND OR CREATE BUCKET
+  // 7. NEW INBOX FLOW: AI EXTRACTION → ALIAS MATCH → LAST CONFIRMED → INBOX FALLBACK
+  const { extractMessageInfo } = await import('../services/extractionService.js');
+
+  // Run AI extraction to get suspected project name
+  const extraction = await extractMessageInfo(
+    fullText,
+    transcripts,
+    imageUrls,
+    member.domain || 'construction'
+  );
+  const suspectedProjectName = extraction.projectName;
+
+  console.log(`[AI EXTRACTION] Suspected project: "${suspectedProjectName}", isProjectClear: ${extraction.isProjectClear}`);
+
+  let projectId: number | null = null;
+  let projectMatchInfo = '';
+
+  // Try fuzzy match with project aliases
+  if (suspectedProjectName) {
+    const matchedProject = await findProjectByAlias(sql, member.company_id, suspectedProjectName);
+    if (matchedProject) {
+      projectId = matchedProject.id;
+      projectMatchInfo = `[ALIAS MATCH] "${suspectedProjectName}" → Project:${matchedProject.name}`;
+    }
+  }
+
+  // Fall back to last confirmed project if no alias match
+  if (!projectId) {
+    const lastProject = await getLastConfirmedProject(sql, member);
+    if (lastProject) {
+      projectId = lastProject.id;
+      projectMatchInfo = `[LAST CONFIRMED] Project:${lastProject.name}`;
+    }
+  }
+
+  // Final fallback: assign to Inbox
+  let isInbox = false;
+  if (!projectId) {
+    projectId = await ensureInboxProject(sql, member.company_id);
+    isInbox = true;
+    projectMatchInfo = `[INBOX] Tag: "${suspectedProjectName || 'unknown'}"`;
+  }
+
+  console.log(`[PROJECT] ${projectMatchInfo}`);
+
+  // 8. FIND OR CREATE BUCKET (with suspected project name)
   let bucket = await findOpenBucket(sql, member.id, projectId);
 
   if (bucket) {
@@ -120,7 +162,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     });
     console.log(`[BUCKET] Appended to #${bucket.id}`);
   } else {
-    // Create new bucket
+    // Create new bucket with suspected project name
     bucket = await createBucket(sql, {
       memberId: member.id,
       nodeId: member.company_id,
@@ -132,11 +174,12 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
       audioUrls,
       transcripts,
       messageSid,
+      suspectedProjectName, // NEW: Save the AI-extracted tag
     });
     console.log(`[BUCKET] Created #${bucket.id}`);
   }
 
-  // 8. VALIDATE BUCKET COMPLETENESS
+  // 9. VALIDATE BUCKET COMPLETENESS
   const validation = await validateBucket(sql, bucket);
   console.log(`[VALIDATE] Complete: ${validation.isComplete}, Errors: ${validation.errors.length}`);
 
@@ -144,20 +187,24 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     // Close bucket and send confirmation
     await closeBucket(sql, bucket.id);
 
-    // Update last confirmed project if we had one
-    if (projectId) {
+    // Update last confirmed project if we had one (and it's not Inbox)
+    if (projectId && !isInbox) {
       await updateLastConfirmedProject(sql, member.id, projectId);
     }
 
     // TODO: Re-enable when ready for txn creation
     // await queueBucketForProcessing(bucket);
 
-    // Send confirmation with summary and project correction option
-    const projectName = lastProject?.name || 'your current project';
+    // Get project name for confirmation
+    const projectResult = await sql`SELECT name, is_inbox FROM projects WHERE id = ${projectId}`;
+    const projectName = projectResult[0]?.name || 'Inbox';
+
+    // Build confirmation message with tag if it's an Inbox entry
     const summaryLine = validation.summary ? `So you: "${validation.summary}"\n\n` : '';
-    const confirmationMsg = lastProject
-      ? `${summaryLine}✅ Logged to: ${projectName}\n\nType N within 5 min if wrong project.`
-      : `${summaryLine}✅ Task closed! Ready for processing.`;
+    const tagLine = isInbox && suspectedProjectName
+      ? `(Tag: ${suspectedProjectName}) `
+      : '';
+    const confirmationMsg = `${summaryLine}✅ ${tagLine}Logged to: ${projectName}\n\nType N within 5 min if wrong project.`;
 
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   } else {

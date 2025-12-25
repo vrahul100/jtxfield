@@ -34,6 +34,8 @@ export const projects = pgTable('projects', {
     id: serial('id').primaryKey(),
     nodeId: integer('node_id').references(() => nodes.id).notNull(),
     name: text('name').notNull(),
+    aliases: text('aliases'), // JSON array of project name variations for fuzzy matching
+    isInbox: boolean('is_inbox').default(false), // Permanent "Inbox" project per node
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at').defaultNow(),
 });
@@ -58,6 +60,7 @@ export const buckets = pgTable('buckets', {
     domain: varchar('domain', { length: 50 }),
     intent: varchar('intent', { length: 50 }),
     projectNameRaw: text('project_name_raw'),
+    suspectedProjectName: text('suspected_project_name'), // AI-extracted project tag for Inbox sorting
 
     // Status: open | closed | processing | completed | failed | holding
     status: varchar('status', { length: 20 }).default('open').notNull(),
