@@ -7,7 +7,7 @@ interface TwilioConfig {
     accountSid: string;
     authToken: string;
     fromNumber: string;       // For SMS
-    fromWhatsApp: string;     // For WhatsApp (e.g., "whatsapp:+14155238886")
+    fromWhatsApp: string;     // For WhatsApp (e.g., "whatsapp:+12029536899")
 }
 
 function getConfig(): TwilioConfig {

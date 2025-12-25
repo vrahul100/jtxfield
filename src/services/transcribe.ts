@@ -35,7 +35,7 @@ export async function transcribeAudio(audioUrl: string, contentType: string): Pr
 
         const transcription = await getGroq().audio.transcriptions.create({
             file: fs.createReadStream(tempFilePath),
-            model: "whisper-large-v3-turbo",
+            model: "whisper-large-v3",
             response_format: "json",
             temperature: 0.0, // Strict decoding
             // language: "en", // Optional: Remove to enable auto-detect (Polyglot mode)

@@ -12,12 +12,19 @@ export const nodes = pgTable('nodes', {
 export const members = pgTable('members', {
     id: serial('id').primaryKey(),
     companyId: integer('company_id').references(() => nodes.id),
-    phoneNumber: varchar('phone_number', { length: 20 }).unique().notNull(),
-    fullName: text('full_name'),
-    domain: varchar('domain', { length: 50 }).default('construction'),
-    // Last confirmed project (valid for 4 hours)
-    lastConfirmedProjectId: integer('last_confirmed_project_id').references(() => projects.id),
+    phoneNumber: varchar('phone_number', { length: 20 }).notNull().unique(),
+    fullName: varchar('full_name', { length: 100 }),
+    domain: varchar('domain', { length: 50 }),
+
+    // Onboarding
+    status: varchar('status', { length: 20 }).default('pending'), // pending, active, inactive
+    onboardedAt: timestamp('onboarded_at'),
+    invitedBy: integer('invited_by').references((): any => members.id),
+
+    // Last confirmed project logic
+    lastConfirmedProjectId: integer('last_confirmed_project_id').references((): any => projects.id),
     projectConfirmedAt: timestamp('project_confirmed_at'),
+
     createdAt: timestamp('created_at').defaultNow(),
 });
 

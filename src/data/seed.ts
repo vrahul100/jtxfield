@@ -1,32 +1,51 @@
-// Run this with: npx tsx seed.ts
-import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import { nodes, members } from '../db/schema';
 import dotenv from 'dotenv';
 
 dotenv.config();
+const sql = postgres(process.env.DATABASE_URL!);
 
-const client = postgres(process.env.DATABASE_URL!);
-const db = drizzle(client);
+async function seed() {
+    console.log('🌱 Seeding database...\n');
 
-async function main() {
-    console.log('🌱 Seeding...');
+    try {
+        // 1. CLEAR ALL DATA (reverse foreign key order)
+        console.log('🗑️  Clearing all data...');
+        await sql`DELETE FROM txns`;
+        await sql`DELETE FROM buckets`;
+        await sql`DELETE FROM members`;
+        await sql`DELETE FROM projects`;
+        await sql`DELETE FROM holding_tank`;
+        console.log('  ✅ All data cleared\n');
 
-    // 1. Create Node (Company)
-    const newNode = await db.insert(nodes).values({
-        name: 'Acme Electric',
-        defaultHourlyRate: '85.00',
-    }).returning();
+        // 2. CREATE COMPANY (NODE)
+        console.log('🏢 Creating company...');
+        const [company] = await sql`
+      INSERT INTO nodes (name, created_at)
+      VALUES ('Acme Construction', NOW())
+      RETURNING *
+    `;
+        console.log(`  ✅ Created: ${company.name} (ID: ${company.id})\n`);
 
-    // 2. Create Member (REPLACE WITH YOUR PHONE NUMBER)
-    await db.insert(members).values({
-        companyId: newNode[0].id,
-        phoneNumber: '+15551234567',
-        fullName: 'Mike the Foreman',
-    });
+        // 3. CREATE PROJECT
+        console.log('📋 Creating project...');
+        const [project] = await sql`
+      INSERT INTO projects (node_id, name, created_at)
+      VALUES (${company.id}, 'Downtown Office Renovation', NOW())
+      RETURNING *
+    `;
+        console.log(`  ✅ Created: ${project.name} (ID: ${project.id})\n`);
 
-    console.log('✅ Done!');
-    process.exit(0);
+        console.log('🎉 Seeding complete!\n');
+        console.log('Summary:');
+        console.log(`  Company: ${company.name}`);
+        console.log(`  Project: ${project.name}`);
+
+    } catch (error) {
+        console.error('❌ Seeding failed:', error);
+        throw error;
+    } finally {
+        await sql.end();
+    }
 }
 
-main();
+seed();

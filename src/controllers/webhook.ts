@@ -19,6 +19,7 @@ import {
   Bucket
 } from '../services/bucketService.js'
 import { sendTwilioMessage } from '../services/twilio.js'
+import { handleJoinRequest } from './joinHandler.js'
 
 const validator = getMediaValidator();
 
@@ -49,11 +50,17 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     body = await c.req.parseBody()
   }
 
-  // 1. NORMALIZE THE MESSAGE
+  // 1. NORMALIZE THE MESSAGE (works for SMS and WhatsApp)
   const normalized = normalizeTwilioPayload(body);
   console.log(`[WEBHOOK] ${normalized.source.toUpperCase()} from ${normalized.sender}`);
 
-  // 2. QUICK VALIDATION
+  // 2. CHECK FOR JOIN REQUEST (before authentication)
+  const messageText = normalized.text.trim().toUpperCase();
+  if (messageText === 'JOIN JTX' || messageText === 'JOIN') {
+    return await handleJoinRequest(c, sql, normalized, body);
+  }
+
+  // 3. QUICK VALIDATION (fast response to Twilio)
   const quickCheck = validator.quickValidate(body);
   if (!quickCheck.valid) {
     console.log(`❌ Quick validation failed: ${quickCheck.error}`)

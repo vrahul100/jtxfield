@@ -6,6 +6,7 @@ npm run dev
  npx drizzle-kit generate
  npx drizzle-kit migrate
  ngrok http 3000
+npx tsx src/data/seed.ts
 
 
  Verification
@@ -56,3 +57,16 @@ The webhook now handles both:
 SMS: From: +15551234567
 WhatsApp: From: whatsapp:+15551234567 → normalized to +15551234567
 Run npm run dev to test.
+
+https://wa.me/12029536899?text=JOIN%20JTX
+# 1. Send JOIN
+curl -X POST http://localhost:3000/twhook \
+  -d "Body=JOIN JTX" -d "From=whatsapp:+15555551234"
+
+# 2. List pending
+curl http://localhost:3000/admin/pending-users
+
+# 3. Assign
+curl -X POST http://localhost:3000/admin/assign-user \
+  -H "Content-Type: application/json" \
+  -d '{"userId":1,"nodeId":1,"fullName":"Test"}'
