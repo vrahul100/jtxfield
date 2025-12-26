@@ -30,11 +30,6 @@ export function Sidebar() {
                     <span>Projects</span>
                 </NavLink>
 
-                <NavLink to="/inbox" className={navLinkClass}>
-                    <span className="text-xl">📥</span>
-                    <span>Inbox</span>
-                </NavLink>
-
                 <div className="pt-2">
                     <div className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
                         Coming Soon

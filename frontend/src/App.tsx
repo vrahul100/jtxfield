@@ -5,7 +5,6 @@ import { Login } from './pages/Login';
 import { Worklog } from './pages/Worklog';
 import { Members } from './pages/Members';
 import { Projects } from './pages/Projects';
-import { Inbox } from './pages/Inbox';
 import { Nodes } from './pages/Nodes';
 import { Users } from './pages/Users';
 import './index.css';
@@ -55,14 +54,6 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Projects />
-                            </ProtectedRoute>
-                        }
-                    />
-                    <Route
-                        path="/inbox"
-                        element={
-                            <ProtectedRoute>
-                                <Inbox />
                             </ProtectedRoute>
                         }
                     />

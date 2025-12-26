@@ -136,3 +136,101 @@ export async function approveBucket(c: Context, sql: Sql) {
     }
 }
 
+/**
+ * PUT /api/worklog/:id
+ * Update a bucket's raw_text and/or project_id
+ */
+export async function updateBucket(c: Context, sql: Sql) {
+    try {
+        const user: User = c.get('user');
+        const bucketId = parseInt(c.req.param('id'));
+        const body = await c.req.json();
+        const { rawText, projectId } = body;
+
+        // Get bucket
+        const buckets = await sql`SELECT * FROM buckets WHERE id = ${bucketId}`;
+        if (buckets.length === 0) {
+            return c.json({ error: 'Bucket not found' }, 404);
+        }
+
+        const bucket = buckets[0];
+
+        // OM can only update their node's buckets
+        if (user.role === 'OM' && bucket.node_id !== user.nodeId) {
+            return c.json({ error: 'Forbidden' }, 403);
+        }
+
+        // Build update query based on what's provided
+        if (rawText !== undefined && projectId !== undefined) {
+            await sql`
+                UPDATE buckets 
+                SET raw_text = ${rawText},
+                    project_id = ${projectId},
+                    updated_at = NOW()
+                WHERE id = ${bucketId}
+            `;
+        } else if (rawText !== undefined) {
+            await sql`
+                UPDATE buckets 
+                SET raw_text = ${rawText},
+                    updated_at = NOW()
+                WHERE id = ${bucketId}
+            `;
+        } else if (projectId !== undefined) {
+            await sql`
+                UPDATE buckets 
+                SET project_id = ${projectId},
+                    updated_at = NOW()
+                WHERE id = ${bucketId}
+            `;
+        } else {
+            return c.json({ error: 'rawText or projectId is required' }, 400);
+        }
+
+        console.log(`[Work Reported] Bucket #${bucketId} updated by user ${user.id}`);
+
+        return c.json({ success: true });
+    } catch (error: any) {
+        console.error('[Work Reported] Update error:', error);
+        return c.json({ error: 'Internal server error' }, 500);
+    }
+}
+
+/**
+ * POST /api/worklog/:id/reject
+ * Reject a bucket (mark as closed/rejected)
+ */
+export async function rejectBucket(c: Context, sql: Sql) {
+    try {
+        const user: User = c.get('user');
+        const bucketId = parseInt(c.req.param('id'));
+
+        // Get bucket
+        const buckets = await sql`SELECT * FROM buckets WHERE id = ${bucketId}`;
+        if (buckets.length === 0) {
+            return c.json({ error: 'Bucket not found' }, 404);
+        }
+
+        const bucket = buckets[0];
+
+        // OM can only reject their node's buckets
+        if (user.role === 'OM' && bucket.node_id !== user.nodeId) {
+            return c.json({ error: 'Forbidden' }, 403);
+        }
+
+        // Update status to rejected
+        await sql`
+            UPDATE buckets 
+            SET status = 'rejected',
+                updated_at = NOW()
+            WHERE id = ${bucketId}
+        `;
+
+        console.log(`[Work Reported] Bucket #${bucketId} rejected by user ${user.id}`);
+
+        return c.json({ success: true });
+    } catch (error: any) {
+        console.error('[Work Reported] Reject error:', error);
+        return c.json({ error: 'Internal server error' }, 500);
+    }
+}

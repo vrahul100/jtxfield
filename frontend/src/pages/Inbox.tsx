@@ -52,7 +52,11 @@ export function Inbox() {
                 const projectsData = await projectsRes.json();
                 // Backend returns { projects: [...] }
                 if (projectsData.projects && Array.isArray(projectsData.projects)) {
-                    setProjects(projectsData.projects);
+                    // Filter out Inbox project from choices
+                    const filteredProjects = projectsData.projects.filter(
+                        (p: any) => p.name !== 'Inbox' && !p.is_inbox
+                    );
+                    setProjects(filteredProjects);
                 }
             } else {
                 setProjects([]);

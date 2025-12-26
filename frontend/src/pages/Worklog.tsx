@@ -30,6 +30,10 @@ export function Worklog() {
 
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [expandedBucketIds, setExpandedBucketIds] = useState<number[]>([]);
+    const [editingBucketId, setEditingBucketId] = useState<number | null>(null);
+    const [editText, setEditText] = useState<string>('');
+    const [editingProjectBucketId, setEditingProjectBucketId] = useState<number | null>(null);
+    const [editProjectId, setEditProjectId] = useState<number | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [projectFilter, setProjectFilter] = useState<string>('all');
     const [sortBy, setSortBy] = useState('created_at');
@@ -56,7 +60,9 @@ export function Worklog() {
             const response = await fetch('/api/projects?limit=100', { credentials: 'include' });
             if (response.ok) {
                 const data = await response.json();
-                if (data.projects) setProjects(data.projects);
+                if (data.projects) {
+                    setProjects(data.projects);
+                }
             }
         } catch (error) {
             console.error('Failed to fetch projects:', error);
@@ -108,6 +114,10 @@ export function Worklog() {
                 return 'bg-purple-100 text-purple-800';
             case 'pending_review':
                 return 'bg-orange-100 text-orange-800';
+            case 'awaiting_correction':
+                return 'bg-red-100 text-red-800';
+            case 'rejected':
+                return 'bg-red-200 text-red-900';
             default:
                 return 'bg-gray-100 text-gray-800';
         }
@@ -146,6 +156,103 @@ export function Worklog() {
         setExpandedBucketIds(prev =>
             prev.includes(id) ? prev.filter(bId => bId !== id) : [...prev, id]
         );
+    };
+
+    const startEdit = (bucket: Bucket) => {
+        setEditingBucketId(bucket.id);
+        setEditText(bucket.raw_text || '');
+    };
+
+    const cancelEdit = () => {
+        setEditingBucketId(null);
+        setEditText('');
+    };
+
+    const handleSaveEdit = async (bucketId: number) => {
+        setActionLoading(bucketId);
+        try {
+            const response = await fetch(`/api/worklog/${bucketId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ rawText: editText }),
+            });
+            if (response.ok) {
+                setEditingBucketId(null);
+                setEditText('');
+                fetchBuckets();
+            } else {
+                alert('Failed to save');
+            }
+        } catch (error) {
+            console.error('Failed to save:', error);
+            alert('Failed to save');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleReject = async (bucketId: number) => {
+        if (!confirm('Reject this work item?')) return;
+
+        setActionLoading(bucketId);
+        try {
+            const response = await fetch(`/api/worklog/${bucketId}/reject`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                fetchBuckets();
+            } else {
+                alert('Failed to reject');
+            }
+        } catch (error) {
+            console.error('Failed to reject:', error);
+            alert('Failed to reject');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    // Helper to check if item is editable
+    const isEditable = (status: string) => {
+        return status === 'open' || status === 'awaiting_correction';
+    };
+
+    const startEditProject = (bucket: Bucket) => {
+        setEditingProjectBucketId(bucket.id);
+        setEditProjectId(bucket.project_id);
+    };
+
+    const cancelEditProject = () => {
+        setEditingProjectBucketId(null);
+        setEditProjectId(null);
+    };
+
+    const handleSaveProject = async (bucketId: number) => {
+        if (editProjectId === null) return;
+
+        setActionLoading(bucketId);
+        try {
+            const response = await fetch(`/api/worklog/${bucketId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ projectId: editProjectId }),
+            });
+            if (response.ok) {
+                setEditingProjectBucketId(null);
+                setEditProjectId(null);
+                fetchBuckets();
+            } else {
+                alert('Failed to save');
+            }
+        } catch (error) {
+            console.error('Failed to save:', error);
+            alert('Failed to save');
+        } finally {
+            setActionLoading(null);
+        }
     };
 
     if (loading) {
@@ -188,6 +295,8 @@ export function Worklog() {
                                 <option value="open">Open</option>
                                 <option value="closed">Closed</option>
                                 <option value="processing">Processing</option>
+                                <option value="awaiting_correction">Awaiting Correction</option>
+                                <option value="rejected">Rejected</option>
                                 <option value="completed">Completed</option>
                             </select>
                         </div>
@@ -241,6 +350,7 @@ export function Worklog() {
                         <table className="min-w-full divide-y divide-gray-200">
                             <thead className="bg-gray-50">
                                 <tr>
+                                    <th className="px-2 py-3 w-10"></th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Status
                                     </th>
@@ -264,6 +374,15 @@ export function Worklog() {
                                     return (
                                         <React.Fragment key={bucket.id}>
                                             <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpand(bucket.id)}>
+                                                <td className="px-2 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={() => toggleExpand(bucket.id)}
+                                                        className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 border rounded"
+                                                        title={isExpanded ? 'Collapse' : 'Expand'}
+                                                    >
+                                                        {isExpanded ? '−' : '+'}
+                                                    </button>
+                                                </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(bucket.status)}`}>
                                                         {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
@@ -273,8 +392,48 @@ export function Worklog() {
                                                     <div className="text-sm font-medium text-gray-900">{bucket.member_name || bucket.member_phone || 'Unknown'}</div>
                                                     {bucket.member_name && <div className="text-xs text-gray-500">{bucket.member_phone}</div>}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm text-gray-900">{bucket.project_name || 'Unassigned'}</div>
+                                                <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                                    {editingProjectBucketId === bucket.id ? (
+                                                        <div className="flex items-center gap-2">
+                                                            <select
+                                                                value={editProjectId || ''}
+                                                                onChange={(e) => setEditProjectId(Number(e.target.value) || null)}
+                                                                className="text-sm border rounded px-2 py-1"
+                                                            >
+                                                                {projects.map((p) => (
+                                                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                                                ))}
+                                                            </select>
+                                                            <button
+                                                                onClick={() => handleSaveProject(bucket.id)}
+                                                                disabled={actionLoading === bucket.id}
+                                                                className="text-green-600 hover:text-green-800"
+                                                                title="Save"
+                                                            >
+                                                                ✓
+                                                            </button>
+                                                            <button
+                                                                onClick={cancelEditProject}
+                                                                className="text-red-600 hover:text-red-800"
+                                                                title="Cancel"
+                                                            >
+                                                                ✗
+                                                            </button>
+                                                        </div>
+                                                    ) : (
+                                                        <div className="flex items-center gap-2">
+                                                            <span className="text-sm text-gray-900">{bucket.project_name}</span>
+                                                            {bucket.status !== 'completed' && bucket.status !== 'closed' && bucket.status !== 'rejected' && (
+                                                                <button
+                                                                    onClick={() => startEditProject(bucket)}
+                                                                    className="text-blue-600 hover:text-blue-800 text-xs"
+                                                                    title="Change project"
+                                                                >
+                                                                    ✏️
+                                                                </button>
+                                                            )}
+                                                        </div>
+                                                    )}
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="text-sm text-gray-900 line-clamp-2">
@@ -288,30 +447,77 @@ export function Worklog() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center gap-2">
-                                                        {bucket.status !== 'completed' && (
+                                                        {bucket.status === 'open' && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleApprove(bucket.id)}
+                                                                    disabled={actionLoading === bucket.id}
+                                                                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
+                                                                >
+                                                                    {actionLoading === bucket.id ? '...' : 'Approve'}
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleReject(bucket.id)}
+                                                                    disabled={actionLoading === bucket.id}
+                                                                    className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
+                                                                >
+                                                                    Reject
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {bucket.status !== 'completed' && bucket.status !== 'open' && bucket.status !== 'closed' && bucket.status !== 'rejected' && (
                                                             <button
                                                                 onClick={() => handleApprove(bucket.id)}
                                                                 disabled={actionLoading === bucket.id}
-                                                                className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                                                                className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
                                                             >
                                                                 {actionLoading === bucket.id ? '...' : 'Approve'}
                                                             </button>
                                                         )}
-                                                        <button
-                                                            onClick={(e) => { e.stopPropagation(); toggleExpand(bucket.id); }}
-                                                            className="text-gray-400 hover:text-gray-600"
-                                                        >
-                                                            {isExpanded ? 'Collapse' : 'Expand'}
-                                                        </button>
                                                     </div>
                                                 </td>
                                             </tr>
                                             {isExpanded && (
                                                 <tr className="bg-gray-50">
-                                                    <td colSpan={5} className="px-6 py-4">
+                                                    <td colSpan={6} className="px-6 py-4">
                                                         <div className="text-sm text-gray-900 mb-4">
-                                                            <strong>Full Message:</strong>
-                                                            <p className="whitespace-pre-wrap mt-1">{bucket.raw_text}</p>
+                                                            <div className="flex justify-between items-start mb-2">
+                                                                <strong>Full Message:</strong>
+                                                                {isEditable(bucket.status) && editingBucketId !== bucket.id && (
+                                                                    <button
+                                                                        onClick={() => startEdit(bucket)}
+                                                                        className="text-blue-600 hover:text-blue-800 text-sm"
+                                                                    >
+                                                                        ✏️ Edit
+                                                                    </button>
+                                                                )}
+                                                            </div>
+                                                            {editingBucketId === bucket.id ? (
+                                                                <div>
+                                                                    <textarea
+                                                                        value={editText}
+                                                                        onChange={(e) => setEditText(e.target.value)}
+                                                                        className="w-full p-2 border rounded text-sm min-h-[100px]"
+                                                                    />
+                                                                    <div className="flex gap-2 mt-2">
+                                                                        <button
+                                                                            onClick={() => handleSaveEdit(bucket.id)}
+                                                                            disabled={actionLoading === bucket.id}
+                                                                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                                                                        >
+                                                                            {actionLoading === bucket.id ? 'Saving...' : 'Save'}
+                                                                        </button>
+                                                                        <button
+                                                                            onClick={cancelEdit}
+                                                                            className="px-3 py-1 border text-sm rounded hover:bg-gray-50"
+                                                                        >
+                                                                            Cancel
+                                                                        </button>
+                                                                    </div>
+                                                                </div>
+                                                            ) : (
+                                                                <p className="whitespace-pre-wrap mt-1">{bucket.raw_text}</p>
+                                                            )}
                                                         </div>
 
                                                         {/* Transcripts */}

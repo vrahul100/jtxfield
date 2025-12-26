@@ -4,7 +4,7 @@ import { handleTwilioWebhook } from './controllers/webhook.js'
 import { createAdminRoutes } from './controllers/admin.js'
 import { getInbox, bulkAssign, addAlias } from './controllers/inbox.js'
 import { login, logout, checkSession } from './controllers/auth.js'
-import { getWorklog, approveBucket } from './controllers/worklog.js'
+import { getWorklog, approveBucket, updateBucket, rejectBucket } from './controllers/worklog.js'
 import { getMembers, approveMember, inviteMember, updateMember, deleteMember, resendConfirmation } from './controllers/members.js'
 import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
 import { getNodes, createNode, updateNode } from './controllers/nodes.js'
@@ -22,9 +22,10 @@ export const createApp = (sql: Sql) => {
     app.post('/api/auth/logout', (c) => logout(c))
     app.get('/api/auth/session', (c) => checkSession(c, sql))
 
-    // 3. WORKLOG API (OM & SU)
     app.get('/api/worklog', requireOM(sql), (c) => getWorklog(c, sql))
     app.post('/api/worklog/:id/approve', requireOM(sql), (c) => approveBucket(c, sql))
+    app.post('/api/worklog/:id/reject', requireOM(sql), (c) => rejectBucket(c, sql))
+    app.put('/api/worklog/:id', requireOM(sql), (c) => updateBucket(c, sql))
 
     // 4. MEMBERS API (OM & SU)
     app.get('/api/members', requireOM(sql), (c) => getMembers(c, sql))
