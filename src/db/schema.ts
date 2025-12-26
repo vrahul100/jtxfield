@@ -20,7 +20,8 @@ export const members = pgTable('members', {
     // Onboarding
     status: varchar('status', { length: 20 }).default('pending'), // pending, active, inactive
     onboardedAt: timestamp('onboarded_at'),
-    invitedBy: integer('invited_by').references((): any => members.id),
+    invitedBy: integer('invited_by'), // User ID who invited
+    pendingNodeId: integer('pending_node_id').references(() => nodes.id), // Node the member is being invited to join
 
     // Last confirmed project logic
     lastConfirmedProjectId: integer('last_confirmed_project_id').references((): any => projects.id),
@@ -115,4 +116,16 @@ export const holdingTank = pgTable('holding_tank', {
     messageSid: varchar('message_sid', { length: 50 }),
     status: varchar('status', { length: 20 }).default('pending').notNull(), // pending | reviewed | rejected
     createdAt: timestamp('created_at').defaultNow(),
+});
+// 8. USERS - Web dashboard authentication
+export const users = pgTable('users', {
+    id: serial('id').primaryKey(),
+    email: varchar('email', { length: 255 }).notNull().unique(),
+    passwordHash: text('password_hash').notNull(),
+    role: varchar('role', { length: 10 }).notNull(), // 'OM' (Office Manager) | 'SU' (Super User)
+    nodeId: integer('node_id').references(() => nodes.id), // null for SU, required for OM
+    fullName: varchar('full_name', { length: 100 }),
+    isActive: boolean('is_active').default(true),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
 });

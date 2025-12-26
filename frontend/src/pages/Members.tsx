@@ -1,0 +1,382 @@
+import { useState, useEffect } from 'react';
+import { Layout } from '../components/Layout';
+import { useAuth } from '../hooks/useAuth';
+
+interface Member {
+    id: number;
+    full_name: string;
+    phone_number: string;
+    status: 'active' | 'pending' | 'inactive';
+    company_id: number;
+    node_name?: string;
+    created_at: string;
+}
+
+export function Members() {
+    const { user } = useAuth();
+    const [members, setMembers] = useState<Member[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [filter, setFilter] = useState('all');
+    const [sortBy, setSortBy] = useState('name');
+    const [showAddForm, setShowAddForm] = useState(false);
+    const [formData, setFormData] = useState({ name: '', phone: '' });
+    const [formError, setFormError] = useState('');
+    const [actionLoading, setActionLoading] = useState<number | null>(null);
+
+    useEffect(() => {
+        fetchMembers();
+    }, []);
+
+    const fetchMembers = async () => {
+        try {
+            const response = await fetch('/api/members', {
+                credentials: 'include',
+            });
+            if (response.ok) {
+                const data = await response.json();
+                // Backend returns { members: [...] }
+                if (data.members && Array.isArray(data.members)) {
+                    setMembers(data.members);
+                }
+            } else {
+                setMembers([]);
+            }
+        } catch (error) {
+            console.error('Failed to fetch members:', error);
+            setMembers([]);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleApprove = async (id: number) => {
+        setActionLoading(id);
+        try {
+            const response = await fetch(`/api/members/${id}/approve`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                fetchMembers();
+            }
+        } catch (error) {
+            console.error('Failed to approve member:', error);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleResendConfirmation = async (id: number) => {
+        setActionLoading(id);
+        try {
+            const response = await fetch(`/api/members/${id}/resend-confirmation`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                alert('Confirmation message sent!');
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Failed to resend confirmation');
+            }
+        } catch (error) {
+            console.error('Failed to resend confirmation:', error);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleDelete = async (id: number, name: string) => {
+        if (!confirm(`Are you sure you want to delete ${name || 'this member'}?`)) {
+            return;
+        }
+
+        setActionLoading(id);
+        try {
+            const response = await fetch(`/api/members/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                fetchMembers();
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Failed to delete member');
+            }
+        } catch (error) {
+            console.error('Failed to delete member:', error);
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
+    const handleAddMember = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setFormError('');
+
+        try {
+            const response = await fetch('/api/members', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    phoneNumber: formData.phone,
+                    fullName: formData.name,
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setFormData({ name: '', phone: '' });
+                setShowAddForm(false);
+                fetchMembers();
+                alert(data.message || 'Member added successfully!');
+            } else {
+                setFormError(data.error || 'Failed to add member');
+            }
+        } catch (error) {
+            console.error('Failed to add member:', error);
+            setFormError('An error occurred while adding the member');
+        }
+    };
+
+    const getStatusBadge = (status: string) => {
+        switch (status) {
+            case 'active':
+                return 'bg-green-100 text-green-800';
+            case 'pending':
+                return 'bg-yellow-100 text-yellow-800';
+            case 'inactive':
+                return 'bg-gray-100 text-gray-800';
+            default:
+                return 'bg-gray-100 text-gray-800';
+        }
+    };
+
+    const getStatusLabel = (status: string) => {
+        switch (status) {
+            case 'pending':
+                return 'Awaiting Confirmation';
+            case 'active':
+                return 'Active';
+            case 'inactive':
+                return 'Inactive';
+            default:
+                return status;
+        }
+    };
+
+    const filteredMembers = members
+        .filter(m => {
+            if (filter === 'all') return m.status !== 'inactive';
+            if (filter === 'inactive') return m.status === 'inactive';
+            return m.status === filter;
+        })
+        .sort((a, b) => {
+            const aName = a.full_name || '';
+            const bName = b.full_name || '';
+            const aPhone = a.phone_number || '';
+            const bPhone = b.phone_number || '';
+
+            if (sortBy === 'name') return aName.localeCompare(bName);
+            if (sortBy === 'phone') return aPhone.localeCompare(bPhone);
+            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+        });
+
+    if (loading) {
+        return (
+            <Layout>
+                <div className="flex items-center justify-center h-64">
+                    <div className="text-gray-600">Loading...</div>
+                </div>
+            </Layout>
+        );
+    }
+
+    return (
+        <Layout>
+            <div>
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-gray-900">Members</h1>
+                    <button
+                        onClick={() => setShowAddForm(!showAddForm)}
+                        className="btn-primary"
+                    >
+                        {showAddForm ? 'Cancel' : '+ Invite Member'}
+                    </button>
+                </div>
+
+                {/* Add Member Form */}
+                {showAddForm && (
+                    <div className="card p-6 mb-6">
+                        <h2 className="text-xl font-semibold mb-4">Invite Member</h2>
+                        {formError && (
+                            <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
+                                {formError}
+                            </div>
+                        )}
+                        <form onSubmit={handleAddMember} className="space-y-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Name
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                                    className="input-field"
+                                    required
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Phone Number
+                                </label>
+                                <input
+                                    type="tel"
+                                    value={formData.phone}
+                                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                                    className="input-field"
+                                    placeholder="+15551234567"
+                                    required
+                                />
+                                <p className="text-sm text-gray-500 mt-1">
+                                    Member will receive a WhatsApp invitation to join your team.
+                                </p>
+                            </div>
+                            <button type="submit" className="btn-primary">
+                                Send Invitation
+                            </button>
+                        </form>
+                    </div>
+                )}
+
+                {/* Filters and Sort */}
+                <div className="card p-4 mb-6">
+                    <div className="flex gap-4">
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Filter by Status
+                            </label>
+                            <select
+                                value={filter}
+                                onChange={(e) => setFilter(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="all">All Active</option>
+                                <option value="active">Confirmed</option>
+                                <option value="pending">Awaiting Confirmation</option>
+                                <option value="inactive">Inactive</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Sort by
+                            </label>
+                            <select
+                                value={sortBy}
+                                onChange={(e) => setSortBy(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="name">Name</option>
+                                <option value="phone">Phone</option>
+                                <option value="created">Date Added</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Members List */}
+                <div className="card overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Name
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Phone
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    {user?.role === 'SU' && (
+                                        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                            Node
+                                        </th>
+                                    )}
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {filteredMembers.map((member) => (
+                                    <tr key={member.id} className="hover:bg-gray-50">
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm font-medium text-gray-900">
+                                                {member.full_name || '(No name)'}
+                                            </div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <div className="text-sm text-gray-500">{member.phone_number}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span
+                                                className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(member.status)}`}
+                                            >
+                                                {getStatusLabel(member.status)}
+                                            </span>
+                                        </td>
+                                        {user?.role === 'SU' && (
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                                {member.node_name || 'N/A'}
+                                            </td>
+                                        )}
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
+                                            {member.status === 'pending' && (
+                                                <>
+                                                    <button
+                                                        onClick={() => handleApprove(member.id)}
+                                                        disabled={actionLoading === member.id}
+                                                        className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                                                    >
+                                                        {actionLoading === member.id ? '...' : 'Approve'}
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleResendConfirmation(member.id)}
+                                                        disabled={actionLoading === member.id}
+                                                        className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                                                    >
+                                                        Resend
+                                                    </button>
+                                                </>
+                                            )}
+                                            {member.status !== 'inactive' && (
+                                                <button
+                                                    onClick={() => handleDelete(member.id, member.full_name)}
+                                                    disabled={actionLoading === member.id}
+                                                    className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                                                >
+                                                    Delete
+                                                </button>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                        {filteredMembers.length === 0 && (
+                            <div className="text-center py-8 text-gray-500">
+                                No members found
+                            </div>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </Layout>
+    );
+}
+

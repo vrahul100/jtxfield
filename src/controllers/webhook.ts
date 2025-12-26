@@ -22,6 +22,7 @@ import {
 } from '../services/bucketService.js'
 import { sendTwilioMessage } from '../services/twilio.js'
 import { handleJoinRequest } from './joinHandler.js'
+import { confirmMemberByPhone } from './members.js'
 
 const validator = getMediaValidator();
 
@@ -56,8 +57,22 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   const normalized = normalizeTwilioPayload(body);
   console.log(`[WEBHOOK] ${normalized.source.toUpperCase()} from ${normalized.sender}`);
 
-  // 2. CHECK FOR JOIN REQUEST (before authentication)
+  // 2. CHECK FOR MEMBER CONFIRMATION (before authentication)
   const messageText = normalized.text.trim().toUpperCase();
+  if (messageText === 'CONFIRM') {
+    const confirmResult = await confirmMemberByPhone(sql, normalized.sender);
+    if (confirmResult.success) {
+      const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
+      const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
+      const welcomeMsg = `✅ Welcome to JTX Field${name}!${teamMsg}
+
+You're now activated. Start sending your work updates via text, photos, or voice notes.`;
+      return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+    // If not a pending member, continue with normal flow
+  }
+
+  // 3. CHECK FOR JOIN REQUEST (before authentication)
   if (messageText === 'JOIN JTX' || messageText === 'JOIN') {
     return await handleJoinRequest(c, sql, normalized, body);
   }
