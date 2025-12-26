@@ -4,7 +4,7 @@ import { User } from '../services/auth.js';
 
 /**
  * GET /api/worklog
- * Get buckets with filters and sorting
+ * Get buckets with filters, sorting, pagination, and search
  * OM: only their node, SU: all nodes
  */
 export async function getWorklog(c: Context, sql: Sql) {
@@ -18,6 +18,10 @@ export async function getWorklog(c: Context, sql: Sql) {
         const memberId = c.req.query('memberId');
         const sortBy = c.req.query('sortBy') || 'created_at';
         const order = c.req.query('order') || 'desc';
+        const search = c.req.query('search') || '';
+        const page = parseInt(c.req.query('page') || '1');
+        const limit = parseInt(c.req.query('limit') || '20');
+        const offset = (page - 1) * limit;
 
         // Build WHERE clause based on role
         let conditions = [];
@@ -39,10 +43,31 @@ export async function getWorklog(c: Context, sql: Sql) {
             conditions.push(`b.member_id = ${parseInt(memberId)}`);
         }
 
+        // Search across member name, phone, project name, and raw text
+        if (search.trim()) {
+            const searchTerm = search.trim().replace(/'/g, "''");
+            conditions.push(`(
+                m.full_name ILIKE '%${searchTerm}%' 
+                OR m.phone_number ILIKE '%${searchTerm}%'
+                OR p.name ILIKE '%${searchTerm}%'
+                OR b.raw_text ILIKE '%${searchTerm}%'
+            )`);
+        }
+
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
         const orderClause = `ORDER BY b.${sortBy} ${order.toUpperCase()}`;
 
-        // Get buckets with joins
+        // Get total count
+        const countResult = await sql.unsafe(`
+            SELECT COUNT(*)::int as total
+            FROM buckets b
+            LEFT JOIN projects p ON b.project_id = p.id
+            LEFT JOIN members m ON b.member_id = m.id
+            ${whereClause}
+        `);
+        const total = countResult[0]?.total || 0;
+
+        // Get buckets with joins and pagination
         const buckets = await sql.unsafe(`
             SELECT 
                 b.*,
@@ -56,15 +81,58 @@ export async function getWorklog(c: Context, sql: Sql) {
             LEFT JOIN nodes n ON b.node_id = n.id
             ${whereClause}
             ${orderClause}
-            LIMIT 100
+            LIMIT ${limit} OFFSET ${offset}
         `);
 
         return c.json({
             buckets,
-            total: buckets.length,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
         });
     } catch (error: any) {
-        console.error('[Worklog] Error:', error);
+        console.error('[Work Reported] Error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
+
+/**
+ * POST /api/worklog/:id/approve
+ * Approve/complete a bucket
+ */
+export async function approveBucket(c: Context, sql: Sql) {
+    try {
+        const user: User = c.get('user');
+        const bucketId = parseInt(c.req.param('id'));
+
+        // Get bucket
+        const buckets = await sql`SELECT * FROM buckets WHERE id = ${bucketId}`;
+        if (buckets.length === 0) {
+            return c.json({ error: 'Bucket not found' }, 404);
+        }
+
+        const bucket = buckets[0];
+
+        // OM can only approve their node's buckets
+        if (user.role === 'OM' && bucket.node_id !== user.nodeId) {
+            return c.json({ error: 'Forbidden' }, 403);
+        }
+
+        // Update status to completed
+        await sql`
+            UPDATE buckets 
+            SET status = 'completed',
+                updated_at = NOW()
+            WHERE id = ${bucketId}
+        `;
+
+        console.log(`[Work Reported] Bucket #${bucketId} approved by user ${user.id}`);
+
+        return c.json({ success: true });
+    } catch (error: any) {
+        console.error('[Work Reported] Approve error:', error);
+        return c.json({ error: 'Internal server error' }, 500);
+    }
+}
+

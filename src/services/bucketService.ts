@@ -169,6 +169,7 @@ export async function findProjectByAlias(
 
 /**
  * Get Inbox entries grouped by suspected project name tag
+ * Includes all buckets assigned to the Inbox project
  */
 export async function getInboxEntriesByTag(
     sql: Sql,
@@ -187,18 +188,19 @@ export async function getInboxEntriesByTag(
 
     const inboxId = inboxProjects[0].id;
 
-    // Group buckets by suspected project name
+    // Group buckets by suspected project name (use 'Uncategorized' for nulls)
     const grouped = await sql`
         SELECT 
-            suspected_project_name as tag,
+            COALESCE(suspected_project_name, 'Uncategorized') as tag,
             COUNT(*)::int as count,
             ARRAY_AGG(id) as bucket_ids
         FROM buckets
         WHERE project_id = ${inboxId}
-          AND suspected_project_name IS NOT NULL
-          AND status IN ('open', 'closed', 'completed')
-        GROUP BY suspected_project_name
-        ORDER BY count DESC
+          AND status IN ('open', 'closed', 'completed', 'pending_review')
+        GROUP BY COALESCE(suspected_project_name, 'Uncategorized')
+        ORDER BY 
+            CASE WHEN suspected_project_name IS NULL THEN 1 ELSE 0 END,
+            count DESC
     `;
 
     return grouped.map((g: any) => ({

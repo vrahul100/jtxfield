@@ -6,11 +6,22 @@ interface Project {
     id: number;
     name: string;
     description: string;
-    aliases: string[];
+    aliases: string | null;  // JSON string from database
     nodeId: number;
     nodeName?: string;
     isActive: boolean;
     createdAt: string;
+}
+
+// Helper to safely parse aliases JSON string
+function parseAliases(aliases: string | null): string[] {
+    if (!aliases) return [];
+    try {
+        const parsed = JSON.parse(aliases);
+        return Array.isArray(parsed) ? parsed : [];
+    } catch {
+        return [];
+    }
 }
 
 export function Projects() {
@@ -24,21 +35,35 @@ export function Projects() {
         description: '',
         aliases: '',
     });
+    const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+
+    useEffect(() => {
+        setPage(1);
+    }, [search]);
 
     useEffect(() => {
         fetchProjects();
-    }, []);
+    }, [search, page]);
 
     const fetchProjects = async () => {
         try {
-            const response = await fetch('/api/projects', {
+            const params = new URLSearchParams();
+            if (search.trim()) params.append('search', search.trim());
+            params.append('page', page.toString());
+            params.append('limit', '20');
+
+            const response = await fetch(`/api/projects?${params.toString()}`, {
                 credentials: 'include',
             });
             if (response.ok) {
                 const data = await response.json();
-                // Backend returns { projects: [...] }
                 if (data.projects && Array.isArray(data.projects)) {
                     setProjects(data.projects);
+                    setTotalPages(data.totalPages || 1);
+                    setTotal(data.total || 0);
                 }
             } else {
                 setProjects([]);
@@ -82,8 +107,8 @@ export function Projects() {
         setEditingId(project.id);
         setFormData({
             name: project.name,
-            description: project.description,
-            aliases: project.aliases.join(', '),
+            description: project.description || '',
+            aliases: parseAliases(project.aliases).join(', '),
         });
         setShowForm(true);
     };
@@ -131,6 +156,17 @@ export function Projects() {
                     >
                         {showForm ? 'Cancel' : '+ Add Project'}
                     </button>
+                </div>
+
+                {/* Search */}
+                <div className="card p-4 mb-6">
+                    <input
+                        type="text"
+                        placeholder="Search projects by name or alias..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                        className="input-field w-full"
+                    />
                 </div>
 
                 {/* Project Form */}
@@ -218,10 +254,10 @@ export function Projects() {
                                     {project.description && (
                                         <p className="text-gray-600 mb-3">{project.description}</p>
                                     )}
-                                    {project.aliases && project.aliases.length > 0 && (
+                                    {parseAliases(project.aliases).length > 0 && (
                                         <div className="flex flex-wrap gap-2 mb-2">
                                             <span className="text-sm text-gray-500">Aliases:</span>
-                                            {project.aliases.map((alias, idx) => (
+                                            {parseAliases(project.aliases).map((alias, idx) => (
                                                 <span
                                                     key={idx}
                                                     className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
@@ -258,6 +294,34 @@ export function Projects() {
                         </div>
                     )}
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex justify-between items-center mt-6">
+                        <span className="text-sm text-gray-600">
+                            Showing {projects.length} of {total} projects
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Previous
+                            </button>
+                            <span className="px-3 py-1 text-sm">
+                                Page {page} of {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
     );

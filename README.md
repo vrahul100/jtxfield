@@ -1,4 +1,4 @@
-# JTX Field - Construction Worklog System
+# JTX Field - Construction Work Reported System
 
 A zero-app field worklog system for construction workers and recovery teams. Workers send messages via WhatsApp/SMS, AI extracts structured data, and office managers review and assign work through a web dashboard.
 
@@ -78,7 +78,7 @@ cd frontend && npm run dev
 - **Multi-Language:** Support for English, Spanish, etc.
 
 ### For Office Managers (Web Dashboard)
-- **Worklog View:** Filter/sort all buckets (open, closed, completed)
+- **Work Reported View:** Filter/sort all buckets (open, closed, completed)
 - **Members Management:** Approve orphan workers, add new members
 - **Projects CRUD:** Create, update, delete projects with aliases
 - **Inbox Workflow:** 
@@ -189,7 +189,7 @@ frontend/
 │   │   └── Layout.tsx    # 2-column structure
 │   ├── pages/       # Route pages
 │   │   ├── Login.tsx
-│   │   ├── Worklog.tsx
+│   │   ├── Work Reported.tsx
 │   │   ├── Members.tsx
 │   │   └── Projects.tsx
 │   └── hooks/
@@ -235,7 +235,7 @@ See [AWS Lambda Migration Guide](docs/AWS_LAMBDA.md) for details.
 - `POST /api/auth/logout` - Logout
 - `GET /api/auth/session` - Check session
 
-### Worklog (OM & SU)
+### Work Reported (OM & SU)
 - `GET /api/worklog?status=closed&sortBy=created_at&order=desc`
 
 ### Members (OM & SU)

@@ -49,7 +49,7 @@ Reply CONFIRM to accept and start logging your work.`;
 
 /**
  * GET /api/members
- * Get members list
+ * Get members list with pagination and search
  * OM: only their node, SU: all nodes
  */
 export async function getMembers(c: Context, sql: Sql) {
@@ -57,33 +57,56 @@ export async function getMembers(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const nodeId = c.req.query('nodeId');
         const status = c.req.query('status');
+        const search = c.req.query('search') || '';
+        const page = parseInt(c.req.query('page') || '1');
+        const limit = parseInt(c.req.query('limit') || '20');
+        const offset = (page - 1) * limit;
 
-        let query;
+        // Build conditions
+        let conditions: string[] = [];
+
         if (user.role === 'OM') {
-            // OM sees only their node
-            query = sql`
-                SELECT m.*, n.name as node_name
-                FROM members m
-                LEFT JOIN nodes n ON m.company_id = n.id
-                WHERE m.company_id = ${user.nodeId}
-                ${status ? sql`AND m.status = ${status}` : sql``}
-                ORDER BY m.created_at DESC
-            `;
-        } else {
-            // SU sees all nodes
-            query = sql`
-                SELECT m.*, n.name as node_name
-                FROM members m
-                LEFT JOIN nodes n ON m.company_id = n.id
-                ${nodeId ? sql`WHERE m.company_id = ${parseInt(nodeId)}` : sql``}
-                ${status ? sql`AND m.status = ${status}` : status && !nodeId ? sql`WHERE m.status = ${status}` : sql``}
-                ORDER BY m.created_at DESC
-            `;
+            conditions.push(`m.company_id = ${user.nodeId}`);
+        } else if (nodeId) {
+            conditions.push(`m.company_id = ${parseInt(nodeId)}`);
         }
 
-        const members = await query;
+        if (status) {
+            conditions.push(`m.status = '${status}'`);
+        }
 
-        return c.json({ members });
+        if (search.trim()) {
+            const searchTerm = search.trim().replace(/'/g, "''");
+            conditions.push(`(m.full_name ILIKE '%${searchTerm}%' OR m.phone_number ILIKE '%${searchTerm}%')`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        // Get total count
+        const countResult = await sql.unsafe(`
+            SELECT COUNT(*)::int as total
+            FROM members m
+            ${whereClause}
+        `);
+        const total = countResult[0]?.total || 0;
+
+        // Get members with pagination
+        const members = await sql.unsafe(`
+            SELECT m.*, n.name as node_name
+            FROM members m
+            LEFT JOIN nodes n ON m.company_id = n.id
+            ${whereClause}
+            ORDER BY m.created_at DESC
+            LIMIT ${limit} OFFSET ${offset}
+        `);
+
+        return c.json({
+            members,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        });
     } catch (error: any) {
         console.error('[Members] Get error:', error);
         return c.json({ error: 'Internal server error' }, 500);

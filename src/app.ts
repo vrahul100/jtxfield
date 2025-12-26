@@ -4,7 +4,7 @@ import { handleTwilioWebhook } from './controllers/webhook.js'
 import { createAdminRoutes } from './controllers/admin.js'
 import { getInbox, bulkAssign, addAlias } from './controllers/inbox.js'
 import { login, logout, checkSession } from './controllers/auth.js'
-import { getWorklog } from './controllers/worklog.js'
+import { getWorklog, approveBucket } from './controllers/worklog.js'
 import { getMembers, approveMember, inviteMember, updateMember, deleteMember, resendConfirmation } from './controllers/members.js'
 import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
 import { getNodes, createNode, updateNode } from './controllers/nodes.js'
@@ -24,6 +24,7 @@ export const createApp = (sql: Sql) => {
 
     // 3. WORKLOG API (OM & SU)
     app.get('/api/worklog', requireOM(sql), (c) => getWorklog(c, sql))
+    app.post('/api/worklog/:id/approve', requireOM(sql), (c) => approveBucket(c, sql))
 
     // 4. MEMBERS API (OM & SU)
     app.get('/api/members', requireOM(sql), (c) => getMembers(c, sql))

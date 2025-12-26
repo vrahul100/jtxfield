@@ -4,29 +4,58 @@ import { User } from '../services/auth.js';
 
 /**
  * GET /api/projects
- * Get projects list
+ * Get projects list with pagination and search
  */
 export async function getProjects(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const nodeId = c.req.query('nodeId');
+        const search = c.req.query('search') || '';
+        const page = parseInt(c.req.query('page') || '1');
+        const limit = parseInt(c.req.query('limit') || '20');
+        const offset = (page - 1) * limit;
 
-        let projects;
+        // Build conditions
+        let conditions: string[] = [];
+
         if (user.role === 'OM') {
-            // OM sees only their node's projects
-            projects = await sql`
-                SELECT * FROM projects 
-                WHERE node_id = ${user.nodeId}
-                ORDER BY created_at DESC
-            `;
-        } else {
-            // SU sees projects for selected node or all
-            projects = nodeId
-                ? await sql`SELECT * FROM projects WHERE node_id = ${parseInt(nodeId)} ORDER BY created_at DESC`
-                : await sql`SELECT p.*, n.name as node_name FROM projects p LEFT JOIN nodes n ON p.node_id = n.id ORDER BY p.created_at DESC`;
+            conditions.push(`p.node_id = ${user.nodeId}`);
+        } else if (nodeId) {
+            conditions.push(`p.node_id = ${parseInt(nodeId)}`);
         }
 
-        return c.json({ projects });
+        if (search.trim()) {
+            const searchTerm = search.trim().replace(/'/g, "''");
+            conditions.push(`(p.name ILIKE '%${searchTerm}%' OR p.aliases ILIKE '%${searchTerm}%')`);
+        }
+
+        const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+        // Get total count
+        const countResult = await sql.unsafe(`
+            SELECT COUNT(*)::int as total
+            FROM projects p
+            ${whereClause}
+        `);
+        const total = countResult[0]?.total || 0;
+
+        // Get projects with pagination
+        const projects = await sql.unsafe(`
+            SELECT p.*, n.name as node_name
+            FROM projects p
+            LEFT JOIN nodes n ON p.node_id = n.id
+            ${whereClause}
+            ORDER BY p.created_at DESC
+            LIMIT ${limit} OFFSET ${offset}
+        `);
+
+        return c.json({
+            projects,
+            total,
+            page,
+            limit,
+            totalPages: Math.ceil(total / limit),
+        });
     } catch (error: any) {
         console.error('[Projects] Get error:', error);
         return c.json({ error: 'Internal server error' }, 500);
@@ -82,11 +111,16 @@ export async function updateProject(c: Context, sql: Sql) {
         const body = await c.req.json();
         const { name, isActive, aliases } = body;
 
+        // Convert undefined to null for postgres
+        const nameVal = name !== undefined ? name : null;
+        const isActiveVal = isActive !== undefined ? isActive : null;
+        const aliasesVal = aliases !== undefined ? JSON.stringify(aliases) : null;
+
         const [project] = await sql`
             UPDATE projects
-            SET name = COALESCE(${name}, name),
-                is_active = COALESCE(${isActive}, is_active),
-                aliases = COALESCE(${aliases ? JSON.stringify(aliases) : null}, aliases)
+            SET name = COALESCE(${nameVal}, name),
+                is_active = COALESCE(${isActiveVal}, is_active),
+                aliases = COALESCE(${aliasesVal}, aliases)
             WHERE id = ${projectId}
             ${user.role === 'OM' ? sql`AND node_id = ${user.nodeId}` : sql``}
             RETURNING *

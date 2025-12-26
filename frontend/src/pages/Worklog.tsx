@@ -21,13 +21,22 @@ interface Bucket {
 export function Worklog() {
     const [buckets, setBuckets] = useState<Bucket[]>([]);
     const [loading, setLoading] = useState(true);
+    const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+
+    useEffect(() => {
+        setPage(1); // Reset to page 1 when filters change
+    }, [statusFilter, sortBy, sortOrder, search]);
 
     useEffect(() => {
         fetchBuckets();
-    }, [statusFilter, sortBy, sortOrder]);
+    }, [statusFilter, sortBy, sortOrder, search, page]);
 
     const fetchBuckets = async () => {
         try {
@@ -35,15 +44,19 @@ export function Worklog() {
             if (statusFilter !== 'all') params.append('status', statusFilter);
             params.append('sortBy', sortBy);
             params.append('order', sortOrder);
+            params.append('page', page.toString());
+            params.append('limit', '20');
+            if (search.trim()) params.append('search', search.trim());
 
             const response = await fetch(`/api/worklog?${params.toString()}`, {
                 credentials: 'include',
             });
             if (response.ok) {
                 const data = await response.json();
-                // Backend returns { buckets: [...], total: N }
                 if (data.buckets && Array.isArray(data.buckets)) {
                     setBuckets(data.buckets);
+                    setTotalPages(data.totalPages || 1);
+                    setTotal(data.total || 0);
                 }
             } else {
                 console.error('Failed to fetch worklog:', response.status);
@@ -81,6 +94,28 @@ export function Worklog() {
         return date.toLocaleString();
     };
 
+    const handleApprove = async (bucketId: number) => {
+        if (!confirm('Approve this work item?')) return;
+
+        setActionLoading(bucketId);
+        try {
+            const response = await fetch(`/api/worklog/${bucketId}/approve`, {
+                method: 'POST',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                fetchBuckets();
+            } else {
+                alert('Failed to approve');
+            }
+        } catch (error) {
+            console.error('Failed to approve:', error);
+            alert('Failed to approve');
+        } finally {
+            setActionLoading(null);
+        }
+    };
+
     if (loading) {
         return (
             <Layout>
@@ -94,10 +129,19 @@ export function Worklog() {
     return (
         <Layout>
             <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-6">Worklog</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-6">Work Reported</h1>
 
-                {/* Filters and Sort Controls */}
+                {/* Search and Filters */}
                 <div className="card p-4 mb-6">
+                    <div className="mb-4">
+                        <input
+                            type="text"
+                            placeholder="Search by member, project, or message..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="input-field w-full"
+                        />
+                    </div>
                     <div className="flex gap-4 flex-wrap">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -161,8 +205,19 @@ export function Worklog() {
                                         Bucket #{bucket.id}
                                     </span>
                                 </div>
-                                <div className="text-sm text-gray-500">
-                                    {formatDate(bucket.created_at)}
+                                <div className="flex items-center gap-4">
+                                    <span className="text-sm text-gray-500">
+                                        {formatDate(bucket.created_at)}
+                                    </span>
+                                    {bucket.status !== 'completed' && (
+                                        <button
+                                            onClick={() => handleApprove(bucket.id)}
+                                            disabled={actionLoading === bucket.id}
+                                            className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                                        >
+                                            {actionLoading === bucket.id ? 'Approving...' : '✓ Approve'}
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 
@@ -270,6 +325,34 @@ export function Worklog() {
                         </div>
                     )}
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex justify-between items-center mt-6">
+                        <span className="text-sm text-gray-600">
+                            Showing {buckets.length} of {total} work entries
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Previous
+                            </button>
+                            <span className="px-3 py-1 text-sm">
+                                Page {page} of {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
     );

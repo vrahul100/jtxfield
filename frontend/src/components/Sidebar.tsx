@@ -17,7 +17,7 @@ export function Sidebar() {
                 {/* OM & SU Links */}
                 <NavLink to="/worklog" className={navLinkClass}>
                     <span className="text-xl">📋</span>
-                    <span>Worklog</span>
+                    <span>Work Reported</span>
                 </NavLink>
 
                 <NavLink to="/members" className={navLinkClass}>

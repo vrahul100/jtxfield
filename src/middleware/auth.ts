@@ -110,17 +110,30 @@ export function requireAuth(sql: Sql) {
  */
 export function requireSU(sql: Sql) {
     return async (c: Context, next: Next) => {
-        // First check if authenticated
-        const authMiddleware = requireAuth(sql);
-        await authMiddleware(c, async () => {
-            const user: User = c.get('user');
+        const sessionId = getCookie(c, 'sessionId');
 
-            if (user.role !== 'SU') {
-                return c.json({ error: 'Forbidden: Super User access required' }, 403);
-            }
+        if (!sessionId) {
+            return c.json({ error: 'Unauthorized' }, 401);
+        }
 
-            await next();
-        });
+        const session = getSession(sessionId);
+        if (!session) {
+            return c.json({ error: 'Session expired' }, 401);
+        }
+
+        const user = await getUserById(sql, session.userId);
+        if (!user) {
+            deleteSession(sessionId);
+            deleteCookie(c, 'sessionId');
+            return c.json({ error: 'User not found' }, 401);
+        }
+
+        if (user.role !== 'SU') {
+            return c.json({ error: 'Forbidden: Super User access required' }, 403);
+        }
+
+        c.set('user', user);
+        await next();
     };
 }
 
@@ -129,17 +142,30 @@ export function requireSU(sql: Sql) {
  */
 export function requireOM(sql: Sql) {
     return async (c: Context, next: Next) => {
-        // First check if authenticated
-        const authMiddleware = requireAuth(sql);
-        await authMiddleware(c, async () => {
-            const user: User = c.get('user');
+        const sessionId = getCookie(c, 'sessionId');
 
-            if (user.role !== 'OM' && user.role !== 'SU') {
-                return c.json({ error: 'Forbidden: Office Manager access required' }, 403);
-            }
+        if (!sessionId) {
+            return c.json({ error: 'Unauthorized' }, 401);
+        }
 
-            await next();
-        });
+        const session = getSession(sessionId);
+        if (!session) {
+            return c.json({ error: 'Session expired' }, 401);
+        }
+
+        const user = await getUserById(sql, session.userId);
+        if (!user) {
+            deleteSession(sessionId);
+            deleteCookie(c, 'sessionId');
+            return c.json({ error: 'User not found' }, 401);
+        }
+
+        if (user.role !== 'OM' && user.role !== 'SU') {
+            return c.json({ error: 'Forbidden: Office Manager access required' }, 403);
+        }
+
+        c.set('user', user);
+        await next();
     };
 }
 

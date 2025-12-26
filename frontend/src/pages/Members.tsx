@@ -22,21 +22,36 @@ export function Members() {
     const [formData, setFormData] = useState({ name: '', phone: '' });
     const [formError, setFormError] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+    const [search, setSearch] = useState('');
+    const [page, setPage] = useState(1);
+    const [totalPages, setTotalPages] = useState(1);
+    const [total, setTotal] = useState(0);
+
+    useEffect(() => {
+        setPage(1);
+    }, [filter, search]);
 
     useEffect(() => {
         fetchMembers();
-    }, []);
+    }, [filter, search, page]);
 
     const fetchMembers = async () => {
         try {
-            const response = await fetch('/api/members', {
+            const params = new URLSearchParams();
+            if (filter !== 'all') params.append('status', filter);
+            if (search.trim()) params.append('search', search.trim());
+            params.append('page', page.toString());
+            params.append('limit', '20');
+
+            const response = await fetch(`/api/members?${params.toString()}`, {
                 credentials: 'include',
             });
             if (response.ok) {
                 const data = await response.json();
-                // Backend returns { members: [...] }
                 if (data.members && Array.isArray(data.members)) {
                     setMembers(data.members);
+                    setTotalPages(data.totalPages || 1);
+                    setTotal(data.total || 0);
                 }
             } else {
                 setMembers([]);
@@ -167,22 +182,17 @@ export function Members() {
         }
     };
 
-    const filteredMembers = members
-        .filter(m => {
-            if (filter === 'all') return m.status !== 'inactive';
-            if (filter === 'inactive') return m.status === 'inactive';
-            return m.status === filter;
-        })
-        .sort((a, b) => {
-            const aName = a.full_name || '';
-            const bName = b.full_name || '';
-            const aPhone = a.phone_number || '';
-            const bPhone = b.phone_number || '';
+    // Client-side sorting only (server handles filtering/pagination)
+    const sortedMembers = [...members].sort((a, b) => {
+        const aName = a.full_name || '';
+        const bName = b.full_name || '';
+        const aPhone = a.phone_number || '';
+        const bPhone = b.phone_number || '';
 
-            if (sortBy === 'name') return aName.localeCompare(bName);
-            if (sortBy === 'phone') return aPhone.localeCompare(bPhone);
-            return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-        });
+        if (sortBy === 'name') return aName.localeCompare(bName);
+        if (sortBy === 'phone') return aPhone.localeCompare(bPhone);
+        return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
     if (loading) {
         return (
@@ -252,8 +262,17 @@ export function Members() {
                     </div>
                 )}
 
-                {/* Filters and Sort */}
+                {/* Search, Filters and Sort */}
                 <div className="card p-4 mb-6">
+                    <div className="mb-4">
+                        <input
+                            type="text"
+                            placeholder="Search by name or phone..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="input-field w-full"
+                        />
+                    </div>
                     <div className="flex gap-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -264,7 +283,7 @@ export function Members() {
                                 onChange={(e) => setFilter(e.target.value)}
                                 className="input-field"
                             >
-                                <option value="all">All Active</option>
+                                <option value="all">All</option>
                                 <option value="active">Confirmed</option>
                                 <option value="pending">Awaiting Confirmation</option>
                                 <option value="inactive">Inactive</option>
@@ -313,7 +332,7 @@ export function Members() {
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200">
-                                {filteredMembers.map((member) => (
+                                {sortedMembers.map((member: Member) => (
                                     <tr key={member.id} className="hover:bg-gray-50">
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm font-medium text-gray-900">
@@ -368,13 +387,41 @@ export function Members() {
                                 ))}
                             </tbody>
                         </table>
-                        {filteredMembers.length === 0 && (
+                        {sortedMembers.length === 0 && (
                             <div className="text-center py-8 text-gray-500">
                                 No members found
                             </div>
                         )}
                     </div>
                 </div>
+
+                {/* Pagination */}
+                {totalPages > 1 && (
+                    <div className="flex justify-between items-center mt-6">
+                        <span className="text-sm text-gray-600">
+                            Showing {sortedMembers.length} of {total} members
+                        </span>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => setPage(p => Math.max(1, p - 1))}
+                                disabled={page === 1}
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Previous
+                            </button>
+                            <span className="px-3 py-1 text-sm">
+                                Page {page} of {totalPages}
+                            </span>
+                            <button
+                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                disabled={page === totalPages}
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                Next
+                            </button>
+                        </div>
+                    </div>
+                )}
             </div>
         </Layout>
     );
