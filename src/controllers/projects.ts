@@ -114,7 +114,7 @@ export async function updateProject(c: Context, sql: Sql) {
         // Convert undefined to null for postgres
         const nameVal = name !== undefined ? name : null;
         const isActiveVal = isActive !== undefined ? isActive : null;
-        const aliasesVal = aliases !== undefined ? JSON.stringify(aliases) : null;
+        const aliasesVal = aliases !== undefined ? aliases : null;
 
         const [project] = await sql`
             UPDATE projects

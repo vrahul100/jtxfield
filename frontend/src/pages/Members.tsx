@@ -19,6 +19,7 @@ export function Members() {
     const [filter, setFilter] = useState('all');
     const [sortBy, setSortBy] = useState('name');
     const [showAddForm, setShowAddForm] = useState(false);
+    const [editingMember, setEditingMember] = useState<Member | null>(null);
     const [formData, setFormData] = useState({ name: '', phone: '' });
     const [formError, setFormError] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
@@ -156,6 +157,48 @@ export function Members() {
         }
     };
 
+    const handleUpdateMember = async (e: React.FormEvent) => {
+        e.preventDefault();
+        if (!editingMember) return;
+        setFormError('');
+
+        try {
+            const response = await fetch(`/api/members/${editingMember.id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    fullName: formData.name,
+                    // Phone number is not sent/updated as it's read-only
+                }),
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                setFormData({ name: '', phone: '' });
+                setEditingMember(null);
+                fetchMembers();
+                alert('Member updated successfully!');
+            } else {
+                setFormError(data.error || 'Failed to update member');
+            }
+        } catch (error) {
+            console.error('Failed to update member:', error);
+            setFormError('An error occurred while updating the member');
+        }
+    };
+
+    const startEdit = (member: Member) => {
+        setEditingMember(member);
+        setFormData({
+            name: member.full_name,
+            phone: member.phone_number,
+        });
+        setShowAddForm(false);
+        window.scrollTo(0, 0);
+    };
+
     const getStatusBadge = (status: string) => {
         switch (status) {
             case 'active':
@@ -217,16 +260,30 @@ export function Members() {
                     </button>
                 </div>
 
-                {/* Add Member Form */}
-                {showAddForm && (
+                {/* Add/Edit Member Form */}
+                {(showAddForm || editingMember) && (
                     <div className="card p-6 mb-6">
-                        <h2 className="text-xl font-semibold mb-4">Invite Member</h2>
+                        <div className="flex justify-between items-center mb-4">
+                            <h2 className="text-xl font-semibold">
+                                {editingMember ? 'Edit Member' : 'Invite Member'}
+                            </h2>
+                            <button
+                                onClick={() => {
+                                    setShowAddForm(false);
+                                    setEditingMember(null);
+                                    setFormData({ name: '', phone: '' });
+                                }}
+                                className="text-gray-500 hover:text-gray-700"
+                            >
+                                &times;
+                            </button>
+                        </div>
                         {formError && (
                             <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
                                 {formError}
                             </div>
                         )}
-                        <form onSubmit={handleAddMember} className="space-y-4">
+                        <form onSubmit={editingMember ? handleUpdateMember : handleAddMember} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">
                                     Name
@@ -247,17 +304,38 @@ export function Members() {
                                     type="tel"
                                     value={formData.phone}
                                     onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-                                    className="input-field"
+                                    className={`input-field ${editingMember ? 'bg-gray-100 cursor-not-allowed' : ''}`}
                                     placeholder="+15551234567"
                                     required
+                                    disabled={!!editingMember}
                                 />
-                                <p className="text-sm text-gray-500 mt-1">
-                                    Member will receive a WhatsApp invitation to join your team.
-                                </p>
+                                {!editingMember && (
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Member will receive a WhatsApp invitation to join your team.
+                                    </p>
+                                )}
+                                {editingMember && (
+                                    <p className="text-sm text-gray-500 mt-1">
+                                        Phone number cannot be changed.
+                                    </p>
+                                )}
                             </div>
-                            <button type="submit" className="btn-primary">
-                                Send Invitation
-                            </button>
+                            <div className="flex gap-2 justify-end">
+                                <button
+                                    type="button"
+                                    onClick={() => {
+                                        setShowAddForm(false);
+                                        setEditingMember(null);
+                                        setFormData({ name: '', phone: '' });
+                                    }}
+                                    className="btn-secondary"
+                                >
+                                    Cancel
+                                </button>
+                                <button type="submit" className="btn-primary">
+                                    {editingMember ? 'Update Member' : 'Send Invitation'}
+                                </button>
+                            </div>
                         </form>
                     </div>
                 )}
@@ -382,6 +460,13 @@ export function Members() {
                                                     Delete
                                                 </button>
                                             )}
+                                            <button
+                                                onClick={() => startEdit(member)}
+                                                disabled={actionLoading === member.id}
+                                                className="text-indigo-600 hover:text-indigo-900 disabled:opacity-50"
+                                            >
+                                                Edit
+                                            </button>
                                         </td>
                                     </tr>
                                 ))}

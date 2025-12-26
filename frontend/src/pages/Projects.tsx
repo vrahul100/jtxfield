@@ -8,9 +8,13 @@ interface Project {
     description: string;
     aliases: string | null;  // JSON string from database
     nodeId: number;
+    node_id?: number;
     nodeName?: string;
-    isActive: boolean;
-    createdAt: string;
+    node_name?: string;
+    isActive?: boolean;
+    is_active?: boolean;
+    createdAt?: string;
+    created_at?: string;
 }
 
 // Helper to safely parse aliases JSON string
@@ -24,6 +28,11 @@ function parseAliases(aliases: string | null): string[] {
     }
 }
 
+// Helper to get isActive from project (handles both snake_case and camelCase)
+function getIsActive(project: Project): boolean {
+    return project.is_active ?? project.isActive ?? true;
+}
+
 export function Projects() {
     const { user } = useAuth();
     const [projects, setProjects] = useState<Project[]>([]);
@@ -34,6 +43,7 @@ export function Projects() {
         name: '',
         description: '',
         aliases: '',
+        isActive: true,
     });
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -61,7 +71,9 @@ export function Projects() {
             if (response.ok) {
                 const data = await response.json();
                 if (data.projects && Array.isArray(data.projects)) {
-                    setProjects(data.projects);
+                    // Filter out Inbox project
+                    const filtered = data.projects.filter((p: Project) => p.name !== 'Inbox');
+                    setProjects(filtered);
                     setTotalPages(data.totalPages || 1);
                     setTotal(data.total || 0);
                 }
@@ -85,6 +97,7 @@ export function Projects() {
             name: formData.name,
             description: formData.description,
             aliases: formData.aliases.split(',').map(a => a.trim()).filter(Boolean),
+            isActive: formData.isActive,
         };
 
         try {
@@ -109,6 +122,7 @@ export function Projects() {
             name: project.name,
             description: project.description || '',
             aliases: parseAliases(project.aliases).join(', '),
+            isActive: getIsActive(project),
         });
         setShowForm(true);
     };
@@ -130,7 +144,7 @@ export function Projects() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', description: '', aliases: '' });
+        setFormData({ name: '', description: '', aliases: '', isActive: true });
         setEditingId(null);
         setShowForm(false);
     };
@@ -214,6 +228,18 @@ export function Projects() {
                                     Alternative names workers might use to refer to this project
                                 </p>
                             </div>
+                            <div className="flex items-center">
+                                <input
+                                    type="checkbox"
+                                    id="isActive"
+                                    checked={formData.isActive}
+                                    onChange={(e) => setFormData({ ...formData, isActive: e.target.checked })}
+                                    className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-gray-300 rounded"
+                                />
+                                <label htmlFor="isActive" className="ml-2 block text-sm text-gray-900">
+                                    Active Project
+                                </label>
+                            </div>
                             <div className="flex gap-2">
                                 <button type="submit" className="btn-primary">
                                     {editingId ? 'Update' : 'Create'} Project
@@ -243,12 +269,12 @@ export function Projects() {
                                             {project.name}
                                         </h3>
                                         <span
-                                            className={`px-2 py-1 text-xs font-semibold rounded-full ${project.isActive
+                                            className={`px-2 py-1 text-xs font-semibold rounded-full ${getIsActive(project)
                                                 ? 'bg-green-100 text-green-800'
                                                 : 'bg-gray-100 text-gray-800'
                                                 }`}
                                         >
-                                            {project.isActive ? 'Active' : 'Inactive'}
+                                            {getIsActive(project) ? 'Active' : 'Inactive'}
                                         </span>
                                     </div>
                                     {project.description && (

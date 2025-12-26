@@ -35,6 +35,22 @@ export function Sidebar() {
                     <span>Inbox</span>
                 </NavLink>
 
+                <div className="pt-2">
+                    <div className="px-4 text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2">
+                        Coming Soon
+                    </div>
+                    <div className="opacity-60 cursor-not-allowed">
+                        <div className="flex items-center gap-3 px-4 py-2 text-gray-400">
+                            <span className="text-xl">💲</span>
+                            <span>Rate Card</span>
+                        </div>
+                        <div className="flex items-center gap-3 px-4 py-2 text-gray-400">
+                            <span className="text-xl">🧾</span>
+                            <span>Transactions</span>
+                        </div>
+                    </div>
+                </div>
+
                 {/* SU Only Links */}
                 {user?.role === 'SU' && (
                     <>

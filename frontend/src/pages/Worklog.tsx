@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 
 interface Bucket {
@@ -18,11 +18,20 @@ interface Bucket {
     updated_at?: string;
 }
 
+interface Project {
+    id: number;
+    name: string;
+}
+
 export function Worklog() {
     const [buckets, setBuckets] = useState<Bucket[]>([]);
+    const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
+
     const [actionLoading, setActionLoading] = useState<number | null>(null);
+    const [expandedBucketIds, setExpandedBucketIds] = useState<number[]>([]);
     const [statusFilter, setStatusFilter] = useState<string>('all');
+    const [projectFilter, setProjectFilter] = useState<string>('all');
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [search, setSearch] = useState('');
@@ -31,17 +40,34 @@ export function Worklog() {
     const [total, setTotal] = useState(0);
 
     useEffect(() => {
+        fetchProjects();
+    }, []);
+
+    useEffect(() => {
         setPage(1); // Reset to page 1 when filters change
-    }, [statusFilter, sortBy, sortOrder, search]);
+    }, [statusFilter, projectFilter, sortBy, sortOrder, search]);
 
     useEffect(() => {
         fetchBuckets();
-    }, [statusFilter, sortBy, sortOrder, search, page]);
+    }, [statusFilter, projectFilter, sortBy, sortOrder, search, page]);
+
+    const fetchProjects = async () => {
+        try {
+            const response = await fetch('/api/projects?limit=100', { credentials: 'include' });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.projects) setProjects(data.projects);
+            }
+        } catch (error) {
+            console.error('Failed to fetch projects:', error);
+        }
+    };
 
     const fetchBuckets = async () => {
         try {
             const params = new URLSearchParams();
             if (statusFilter !== 'all') params.append('status', statusFilter);
+            if (projectFilter !== 'all') params.append('projectId', projectFilter);
             params.append('sortBy', sortBy);
             params.append('order', sortOrder);
             params.append('page', page.toString());
@@ -116,6 +142,12 @@ export function Worklog() {
         }
     };
 
+    const toggleExpand = (id: number) => {
+        setExpandedBucketIds(prev =>
+            prev.includes(id) ? prev.filter(bId => bId !== id) : [...prev, id]
+        );
+    };
+
     if (loading) {
         return (
             <Layout>
@@ -161,6 +193,21 @@ export function Worklog() {
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">
+                                Project
+                            </label>
+                            <select
+                                value={projectFilter}
+                                onChange={(e) => setProjectFilter(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="all">All Projects</option>
+                                {projects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">
                                 Sort By
                             </label>
                             <select
@@ -188,142 +235,157 @@ export function Worklog() {
                     </div>
                 </div>
 
-                {/* Buckets List */}
-                <div className="space-y-4">
-                    {buckets.map((bucket) => (
-                        <div key={bucket.id} className="card p-6">
-                            <div className="flex justify-between items-start mb-3">
-                                <div className="flex items-center gap-3">
-                                    <span
-                                        className={`px-3 py-1 text-xs font-semibold rounded-full ${getStatusColor(
-                                            bucket.status
-                                        )}`}
-                                    >
-                                        {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
-                                    </span>
-                                    <span className="text-sm text-gray-500">
-                                        Bucket #{bucket.id}
-                                    </span>
-                                </div>
-                                <div className="flex items-center gap-4">
-                                    <span className="text-sm text-gray-500">
-                                        {formatDate(bucket.created_at)}
-                                    </span>
-                                    {bucket.status !== 'completed' && (
-                                        <button
-                                            onClick={() => handleApprove(bucket.id)}
-                                            disabled={actionLoading === bucket.id}
-                                            className="px-3 py-1 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
-                                        >
-                                            {actionLoading === bucket.id ? 'Approving...' : '✓ Approve'}
-                                        </button>
-                                    )}
-                                </div>
-                            </div>
-
-                            <div className="grid grid-cols-2 gap-4 mb-3">
-                                <div>
-                                    <span className="text-sm font-medium text-gray-600">Member:</span>
-                                    <span className="ml-2 text-gray-900">
-                                        {bucket.member_name || bucket.member_phone || 'Unknown'}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-sm font-medium text-gray-600">Project:</span>
-                                    <span className="ml-2 text-gray-900">
-                                        {bucket.project_name || 'Unassigned'}
-                                    </span>
-                                </div>
-                            </div>
-
-                            {bucket.raw_text && (
-                                <div className="border-t pt-3">
-                                    <p className="text-sm font-medium text-gray-600 mb-1">Message:</p>
-                                    <p className="text-gray-900 whitespace-pre-wrap">{bucket.raw_text}</p>
-                                </div>
-                            )}
-
-                            {/* Transcripts */}
-                            {bucket.transcripts && (() => {
-                                try {
-                                    const transcripts = JSON.parse(bucket.transcripts);
-                                    if (Array.isArray(transcripts) && transcripts.length > 0) {
-                                        return (
-                                            <div className="border-t pt-3 mt-3">
-                                                <p className="text-sm font-medium text-gray-600 mb-1">🎤 Voice Transcripts:</p>
-                                                {transcripts.map((t: string, i: number) => (
-                                                    <p key={i} className="text-gray-900 italic">"{t}"</p>
-                                                ))}
-                                            </div>
-                                        );
-                                    }
-                                } catch { return null; }
-                                return null;
-                            })()}
-
-                            {/* Media Section */}
-                            {(bucket.image_urls || bucket.audio_urls) && (
-                                <div className="border-t pt-3 mt-3">
-                                    <p className="text-sm font-medium text-gray-600 mb-2">📎 Attachments:</p>
-                                    <div className="flex flex-wrap gap-4">
-                                        {/* Images */}
-                                        {bucket.image_urls && (() => {
-                                            try {
-                                                const urls = JSON.parse(bucket.image_urls);
-                                                if (Array.isArray(urls)) {
-                                                    return urls.map((url: string, i: number) => (
-                                                        <a
-                                                            key={`img-${i}`}
-                                                            href={url}
-                                                            target="_blank"
-                                                            rel="noopener noreferrer"
-                                                            className="block"
-                                                        >
-                                                            <img
-                                                                src={url}
-                                                                alt={`Attachment ${i + 1}`}
-                                                                className="w-24 h-24 object-cover rounded border hover:opacity-80 transition"
-                                                            />
-                                                        </a>
-                                                    ));
-                                                }
-                                            } catch { return null; }
-                                            return null;
-                                        })()}
-
-                                        {/* Audio */}
-                                        {bucket.audio_urls && (() => {
-                                            try {
-                                                const urls = JSON.parse(bucket.audio_urls);
-                                                if (Array.isArray(urls)) {
-                                                    return urls.map((url: string, i: number) => (
-                                                        <div key={`audio-${i}`} className="flex items-center gap-2 bg-gray-100 px-3 py-2 rounded">
-                                                            <span className="text-lg">🎵</span>
-                                                            <a
-                                                                href={url}
-                                                                target="_blank"
-                                                                rel="noopener noreferrer"
-                                                                className="text-blue-600 hover:underline text-sm"
-                                                            >
-                                                                Voice Note {i + 1}
-                                                            </a>
+                {/* Buckets Table */}
+                <div className="card overflow-hidden">
+                    <div className="overflow-x-auto">
+                        <table className="min-w-full divide-y divide-gray-200">
+                            <thead className="bg-gray-50">
+                                <tr>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Status
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Member
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Project
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Message
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="bg-white divide-y divide-gray-200">
+                                {buckets.map((bucket) => {
+                                    const isExpanded = expandedBucketIds.includes(bucket.id);
+                                    return (
+                                        <React.Fragment key={bucket.id}>
+                                            <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpand(bucket.id)}>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(bucket.status)}`}>
+                                                        {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm font-medium text-gray-900">{bucket.member_name || bucket.member_phone || 'Unknown'}</div>
+                                                    {bucket.member_name && <div className="text-xs text-gray-500">{bucket.member_phone}</div>}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <div className="text-sm text-gray-900">{bucket.project_name || 'Unassigned'}</div>
+                                                </td>
+                                                <td className="px-6 py-4">
+                                                    <div className="text-sm text-gray-900 line-clamp-2">
+                                                        {bucket.raw_text || '(No text content)'}
+                                                    </div>
+                                                    {(bucket.image_urls || bucket.audio_urls) && (
+                                                        <div className="text-xs text-blue-600 mt-1">
+                                                            📎 Has attachments
                                                         </div>
-                                                    ));
-                                                }
-                                            } catch { return null; }
-                                            return null;
-                                        })()}
-                                    </div>
-                                </div>
-                            )}
-                        </div>
-                    ))}
+                                                    )}
+                                                </td>
+                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                                    <div className="flex items-center gap-2">
+                                                        {bucket.status !== 'completed' && (
+                                                            <button
+                                                                onClick={() => handleApprove(bucket.id)}
+                                                                disabled={actionLoading === bucket.id}
+                                                                className="text-green-600 hover:text-green-900 disabled:opacity-50"
+                                                            >
+                                                                {actionLoading === bucket.id ? '...' : 'Approve'}
+                                                            </button>
+                                                        )}
+                                                        <button
+                                                            onClick={(e) => { e.stopPropagation(); toggleExpand(bucket.id); }}
+                                                            className="text-gray-400 hover:text-gray-600"
+                                                        >
+                                                            {isExpanded ? 'Collapse' : 'Expand'}
+                                                        </button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                            {isExpanded && (
+                                                <tr className="bg-gray-50">
+                                                    <td colSpan={5} className="px-6 py-4">
+                                                        <div className="text-sm text-gray-900 mb-4">
+                                                            <strong>Full Message:</strong>
+                                                            <p className="whitespace-pre-wrap mt-1">{bucket.raw_text}</p>
+                                                        </div>
 
-                    {buckets.length === 0 && (
-                        <div className="card p-8 text-center text-gray-500">
-                            No work entries found. Workers can send updates via WhatsApp/SMS.
-                        </div>
-                    )}
+                                                        {/* Transcripts */}
+                                                        {bucket.transcripts && (() => {
+                                                            try {
+                                                                const transcripts = JSON.parse(bucket.transcripts);
+                                                                if (Array.isArray(transcripts) && transcripts.length > 0) {
+                                                                    return (
+                                                                        <div className="mb-4">
+                                                                            <strong>Transcripts:</strong>
+                                                                            {transcripts.map((t: string, i: number) => (
+                                                                                <p key={i} className="italic mt-1">"{t}"</p>
+                                                                            ))}
+                                                                        </div>
+                                                                    );
+                                                                }
+                                                            } catch { return null; }
+                                                            return null;
+                                                        })()}
+
+                                                        {/* Media */}
+                                                        {(bucket.image_urls || bucket.audio_urls) && (
+                                                            <div>
+                                                                <strong>Attachments:</strong>
+                                                                <div className="flex flex-wrap gap-4 mt-2">
+                                                                    {/* Images */}
+                                                                    {bucket.image_urls && (() => {
+                                                                        try {
+                                                                            const urls = JSON.parse(bucket.image_urls);
+                                                                            if (Array.isArray(urls)) {
+                                                                                return urls.map((url: string, i: number) => (
+                                                                                    <a key={`img-${i}`} href={url} target="_blank" rel="noopener noreferrer">
+                                                                                        <img src={url} alt={`Attachment ${i + 1}`} className="w-24 h-24 object-cover rounded border hover:opacity-80" />
+                                                                                    </a>
+                                                                                ));
+                                                                            }
+                                                                        } catch { return null; }
+                                                                        return null;
+                                                                    })()}
+                                                                    {/* Audio */}
+                                                                    {bucket.audio_urls && (() => {
+                                                                        try {
+                                                                            const urls = JSON.parse(bucket.audio_urls);
+                                                                            if (Array.isArray(urls)) {
+                                                                                return urls.map((url: string, i: number) => (
+                                                                                    <div key={`audio-${i}`} className="flex items-center gap-2 bg-white px-3 py-2 rounded border">
+                                                                                        <span className="text-lg">🎵</span>
+                                                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">Voice Note {i + 1}</a>
+                                                                                    </div>
+                                                                                ));
+                                                                            }
+                                                                        } catch { return null; }
+                                                                        return null;
+                                                                    })()}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <div className="text-xs text-gray-500 mt-4">
+                                                            Created: {formatDate(bucket.created_at)}
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+                                        </React.Fragment>
+                                    );
+                                })}
+                            </tbody>
+                        </table>
+                        {buckets.length === 0 && (
+                            <div className="text-center py-8 text-gray-500">
+                                No work entries found.
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 {/* Pagination */}
