@@ -163,10 +163,27 @@ You're now activated. Start sending your work updates via text, photos, or voice
 
   console.log(`[PROJECT] ${projectMatchInfo}`);
 
-  // 8. FIND OR CREATE BUCKET (with suspected project name)
+  // 8. FIND OR CREATE BUCKET (ticket)
   let bucket = await findOpenBucket(sql, member.id, projectId);
+  let isNewTicket = false;
+
+  // Count total media in current message
+  const newMediaCount = imageUrls.length + audioUrls.length;
 
   if (bucket) {
+    // Check existing media count
+    const existingImages = bucket.image_urls ? JSON.parse(bucket.image_urls) : [];
+    const existingAudio = bucket.audio_urls ? JSON.parse(bucket.audio_urls) : [];
+    const existingMediaCount = existingImages.length + existingAudio.length;
+    const totalAfterAppend = existingMediaCount + newMediaCount;
+
+    if (totalAfterAppend > 5) {
+      // At media limit - don't append more media, just notify
+      console.log(`[TICKET] Ticket #${bucket.id} at media limit (${existingMediaCount} existing, ${newMediaCount} new)`);
+      const limitMsg = `⚠️ Ticket #${bucket.id} already has ${existingMediaCount} attachments (max 5). No more can be added.\n\nSend text details instead, or wait for this ticket to close.`;
+      return c.text(`<Response><Message>${limitMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+
     // Append to existing bucket
     bucket = await appendToBucket(sql, bucket, {
       rawText: fullText,
@@ -175,9 +192,9 @@ You're now activated. Start sending your work updates via text, photos, or voice
       transcripts,
       messageSid,
     });
-    console.log(`[BUCKET] Appended to #${bucket.id}`);
+    console.log(`[TICKET] Appended to ticket #${bucket.id}`);
   } else {
-    // Create new bucket with suspected project name
+    // Create new bucket (ticket)
     bucket = await createBucket(sql, {
       memberId: member.id,
       nodeId: member.company_id,
@@ -189,22 +206,23 @@ You're now activated. Start sending your work updates via text, photos, or voice
       audioUrls,
       transcripts,
       messageSid,
-      suspectedProjectName, // NEW: Save the AI-extracted tag
+      suspectedProjectName,
     });
-    console.log(`[BUCKET] Created #${bucket.id}`);
+    isNewTicket = true;
+    console.log(`[TICKET] Opened ticket #${bucket.id}`);
   }
 
-  // 9. VALIDATE BUCKET COMPLETENESS
+  // 9. VALIDATE TICKET COMPLETENESS
   const validation = await validateBucket(sql, bucket);
   console.log(`[VALIDATE] Complete: ${validation.isComplete}, Errors: ${validation.errors.length}`);
 
-  // Count attempts (number of messages added to this bucket)
+  // Count attempts (number of messages added to this ticket)
   const messageSids = bucket.message_sids ? JSON.parse(bucket.message_sids) : [];
   const attemptCount = messageSids.length;
-  console.log(`[BUCKET] Attempt count: ${attemptCount}`);
+  console.log(`[TICKET] Attempt count: ${attemptCount}`);
 
   if (validation.isComplete) {
-    // Close bucket and send confirmation
+    // Close ticket and send confirmation with ticket number
     await closeBucket(sql, bucket.id);
 
     // Update last confirmed project if we had one (and it's not Inbox)
@@ -212,38 +230,49 @@ You're now activated. Start sending your work updates via text, photos, or voice
       await updateLastConfirmedProject(sql, member.id, projectId);
     }
 
-    // TODO: Re-enable when ready for txn creation
-    // await queueBucketForProcessing(bucket);
-
     // Get project name for confirmation
     const projectResult = await sql`SELECT name, is_inbox FROM projects WHERE id = ${projectId}`;
     const projectName = projectResult[0]?.name || 'Inbox';
 
-    // Build confirmation message with tag if it's an Inbox entry
-    const summaryLine = validation.summary ? `So you: "${validation.summary}"\n\n` : '';
+    // Build confirmation message with ticket number
+    const summaryLine = validation.summary ? `"${validation.summary}"\n\n` : '';
     const tagLine = isInbox && suspectedProjectName
       ? `(Tag: ${suspectedProjectName}) `
       : '';
-    const confirmationMsg = `${summaryLine}✅ ${tagLine}Logged to: ${projectName}\n\nType N within 5 min if wrong project.`;
+    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\n${summaryLine}${tagLine}Logged to: ${projectName}`;
 
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   } else if (attemptCount >= 2) {
-    // After 2 attempts, send for review instead of asking more questions
+    // After 2 attempts, send for review - include the reason if available
     await sql`
       UPDATE buckets 
       SET status = 'pending_review', updated_at = NOW() 
       WHERE id = ${bucket.id}
     `;
-    console.log(`[BUCKET] Sent #${bucket.id} for review after ${attemptCount} attempts`);
+    console.log(`[TICKET] Sent ticket #${bucket.id} for review after ${attemptCount} attempts`);
 
-    const reviewMsg = `📋 Got it! Your entry has been sent for review. An admin will follow up if needed.`;
+    // Include validation errors/questions in review message
+    const reasonLine = validation.questions.length > 0
+      ? `\n\nReason: ${validation.questions[0].replace('⚠️ ', '').replace('The details don\'t look right. ', '')}`
+      : (validation.errors.length > 0 ? `\n\nIssue: ${validation.errors[0]}` : '');
+
+    const reviewMsg = `📋 Ticket #${bucket.id} sent for review.${reasonLine}\n\nAn admin will follow up.`;
     return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   } else {
-    // Bucket incomplete - show helpful questions to guide user
-    const responseMsg = validation.questions.length > 0
-      ? validation.questions.join('\n\n')
-      : `📥 Received! Send more details to complete this.`;
-    return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    // Ticket incomplete - show questions (including inconsistency) or generic message
+    if (validation.questions.length > 0) {
+      // Show validation questions (includes inconsistency reasons)
+      const questionMsg = isNewTicket
+        ? `📋 Ticket #${bucket.id} opened.\n\n${validation.questions.join('\n\n')}`
+        : `Ticket #${bucket.id}: ${validation.questions.join('\n\n')}`;
+      return c.text(`<Response><Message>${questionMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    } else if (isNewTicket) {
+      const openMsg = `📋 Ticket #${bucket.id} opened.\n\nSend photos and details to complete it.`;
+      return c.text(`<Response><Message>${openMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    } else {
+      const responseMsg = `📥 Ticket #${bucket.id}: Received! Send more details to complete.`;
+      return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
   }
 }
 

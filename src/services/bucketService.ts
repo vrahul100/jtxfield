@@ -3,7 +3,7 @@ import { extractMessageInfo } from './extractionService.js';
 import { getQueue } from '../queue/index.js';
 import { getSchemaForDomain, FIELD_QUESTIONS } from '../schemas/domainSchemas.js';
 
-export type BucketStatus = 'open' | 'closed' | 'processing' | 'completed' | 'failed' | 'holding' | 'awaiting_correction' | 'pending_review';
+export type BucketStatus = 'open' | 'submitted' | 'pending_review' | 'rejected';
 
 export interface Bucket {
     id: number;
@@ -602,14 +602,14 @@ export async function validateBucket(
 }
 
 /**
- * Close a bucket (mark as ready for processing)
+ * Close a bucket (mark as submitted)
  */
 export async function closeBucket(sql: Sql, bucketId: number): Promise<void> {
     await sql`
-        UPDATE buckets SET status = 'closed', updated_at = NOW()
+        UPDATE buckets SET status = 'submitted', updated_at = NOW()
         WHERE id = ${bucketId}
     `;
-    console.log(`[BucketService] ✅ Closed bucket #${bucketId}`);
+    console.log(`[BucketService] ✅ Submitted bucket #${bucketId}`);
 }
 
 /**

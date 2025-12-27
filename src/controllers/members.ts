@@ -275,13 +275,14 @@ export async function updateMember(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const memberId = parseInt(c.req.param('id'));
         const body = await c.req.json();
-        const { fullName, domain, status } = body;
+        const { fullName, domain, status, language } = body;
 
         const [member] = await sql`
             UPDATE members
             SET full_name = COALESCE(${fullName}, full_name),
                 domain = COALESCE(${domain}, domain),
-                status = COALESCE(${status}, status)
+                status = COALESCE(${status}, status),
+                language = COALESCE(${language}, language)
             WHERE id = ${memberId}
             ${user.role === 'OM' ? sql`AND company_id = ${user.nodeId}` : sql``}
             RETURNING *

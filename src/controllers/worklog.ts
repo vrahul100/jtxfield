@@ -119,10 +119,10 @@ export async function approveBucket(c: Context, sql: Sql) {
             return c.json({ error: 'Forbidden' }, 403);
         }
 
-        // Update status to completed
+        // Update status to submitted
         await sql`
             UPDATE buckets 
-            SET status = 'completed',
+            SET status = 'submitted',
                 updated_at = NOW()
             WHERE id = ${bucketId}
         `;

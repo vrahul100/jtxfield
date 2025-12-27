@@ -14,6 +14,8 @@ interface Bucket {
     image_urls: string | null;
     audio_urls: string | null;
     transcripts: string | null;
+    clarity_score: number | null;
+    notes: string | null;
     created_at: string;
     updated_at?: string;
 }
@@ -106,16 +108,10 @@ export function Worklog() {
         switch (status) {
             case 'open':
                 return 'bg-blue-100 text-blue-800';
-            case 'closed':
-                return 'bg-yellow-100 text-yellow-800';
-            case 'completed':
+            case 'submitted':
                 return 'bg-green-100 text-green-800';
-            case 'processing':
-                return 'bg-purple-100 text-purple-800';
             case 'pending_review':
                 return 'bg-orange-100 text-orange-800';
-            case 'awaiting_correction':
-                return 'bg-red-100 text-red-800';
             case 'rejected':
                 return 'bg-red-200 text-red-900';
             default:
@@ -128,6 +124,13 @@ export function Worklog() {
         const date = new Date(dateString);
         if (isNaN(date.getTime())) return 'N/A';
         return date.toLocaleString();
+    };
+
+    const getConfidenceColor = (score: number | null | undefined) => {
+        if (score === null || score === undefined) return 'text-gray-400';
+        if (score >= 0.7) return 'text-green-600';
+        if (score >= 0.4) return 'text-yellow-600';
+        return 'text-red-600';
     };
 
     const handleApprove = async (bucketId: number) => {
@@ -216,7 +219,7 @@ export function Worklog() {
 
     // Helper to check if item is editable
     const isEditable = (status: string) => {
-        return status === 'open' || status === 'awaiting_correction';
+        return status === 'open' || status === 'pending_review';
     };
 
     const startEditProject = (bucket: Bucket) => {
@@ -294,11 +297,8 @@ export function Worklog() {
                                 <option value="all">All</option>
                                 <option value="open">Open</option>
                                 <option value="pending_review">Pending Review</option>
-                                <option value="closed">Closed</option>
-                                <option value="processing">Processing</option>
-                                <option value="awaiting_correction">Awaiting Correction</option>
+                                <option value="submitted">Submitted</option>
                                 <option value="rejected">Rejected</option>
-                                <option value="completed">Completed</option>
                             </select>
                         </div>
                         <div>
@@ -342,6 +342,14 @@ export function Worklog() {
                                 <option value="asc">Oldest First</option>
                             </select>
                         </div>
+                        <div className="flex items-end">
+                            <button
+                                onClick={() => fetchBuckets()}
+                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                            >
+                                🔄 Refresh
+                            </button>
+                        </div>
                     </div>
                 </div>
 
@@ -354,6 +362,9 @@ export function Worklog() {
                                     <th className="px-2 py-3 w-10"></th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Status
+                                    </th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Conf.
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Member
@@ -387,6 +398,14 @@ export function Worklog() {
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(bucket.status)}`}>
                                                         {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
+                                                    </span>
+                                                </td>
+                                                <td className="px-4 py-4 whitespace-nowrap text-center">
+                                                    <span
+                                                        className={`text-lg ${getConfidenceColor(bucket.clarity_score)}`}
+                                                        title={`Confidence: ${bucket.clarity_score ? Math.round(bucket.clarity_score * 100) + '%' : 'N/A'}`}
+                                                    >
+                                                        ●
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -424,7 +443,7 @@ export function Worklog() {
                                                     ) : (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-sm text-gray-900">{bucket.project_name}</span>
-                                                            {bucket.status !== 'completed' && bucket.status !== 'closed' && bucket.status !== 'rejected' && (
+                                                            {(bucket.status === 'open' || bucket.status === 'pending_review') && (
                                                                 <button
                                                                     onClick={() => startEditProject(bucket)}
                                                                     className="text-blue-600 hover:text-blue-800 text-xs"
@@ -448,7 +467,7 @@ export function Worklog() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center gap-2">
-                                                        {bucket.status === 'open' && (
+                                                        {(bucket.status === 'open' || bucket.status === 'pending_review') && (
                                                             <>
                                                                 <button
                                                                     onClick={() => handleApprove(bucket.id)}
@@ -466,21 +485,12 @@ export function Worklog() {
                                                                 </button>
                                                             </>
                                                         )}
-                                                        {bucket.status !== 'completed' && bucket.status !== 'open' && bucket.status !== 'closed' && bucket.status !== 'rejected' && (
-                                                            <button
-                                                                onClick={() => handleApprove(bucket.id)}
-                                                                disabled={actionLoading === bucket.id}
-                                                                className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
-                                                            >
-                                                                {actionLoading === bucket.id ? '...' : 'Approve'}
-                                                            </button>
-                                                        )}
                                                     </div>
                                                 </td>
                                             </tr>
                                             {isExpanded && (
                                                 <tr className="bg-gray-50">
-                                                    <td colSpan={6} className="px-6 py-4">
+                                                    <td colSpan={7} className="px-6 py-4">
                                                         <div className="text-sm text-gray-900 mb-4">
                                                             <div className="flex justify-between items-start mb-2">
                                                                 <strong>Full Message:</strong>

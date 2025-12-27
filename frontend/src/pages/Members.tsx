@@ -9,6 +9,8 @@ interface Member {
     status: 'active' | 'pending' | 'inactive';
     company_id: number;
     node_name?: string;
+    language?: string;
+    domain?: string;
     created_at: string;
 }
 
@@ -20,7 +22,7 @@ export function Members() {
     const [sortBy, setSortBy] = useState('name');
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingMember, setEditingMember] = useState<Member | null>(null);
-    const [formData, setFormData] = useState({ name: '', phone: '' });
+    const [formData, setFormData] = useState({ name: '', phone: '', language: 'en', domain: 'construction' });
     const [formError, setFormError] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [search, setSearch] = useState('');
@@ -144,7 +146,7 @@ export function Members() {
             const data = await response.json();
 
             if (response.ok) {
-                setFormData({ name: '', phone: '' });
+                setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
                 setShowAddForm(false);
                 fetchMembers();
                 alert(data.message || 'Member added successfully!');
@@ -169,14 +171,15 @@ export function Members() {
                 credentials: 'include',
                 body: JSON.stringify({
                     fullName: formData.name,
-                    // Phone number is not sent/updated as it's read-only
+                    language: formData.language,
+                    domain: formData.domain,
                 }),
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                setFormData({ name: '', phone: '' });
+                setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
                 setEditingMember(null);
                 fetchMembers();
                 alert('Member updated successfully!');
@@ -194,6 +197,8 @@ export function Members() {
         setFormData({
             name: member.full_name,
             phone: member.phone_number,
+            language: member.language || 'en',
+            domain: member.domain || 'construction',
         });
         setShowAddForm(false);
         window.scrollTo(0, 0);
@@ -252,12 +257,20 @@ export function Members() {
             <div>
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Members</h1>
-                    <button
-                        onClick={() => setShowAddForm(!showAddForm)}
-                        className="btn-primary"
-                    >
-                        {showAddForm ? 'Cancel' : '+ Invite Member'}
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={() => fetchMembers()}
+                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                        >
+                            🔄 Refresh
+                        </button>
+                        <button
+                            onClick={() => setShowAddForm(!showAddForm)}
+                            className="btn-primary"
+                        >
+                            {showAddForm ? 'Cancel' : '+ Invite Member'}
+                        </button>
+                    </div>
                 </div>
 
                 {/* Add/Edit Member Form */}
@@ -271,7 +284,7 @@ export function Members() {
                                 onClick={() => {
                                     setShowAddForm(false);
                                     setEditingMember(null);
-                                    setFormData({ name: '', phone: '' });
+                                    setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
                                 }}
                                 className="text-gray-500 hover:text-gray-700"
                             >
@@ -320,13 +333,43 @@ export function Members() {
                                     </p>
                                 )}
                             </div>
+                            {editingMember && (
+                                <>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Language Preference
+                                        </label>
+                                        <select
+                                            value={formData.language}
+                                            onChange={(e) => setFormData({ ...formData, language: e.target.value })}
+                                            className="input-field"
+                                        >
+                                            <option value="en">English</option>
+                                            <option value="es">Spanish</option>
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            Domain
+                                        </label>
+                                        <select
+                                            value={formData.domain}
+                                            onChange={(e) => setFormData({ ...formData, domain: e.target.value })}
+                                            className="input-field"
+                                        >
+                                            <option value="construction">Construction</option>
+                                            <option value="recovery">Recovery</option>
+                                        </select>
+                                    </div>
+                                </>
+                            )}
                             <div className="flex gap-2 justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setShowAddForm(false);
                                         setEditingMember(null);
-                                        setFormData({ name: '', phone: '' });
+                                        setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
                                     }}
                                     className="btn-secondary"
                                 >
