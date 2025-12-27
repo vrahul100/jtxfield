@@ -5,6 +5,7 @@ import { getMediaValidator } from '../validators/MediaValidator.js'
 import { transcribeAudio } from '../services/transcribe.js'
 import { copyTwilioMedia } from '../services/mediaStorage.js'
 import { normalizeTwilioPayload } from '../utils/normalize.js'
+import { t, getLang } from '../services/i18n.js'
 import {
   getLastConfirmedProject,
   findOpenBucket,
@@ -252,8 +253,9 @@ You're now activated. Start sending your work updates via text, photos, or voice
       await updateLastConfirmedProject(sql, member.id, finalProjectId!);
     }
 
+    const lang = getLang(member);
     const summaryLine = validation.summary ? `"${validation.summary}"\n\n` : '';
-    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\n${summaryLine}Logged to: ${projectName}`;
+    const confirmationMsg = `${t(lang, 'ticket_submitted', { id: bucket.id })}\n\n${summaryLine}${t(lang, 'logged_to', { project: projectName })}`;
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
 
   } else if (attemptCount >= 5) {
@@ -265,24 +267,26 @@ You're now activated. Start sending your work updates via text, photos, or voice
     `;
     console.log(`[TICKET] Sent ticket #${bucket.id} for review after ${attemptCount} attempts`);
 
+    const lang = getLang(member);
     const reasonLine = validation.questions.length > 0
       ? `\n\nReason: ${validation.questions[0].replace('⚠️ ', '').replace('The details don\'t look right. ', '')}`
       : '';
-    const reviewMsg = `📋 Ticket #${bucket.id} sent for review.${reasonLine}\n\nAn admin will follow up.`;
+    const reviewMsg = `${t(lang, 'ticket_review', { id: bucket.id })}${reasonLine}\n\n${t(lang, 'admin_followup')}`;
     return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
 
   } else {
     // Ticket incomplete - ask clarifying questions
+    const lang = getLang(member);
     if (validation.questions.length > 0) {
       const questionMsg = isNewTicket
-        ? `📋 Ticket #${bucket.id} opened.\n\n${validation.questions.join('\n\n')}`
+        ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${validation.questions.join('\n\n')}`
         : `Ticket #${bucket.id}: ${validation.questions.join('\n\n')}`;
       return c.text(`<Response><Message>${questionMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     } else if (isNewTicket) {
-      const openMsg = `📋 Ticket #${bucket.id} opened.\n\nSend photos and details to complete it.`;
+      const openMsg = `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${t(lang, 'send_photos')}`;
       return c.text(`<Response><Message>${openMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     } else {
-      const responseMsg = `📥 Ticket #${bucket.id}: Received! Send more details to complete.`;
+      const responseMsg = `${t(lang, 'ticket_received', { id: bucket.id })} ${t(lang, 'send_details')}`;
       return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
   }

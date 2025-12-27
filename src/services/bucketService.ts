@@ -34,6 +34,7 @@ export interface Member {
     phone_number: string;
     full_name: string | null;
     domain: string | null;
+    language_preference: string | null;
     last_confirmed_project_id: number | null;
     project_confirmed_at: Date | null;
 }
@@ -484,7 +485,7 @@ export async function validateBucket(
                 WHERE id = ${bucket.id}
             `;
 
-            questions.push('📋 Filing for review. You can keep sending updates.');
+            questions.push('📋 Filing for review.');
         } else {
             // First attempt - ask for clarification
             questions.push(`⚠️ The details don't look right. ${extraction.inconsistencyReason}`);
@@ -539,7 +540,7 @@ export async function validateBucket(
             return {
                 isComplete: false,
                 errors: ['Missing required fields after 2 attempts'],
-                questions: ['📋 Missing details. Filing for review. Keep sending updates.'],
+                questions: ['📋 Missing details. Filing for review.'],
                 summary: extraction.summary,
             };
         }

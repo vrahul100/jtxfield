@@ -9,7 +9,7 @@ interface Member {
     status: 'active' | 'pending' | 'inactive';
     company_id: number;
     node_name?: string;
-    language?: string;
+    language_preference?: string;
     domain?: string;
     created_at: string;
 }
@@ -197,7 +197,7 @@ export function Members() {
         setFormData({
             name: member.full_name,
             phone: member.phone_number,
-            language: member.language || 'en',
+            language: member.language_preference || 'en',
             domain: member.domain || 'construction',
         });
         setShowAddForm(false);
