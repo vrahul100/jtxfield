@@ -71,7 +71,7 @@ describe('CRUD API Tests', () => {
     // ============================================
     // WORKLOG TESTS
     // ============================================
-    describe('Work Reported API', () => {
+    describe('Work Ticket API', () => {
         it('GET /api/worklog without auth returns 401', async () => {
             const res = await request('GET', '/api/worklog');
             expect(res.status).toBe(401);

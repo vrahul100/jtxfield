@@ -118,69 +118,26 @@ You're now activated. Start sending your work updates via text, photos, or voice
     fullText = `${fullText}\n[VOICE]: ${transcripts.join(' ')}`.trim();
   }
 
-  // 7. NEW INBOX FLOW: AI EXTRACTION → ALIAS MATCH → LAST CONFIRMED → INBOX FALLBACK
-  const { extractMessageInfo } = await import('../services/extractionService.js');
+  // 7. FIND OR CREATE BUCKET (without project assignment yet)
+  // Use Inbox as temporary placeholder - will be reassigned when validated
+  const inboxProjectId = await ensureInboxProject(sql, member.company_id);
 
-  // Run AI extraction to get suspected project name
-  const extraction = await extractMessageInfo(
-    fullText,
-    transcripts,
-    imageUrls,
-    member.domain || 'construction'
-  );
-  const suspectedProjectName = extraction.projectName;
-
-  console.log(`[AI EXTRACTION] Suspected project: "${suspectedProjectName}", isProjectClear: ${extraction.isProjectClear}`);
-
-  let projectId: number | null = null;
-  let projectMatchInfo = '';
-
-  // Try fuzzy match with project aliases
-  if (suspectedProjectName) {
-    const matchedProject = await findProjectByAlias(sql, member.company_id, suspectedProjectName);
-    if (matchedProject) {
-      projectId = matchedProject.id;
-      projectMatchInfo = `[ALIAS MATCH] "${suspectedProjectName}" → Project:${matchedProject.name}`;
-    }
-  }
-
-  // Fall back to last confirmed project if no alias match
-  if (!projectId) {
-    const lastProject = await getLastConfirmedProject(sql, member);
-    if (lastProject) {
-      projectId = lastProject.id;
-      projectMatchInfo = `[LAST CONFIRMED] Project:${lastProject.name}`;
-    }
-  }
-
-  // Final fallback: assign to Inbox
-  let isInbox = false;
-  if (!projectId) {
-    projectId = await ensureInboxProject(sql, member.company_id);
-    isInbox = true;
-    projectMatchInfo = `[INBOX] Tag: "${suspectedProjectName || 'unknown'}"`;
-  }
-
-  console.log(`[PROJECT] ${projectMatchInfo}`);
-
-  // 8. FIND OR CREATE BUCKET (ticket)
-  let bucket = await findOpenBucket(sql, member.id, projectId);
+  let bucket = await findOpenBucket(sql, member.id, inboxProjectId);
   let isNewTicket = false;
 
   // Count total media in current message
   const newMediaCount = imageUrls.length + audioUrls.length;
 
   if (bucket) {
-    // Check existing media count
+    // Check existing media count (max 5)
     const existingImages = bucket.image_urls ? JSON.parse(bucket.image_urls) : [];
     const existingAudio = bucket.audio_urls ? JSON.parse(bucket.audio_urls) : [];
     const existingMediaCount = existingImages.length + existingAudio.length;
     const totalAfterAppend = existingMediaCount + newMediaCount;
 
     if (totalAfterAppend > 5) {
-      // At media limit - don't append more media, just notify
-      console.log(`[TICKET] Ticket #${bucket.id} at media limit (${existingMediaCount} existing, ${newMediaCount} new)`);
-      const limitMsg = `⚠️ Ticket #${bucket.id} already has ${existingMediaCount} attachments (max 5). No more can be added.\n\nSend text details instead, or wait for this ticket to close.`;
+      console.log(`[TICKET] Ticket #${bucket.id} at media limit`);
+      const limitMsg = `⚠️ Ticket #${bucket.id} has max 5 attachments. Send text details or wait for this ticket to close.`;
       return c.text(`<Response><Message>${limitMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
 
@@ -194,11 +151,11 @@ You're now activated. Start sending your work updates via text, photos, or voice
     });
     console.log(`[TICKET] Appended to ticket #${bucket.id}`);
   } else {
-    // Create new bucket (ticket)
+    // Create new bucket (in Inbox temporarily)
     bucket = await createBucket(sql, {
       memberId: member.id,
       nodeId: member.company_id,
-      projectId,
+      projectId: inboxProjectId,
       source: normalized.source,
       fromPhone: normalized.sender,
       rawText: fullText,
@@ -206,13 +163,13 @@ You're now activated. Start sending your work updates via text, photos, or voice
       audioUrls,
       transcripts,
       messageSid,
-      suspectedProjectName,
+      suspectedProjectName: null,
     });
     isNewTicket = true;
     console.log(`[TICKET] Opened ticket #${bucket.id}`);
   }
 
-  // 9. VALIDATE TICKET COMPLETENESS
+  // 8. VALIDATE TICKET COMPLETENESS
   const validation = await validateBucket(sql, bucket);
   console.log(`[VALIDATE] Complete: ${validation.isComplete}, Errors: ${validation.errors.length}`);
 
@@ -222,28 +179,85 @@ You're now activated. Start sending your work updates via text, photos, or voice
   console.log(`[TICKET] Attempt count: ${attemptCount}`);
 
   if (validation.isComplete) {
-    // Close ticket and send confirmation with ticket number
-    await closeBucket(sql, bucket.id);
+    // 9. NOW INFER PROJECT (only when ticket is complete)
+    const { extractMessageInfo } = await import('../services/extractionService.js');
+    const extraction = await extractMessageInfo(
+      bucket.raw_text || '',
+      bucket.transcripts ? JSON.parse(bucket.transcripts) : [],
+      bucket.image_urls ? JSON.parse(bucket.image_urls) : [],
+      member.domain || 'construction'
+    );
 
-    // Update last confirmed project if we had one (and it's not Inbox)
-    if (projectId && !isInbox) {
-      await updateLastConfirmedProject(sql, member.id, projectId);
+    console.log(`[AI EXTRACTION] Project: "${extraction.projectName}", Clear: ${extraction.isProjectClear}`);
+
+    let finalProjectId: number | null = null;
+    let projectName = '';
+
+    // Try to match project by alias
+    if (extraction.projectName) {
+      const matchedProject = await findProjectByAlias(sql, member.company_id, extraction.projectName);
+      if (matchedProject) {
+        finalProjectId = matchedProject.id;
+        projectName = matchedProject.name;
+        console.log(`[PROJECT] Alias match: "${extraction.projectName}" → ${matchedProject.name}`);
+      }
     }
 
-    // Get project name for confirmation
-    const projectResult = await sql`SELECT name, is_inbox FROM projects WHERE id = ${projectId}`;
-    const projectName = projectResult[0]?.name || 'Inbox';
+    // Fallback to last confirmed project
+    if (!finalProjectId) {
+      const lastProject = await getLastConfirmedProject(sql, member);
+      if (lastProject) {
+        finalProjectId = lastProject.id;
+        projectName = lastProject.name;
+        console.log(`[PROJECT] Using last confirmed: ${lastProject.name}`);
+      }
+    }
 
-    // Build confirmation message with ticket number
+    // If STILL no project, ASK user which project
+    if (!finalProjectId) {
+      // Get list of projects to offer
+      const projects = await sql`
+        SELECT id, name FROM projects 
+        WHERE node_id = ${member.company_id} AND is_inbox = false AND is_active = true
+        ORDER BY name LIMIT 5
+      `;
+
+      if (projects.length > 0) {
+        // Store pending project selection state (using validation_attempts as flag)
+        await sql`
+          UPDATE buckets 
+          SET validation_attempts = -1, updated_at = NOW()
+          WHERE id = ${bucket.id}
+        `;
+
+        const projectList = projects.map((p: any, i: number) => `${i + 1}. ${p.name}`).join('\n');
+        const askProjectMsg = `📋 Ticket #${bucket.id} is ready!\n\nWhich project is this for?\n\n${projectList}\n\nReply with the number.`;
+        return c.text(`<Response><Message>${askProjectMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      } else {
+        // No projects to choose from, go to Inbox
+        finalProjectId = inboxProjectId;
+        projectName = 'Inbox';
+      }
+    }
+
+    // Update bucket with final project and submit
+    await sql`
+      UPDATE buckets 
+      SET project_id = ${finalProjectId}, status = 'submitted', updated_at = NOW()
+      WHERE id = ${bucket.id}
+    `;
+
+    // Update last confirmed if not Inbox
+    if (finalProjectId !== inboxProjectId) {
+      await updateLastConfirmedProject(sql, member.id, finalProjectId!);
+    }
+
     const summaryLine = validation.summary ? `"${validation.summary}"\n\n` : '';
-    const tagLine = isInbox && suspectedProjectName
-      ? `(Tag: ${suspectedProjectName}) `
-      : '';
-    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\n${summaryLine}${tagLine}Logged to: ${projectName}`;
-
+    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\n${summaryLine}Logged to: ${projectName}`;
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+
   } else if (attemptCount >= 2) {
-    // After 2 attempts, send for review - include the reason if available
+    // After 2 attempts, send for review
     await sql`
       UPDATE buckets 
       SET status = 'pending_review', updated_at = NOW() 
@@ -251,17 +265,15 @@ You're now activated. Start sending your work updates via text, photos, or voice
     `;
     console.log(`[TICKET] Sent ticket #${bucket.id} for review after ${attemptCount} attempts`);
 
-    // Include validation errors/questions in review message
     const reasonLine = validation.questions.length > 0
       ? `\n\nReason: ${validation.questions[0].replace('⚠️ ', '').replace('The details don\'t look right. ', '')}`
-      : (validation.errors.length > 0 ? `\n\nIssue: ${validation.errors[0]}` : '');
-
+      : '';
     const reviewMsg = `📋 Ticket #${bucket.id} sent for review.${reasonLine}\n\nAn admin will follow up.`;
     return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+
   } else {
-    // Ticket incomplete - show questions (including inconsistency) or generic message
+    // Ticket incomplete - ask clarifying questions
     if (validation.questions.length > 0) {
-      // Show validation questions (includes inconsistency reasons)
       const questionMsg = isNewTicket
         ? `📋 Ticket #${bucket.id} opened.\n\n${validation.questions.join('\n\n')}`
         : `Ticket #${bucket.id}: ${validation.questions.join('\n\n')}`;
@@ -411,7 +423,53 @@ async function handleProjectSelectionResponse(
   selection: number,
   normalized: any
 ): Promise<Response | null> {
-  // Find bucket explicitly marked as awaiting_correction for this member
+  // First check for open bucket awaiting project selection (validation_attempts = -1)
+  const pendingProjectBuckets = await sql`
+    SELECT b.* FROM buckets b
+    WHERE b.member_id = ${member.id}
+      AND b.status = 'open'
+      AND b.validation_attempts = -1
+    ORDER BY b.updated_at DESC
+    LIMIT 1
+  `;
+
+  if (pendingProjectBuckets.length > 0) {
+    const bucket = pendingProjectBuckets[0];
+
+    // Get projects for selection (same query as when asking)
+    const projects = await sql`
+      SELECT id, name FROM projects 
+      WHERE node_id = ${member.company_id} AND is_inbox = false AND is_active = true
+      ORDER BY name LIMIT 5
+    `;
+
+    const projectIndex = selection - 1;
+    if (projectIndex < 0 || projectIndex >= projects.length) {
+      const msg = `Invalid selection. Reply with a number between 1 and ${projects.length}.`;
+      return c.text(`<Response><Message>${msg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+
+    const selectedProject = projects[projectIndex] as { id: number; name: string };
+    console.log(`[PROJECT] User selected: ${selectedProject.name} for bucket #${bucket.id}`);
+
+    // Update bucket with selected project and submit
+    await sql`
+      UPDATE buckets SET 
+        project_id = ${selectedProject.id},
+        status = 'submitted',
+        validation_attempts = 0,
+        updated_at = NOW()
+      WHERE id = ${bucket.id}
+    `;
+
+    // Update last confirmed project
+    await updateLastConfirmedProject(sql, member.id, selectedProject.id);
+
+    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\nLogged to: ${selectedProject.name}`;
+    return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+
+  // Otherwise check for awaiting_correction (legacy flow)
   const awaitingBuckets = await sql`
     SELECT b.*, p.name as project_name FROM buckets b
     LEFT JOIN projects p ON b.project_id = p.id
@@ -450,11 +508,11 @@ async function handleProjectSelectionResponse(
   const newProject = projects[projectIndex] as { id: number; name: string };
   console.log(`[CORRECTION] Fixing bucket #${bucketToFix.id} from "${bucketToFix.project_name}" to "${newProject.name}"`);
 
-  // 1. Update the bucket (restore to completed status)
+  // 1. Update the bucket (restore to submitted status)
   await sql`
     UPDATE buckets SET 
       project_id = ${newProject.id},
-      status = 'completed',
+      status = 'submitted',
       updated_at = NOW()
     WHERE id = ${bucketToFix.id}
   `;

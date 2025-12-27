@@ -271,7 +271,7 @@ export function Worklog() {
     return (
         <Layout>
             <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-6">Work Reported</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-6">Work Ticket</h1>
 
                 {/* Search and Filters */}
                 <div className="card p-4 mb-6">
