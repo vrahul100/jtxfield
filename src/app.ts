@@ -7,7 +7,7 @@ import { login, logout, checkSession } from './controllers/auth.js'
 import { getWorklog, approveBucket, updateBucket, rejectBucket } from './controllers/worklog.js'
 import { getMembers, approveMember, inviteMember, updateMember, deleteMember, resendConfirmation } from './controllers/members.js'
 import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
-import { getNodes, createNode, updateNode } from './controllers/nodes.js'
+import { getNodes, createNode, updateNode, deleteNode } from './controllers/nodes.js'
 import { getUsersList, createNewUser, updateUserInfo, deleteUser } from './controllers/users.js'
 import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 
@@ -46,6 +46,7 @@ export const createApp = (sql: Sql) => {
     app.get('/api/nodes', requireSU(sql), (c) => getNodes(c, sql))
     app.post('/api/nodes', requireSU(sql), (c) => createNode(c, sql))
     app.put('/api/nodes/:id', requireSU(sql), (c) => updateNode(c, sql))
+    app.delete('/api/nodes/:id', requireSU(sql), (c) => deleteNode(c, sql))
 
     // 7. USERS API (SU only)
     app.get('/api/users', requireSU(sql), (c) => getUsersList(c, sql))

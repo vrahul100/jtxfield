@@ -128,7 +128,17 @@ export async function getUserById(sql: Sql, userId: number): Promise<User | null
  */
 export async function getUsers(sql: Sql): Promise<User[]> {
     const users = await sql`SELECT * FROM users ORDER BY created_at DESC`;
-    return users as User[];
+    return users.map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        passwordHash: u.password_hash,
+        role: u.role,
+        nodeId: u.node_id,
+        fullName: u.full_name,
+        isActive: u.is_active,
+        createdAt: u.created_at,
+        updatedAt: u.updated_at,
+    })) as User[];
 }
 
 /**
@@ -139,12 +149,18 @@ export async function updateUser(
     userId: number,
     data: Partial<Pick<User, 'email' | 'fullName' | 'nodeId' | 'isActive'>>
 ): Promise<User> {
+    // Convert undefined to null for postgres.js compatibility
+    const email = data.email ?? null;
+    const fullName = data.fullName ?? null;
+    const nodeId = data.nodeId ?? null;
+    const isActive = data.isActive ?? null;
+
     const [user] = await sql`
         UPDATE users SET
-            email = COALESCE(${data.email}, email),
-            full_name = COALESCE(${data.fullName}, full_name),
-            node_id = COALESCE(${data.nodeId}, node_id),
-            is_active = COALESCE(${data.isActive}, is_active),
+            email = COALESCE(${email}, email),
+            full_name = COALESCE(${fullName}, full_name),
+            node_id = COALESCE(${nodeId}, node_id),
+            is_active = COALESCE(${isActive}, is_active),
             updated_at = NOW()
         WHERE id = ${userId}
         RETURNING *

@@ -4,9 +4,10 @@ import { Layout } from '../components/Layout';
 interface Node {
     id: number;
     name: string;
-    description: string;
-    isActive: boolean;
-    createdAt: string;
+    member_count: number;
+    project_count: number;
+    user_count: number;
+    created_at: string;
 }
 
 export function Nodes() {
@@ -16,7 +17,6 @@ export function Nodes() {
     const [editingId, setEditingId] = useState<number | null>(null);
     const [formData, setFormData] = useState({
         name: '',
-        description: '',
     });
 
     useEffect(() => {
@@ -70,13 +70,31 @@ export function Nodes() {
         setEditingId(node.id);
         setFormData({
             name: node.name,
-            description: node.description,
         });
         setShowForm(true);
     };
 
+    const handleDelete = async (id: number) => {
+        if (!confirm('Are you sure you want to delete this node?')) return;
+
+        try {
+            const response = await fetch(`/api/nodes/${id}`, {
+                method: 'DELETE',
+                credentials: 'include',
+            });
+            if (response.ok) {
+                fetchNodes();
+            } else {
+                const data = await response.json();
+                alert(data.error || 'Failed to delete node');
+            }
+        } catch (error) {
+            console.error('Failed to delete node:', error);
+        }
+    };
+
     const resetForm = () => {
-        setFormData({ name: '', description: '' });
+        setFormData({ name: '' });
         setEditingId(null);
         setShowForm(false);
     };
@@ -140,18 +158,6 @@ export function Nodes() {
                                     required
                                 />
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Description
-                                </label>
-                                <textarea
-                                    value={formData.description}
-                                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                                    className="input-field"
-                                    rows={3}
-                                    placeholder="Construction company specializing in..."
-                                />
-                            </div>
                             <div className="flex gap-2">
                                 <button type="submit" className="btn-primary">
                                     {editingId ? 'Update' : 'Create'} Node
@@ -176,32 +182,34 @@ export function Nodes() {
                         <div key={node.id} className="card p-6">
                             <div className="flex justify-between items-start">
                                 <div className="flex-1">
-                                    <div className="flex items-center gap-3 mb-2">
-                                        <h3 className="text-xl font-semibold text-gray-900">
-                                            {node.name}
-                                        </h3>
-                                        <span
-                                            className={`px-2 py-1 text-xs font-semibold rounded-full ${node.isActive
-                                                ? 'bg-green-100 text-green-800'
-                                                : 'bg-gray-100 text-gray-800'
-                                                }`}
-                                        >
-                                            {node.isActive ? 'Active' : 'Inactive'}
-                                        </span>
+                                    <h3 className="text-xl font-semibold text-gray-900 mb-2">
+                                        {node.name}
+                                    </h3>
+                                    <div className="flex gap-4 text-sm text-gray-600 mb-2">
+                                        <span>👥 {node.member_count || 0} members</span>
+                                        <span>📁 {node.project_count || 0} projects</span>
+                                        <span>👤 {node.user_count || 0} users</span>
                                     </div>
-                                    {node.description && (
-                                        <p className="text-gray-600 mb-2">{node.description}</p>
-                                    )}
                                     <p className="text-sm text-gray-500">
-                                        Created: {new Date(node.createdAt).toLocaleDateString()}
+                                        Created: {new Date(node.created_at).toLocaleDateString()}
                                     </p>
                                 </div>
-                                <button
-                                    onClick={() => handleEdit(node)}
-                                    className="px-3 py-1 text-sm text-primary-600 hover:bg-primary-50 rounded"
-                                >
-                                    Edit
-                                </button>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => handleEdit(node)}
+                                        className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
+                                    >
+                                        Edit
+                                    </button>
+                                    <button
+                                        onClick={() => handleDelete(node.id)}
+                                        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                                        disabled={node.member_count > 0 || node.project_count > 0 || node.user_count > 0}
+                                        title={node.member_count > 0 || node.project_count > 0 || node.user_count > 0 ? 'Cannot delete node with members, projects, or users' : 'Delete node'}
+                                    >
+                                        Delete
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     ))}

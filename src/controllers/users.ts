@@ -8,17 +8,24 @@ import { createUser, getUsers, updateUser, updateUserPassword } from '../service
  */
 export async function getUsersList(c: Context, sql: Sql) {
     try {
-        const users = await getUsers(sql);
+        // Get users with node names
+        const usersWithNodes = await sql`
+            SELECT u.*, n.name as node_name
+            FROM users u
+            LEFT JOIN nodes n ON u.node_id = n.id
+            ORDER BY u.created_at DESC
+        `;
 
-        // Remove password hashes
-        const sanitizedUsers = users.map(u => ({
+        // Remove password hashes and map to camelCase
+        const sanitizedUsers = usersWithNodes.map((u: any) => ({
             id: u.id,
             email: u.email,
             role: u.role,
-            nodeId: u.nodeId,
-            fullName: u.fullName,
-            isActive: u.isActive,
-            createdAt: u.createdAt,
+            nodeId: u.node_id,
+            nodeName: u.node_name,
+            fullName: u.full_name,
+            isActive: u.is_active,
+            createdAt: u.created_at,
         }));
 
         return c.json({ users: sanitizedUsers });

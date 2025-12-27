@@ -310,7 +310,7 @@ export function Users() {
                                         <td className="px-6 py-4 whitespace-nowrap text-sm">
                                             <button
                                                 onClick={() => handleEdit(user)}
-                                                className="text-primary-600 hover:text-primary-900 mr-3"
+                                                className="text-blue-600 hover:text-blue-900 mr-3"
                                             >
                                                 Edit
                                             </button>

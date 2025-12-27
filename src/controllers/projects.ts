@@ -109,18 +109,21 @@ export async function updateProject(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const projectId = parseInt(c.req.param('id'));
         const body = await c.req.json();
-        const { name, isActive, aliases } = body;
+        const { name, isActive, aliases, nodeId } = body;
 
         // Convert undefined to null for postgres
-        const nameVal = name !== undefined ? name : null;
-        const isActiveVal = isActive !== undefined ? isActive : null;
-        const aliasesVal = aliases !== undefined ? aliases : null;
+        const nameVal = name ?? null;
+        const isActiveVal = isActive ?? null;
+        const aliasesVal = aliases ?? null;
+        const nodeIdVal = nodeId ?? null;
 
+        // SU can change node_id, OM cannot
         const [project] = await sql`
             UPDATE projects
             SET name = COALESCE(${nameVal}, name),
                 is_active = COALESCE(${isActiveVal}, is_active),
                 aliases = COALESCE(${aliasesVal}, aliases)
+                ${user.role === 'SU' && nodeIdVal ? sql`, node_id = ${nodeIdVal}` : sql``}
             WHERE id = ${projectId}
             ${user.role === 'OM' ? sql`AND node_id = ${user.nodeId}` : sql``}
             RETURNING *

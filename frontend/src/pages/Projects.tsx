@@ -17,6 +17,11 @@ interface Project {
     created_at?: string;
 }
 
+interface NodeOption {
+    id: number;
+    name: string;
+}
+
 // Helper to safely parse aliases JSON string
 function parseAliases(aliases: string | null): string[] {
     if (!aliases) return [];
@@ -33,9 +38,15 @@ function getIsActive(project: Project): boolean {
     return project.is_active ?? project.isActive ?? true;
 }
 
+// Helper to get node_id from project
+function getNodeId(project: Project): number {
+    return project.node_id ?? project.nodeId ?? 0;
+}
+
 export function Projects() {
     const { user } = useAuth();
     const [projects, setProjects] = useState<Project[]>([]);
+    const [nodes, setNodes] = useState<NodeOption[]>([]);
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingId, setEditingId] = useState<number | null>(null);
@@ -44,6 +55,7 @@ export function Projects() {
         description: '',
         aliases: '',
         isActive: true,
+        nodeId: '',
     });
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(1);
@@ -56,7 +68,24 @@ export function Projects() {
 
     useEffect(() => {
         fetchProjects();
+        if (user?.role === 'SU') {
+            fetchNodes();
+        }
     }, [search, page]);
+
+    const fetchNodes = async () => {
+        try {
+            const response = await fetch('/api/nodes', { credentials: 'include' });
+            if (response.ok) {
+                const data = await response.json();
+                if (data.nodes && Array.isArray(data.nodes)) {
+                    setNodes(data.nodes);
+                }
+            }
+        } catch (error) {
+            console.error('Failed to fetch nodes:', error);
+        }
+    };
 
     const fetchProjects = async () => {
         try {
@@ -93,12 +122,17 @@ export function Projects() {
         const url = editingId ? `/api/projects/${editingId}` : '/api/projects';
         const method = editingId ? 'PUT' : 'POST';
 
-        const payload = {
+        const payload: any = {
             name: formData.name,
             description: formData.description,
             aliases: formData.aliases.split(',').map(a => a.trim()).filter(Boolean),
             isActive: formData.isActive,
         };
+
+        // Include nodeId for SU
+        if (user?.role === 'SU' && formData.nodeId) {
+            payload.nodeId = parseInt(formData.nodeId);
+        }
 
         try {
             const response = await fetch(url, {
@@ -123,6 +157,7 @@ export function Projects() {
             description: project.description || '',
             aliases: parseAliases(project.aliases).join(', '),
             isActive: getIsActive(project),
+            nodeId: getNodeId(project).toString(),
         });
         setShowForm(true);
     };
@@ -144,7 +179,7 @@ export function Projects() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', description: '', aliases: '', isActive: true });
+        setFormData({ name: '', description: '', aliases: '', isActive: true, nodeId: '' });
         setEditingId(null);
         setShowForm(false);
     };
@@ -248,6 +283,25 @@ export function Projects() {
                                     Active Project
                                 </label>
                             </div>
+                            {user?.role === 'SU' && nodes.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                                        Node
+                                    </label>
+                                    <select
+                                        value={formData.nodeId}
+                                        onChange={(e) => setFormData({ ...formData, nodeId: e.target.value })}
+                                        className="input-field"
+                                    >
+                                        <option value="">Select a node...</option>
+                                        {nodes.map((node) => (
+                                            <option key={node.id} value={node.id}>
+                                                {node.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                             <div className="flex gap-2">
                                 <button type="submit" className="btn-primary">
                                     {editingId ? 'Update' : 'Create'} Project
@@ -301,8 +355,8 @@ export function Projects() {
                                             ))}
                                         </div>
                                     )}
-                                    {user?.role === 'SU' && project.nodeName && (
-                                        <p className="text-sm text-gray-500">Node: {project.nodeName}</p>
+                                    {user?.role === 'SU' && (project.node_name || project.nodeName) && (
+                                        <p className="text-sm text-gray-500">Node: {project.node_name || project.nodeName}</p>
                                     )}
                                 </div>
                                 <div className="flex gap-2">
