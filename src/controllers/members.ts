@@ -275,14 +275,19 @@ export async function updateMember(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const memberId = parseInt(c.req.param('id'));
         const body = await c.req.json();
-        const { fullName, domain, status, language } = body;
+
+        // Convert undefined to null for postgres.js compatibility
+        const fullName = body.fullName ?? null;
+        const domain = body.domain ?? null;
+        const status = body.status ?? null;
+        const languagePreference = body.language ?? null;
 
         const [member] = await sql`
             UPDATE members
             SET full_name = COALESCE(${fullName}, full_name),
                 domain = COALESCE(${domain}, domain),
                 status = COALESCE(${status}, status),
-                language = COALESCE(${language}, language)
+                language_preference  = COALESCE(${languagePreference}, language_preference)
             WHERE id = ${memberId}
             ${user.role === 'OM' ? sql`AND company_id = ${user.nodeId}` : sql``}
             RETURNING *

@@ -65,16 +65,22 @@ export interface ExtractionResult {
     damageDescription?: string;
 }
 
-const CONSTRUCTION_PROMPT = `You are an AI assistant extracting construction work information.
+const CONSTRUCTION_PROMPT = `You are an AI assistant extracting construction work information from a CONVERSATION.
+
+The input may contain MULTIPLE MESSAGES separated by "---" or newlines. This is a back-and-forth conversation where:
+- Earlier messages describe the work
+- Later messages may be SHORT ANSWERS (like "4" or "yes" or "3 hours") responding to questions
+
+IMPORTANT: If you see a short answer like just a number (e.g., "4", "2", "8"), interpret it as HOURS WORKED unless context clearly indicates otherwise. Workers often reply with just numbers when asked about hours.
 
 Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
 1. intent: "log" (recording work), "recovery" (damage), "status" (asking), or "unknown"
 2. projectName: ALWAYS extract the suspected project name if mentioned, even if you're not certain (e.g., "The Mall", "East Wing School", "Hospital Project")
 3. isProjectClear: true if you're confident which project, false if uncertain
 4. clarityScore: 0.0 to 1.0 rating of how clear the message is
-5. summary: Brief 1-line summary
+5. summary: Brief 1-line summary of the work done
 6. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "general"
-7. hoursWorked: Number of hours spent (extract from text/voice)
+7. hoursWorked: Number of hours spent (IMPORTANT: look for any number in the text - if someone just says "4" that means 4 hours)
 8. workersCount: Number of workers (default 1)
 9. materialsUsed: Array of materials used (e.g., ["wire", "outlets"])
 10. location: Where the work was done (e.g., "floor 3", "unit 5B")

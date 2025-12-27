@@ -110,6 +110,9 @@ describe('CRUD API Tests', () => {
     // MEMBERS TESTS
     // ============================================
     describe('Members API', () => {
+        let testMemberId: number;
+        const testPhone = '+1555' + Date.now().toString().slice(-7);
+
         it('GET /api/members without auth returns 401', async () => {
             const res = await request('GET', '/api/members');
             expect(res.status).toBe(401);
@@ -150,6 +153,91 @@ describe('CRUD API Tests', () => {
                 // missing phoneNumber
             }, sessionCookie);
             expect(res.status).toBe(400);
+        });
+
+        it('POST /api/members creates a member', async () => {
+            if (!sessionCookie) return;
+            const res = await request('POST', '/api/members', {
+                fullName: 'Test Member',
+                phoneNumber: testPhone,
+            }, sessionCookie);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data).toHaveProperty('member');
+            expect(data.member).toHaveProperty('id');
+            testMemberId = data.member.id;
+        });
+
+        it('PUT /api/members/:id updates full name only', async () => {
+            if (!sessionCookie || !testMemberId) return;
+            const res = await request('PUT', `/api/members/${testMemberId}`, {
+                fullName: 'Updated Member Name',
+            }, sessionCookie);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.member.full_name).toBe('Updated Member Name');
+        });
+
+        it('PUT /api/members/:id updates language only', async () => {
+            if (!sessionCookie || !testMemberId) return;
+            const res = await request('PUT', `/api/members/${testMemberId}`, {
+                language: 'es',
+            }, sessionCookie);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.member.language).toBe('es');
+        });
+
+        it('PUT /api/members/:id updates domain only', async () => {
+            if (!sessionCookie || !testMemberId) return;
+            const res = await request('PUT', `/api/members/${testMemberId}`, {
+                domain: 'recovery',
+            }, sessionCookie);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.member.domain).toBe('recovery');
+        });
+
+        it('PUT /api/members/:id updates multiple fields', async () => {
+            if (!sessionCookie || !testMemberId) return;
+            const res = await request('PUT', `/api/members/${testMemberId}`, {
+                fullName: 'Multi Update Test',
+                language: 'en',
+                domain: 'construction',
+            }, sessionCookie);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.member.full_name).toBe('Multi Update Test');
+            expect(data.member.language).toBe('en');
+            expect(data.member.domain).toBe('construction');
+        });
+
+        it('PUT /api/members/:id with empty body still returns 200', async () => {
+            if (!sessionCookie || !testMemberId) return;
+            const res = await request('PUT', `/api/members/${testMemberId}`, {}, sessionCookie);
+            expect(res.status).toBe(200);
+        });
+
+        it('PUT /api/members/:id with non-existent id returns 404', async () => {
+            if (!sessionCookie) return;
+            const res = await request('PUT', '/api/members/999999', {
+                fullName: 'Should Fail',
+            }, sessionCookie);
+            expect(res.status).toBe(404);
+        });
+
+        it('DELETE /api/members/:id deletes member', async () => {
+            if (!sessionCookie || !testMemberId) return;
+            const res = await request('DELETE', `/api/members/${testMemberId}`, undefined, sessionCookie);
+            expect(res.status).toBe(200);
+            const data = await res.json();
+            expect(data.success).toBe(true);
+        });
+
+        it('DELETE /api/members/:id with non-existent id returns 404', async () => {
+            if (!sessionCookie) return;
+            const res = await request('DELETE', '/api/members/999999', undefined, sessionCookie);
+            expect(res.status).toBe(404);
         });
     });
 

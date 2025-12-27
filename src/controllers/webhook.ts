@@ -256,8 +256,8 @@ You're now activated. Start sending your work updates via text, photos, or voice
     const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\n${summaryLine}Logged to: ${projectName}`;
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
 
-  } else if (attemptCount >= 2) {
-    // After 2 attempts, send for review
+  } else if (attemptCount >= 5) {
+    // After 5 attempts, send for review
     await sql`
       UPDATE buckets 
       SET status = 'pending_review', updated_at = NOW() 

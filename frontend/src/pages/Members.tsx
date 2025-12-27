@@ -448,6 +448,12 @@ export function Members() {
                                         </th>
                                     )}
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Language
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Domain
+                                    </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Actions
                                     </th>
                                 </tr>
@@ -463,6 +469,7 @@ export function Members() {
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <div className="text-sm text-gray-500">{member.phone_number}</div>
                                         </td>
+
                                         <td className="px-6 py-4 whitespace-nowrap">
                                             <span
                                                 className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(member.status)}`}
@@ -475,6 +482,12 @@ export function Members() {
                                                 {member.node_name || 'N/A'}
                                             </td>
                                         )}
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <div className="text-sm text-gray-500">{member.language_preference}</div>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                                            <div className="text-sm text-gray-500">{member.domain}</div>
+                                        </td>
                                         <td className="px-6 py-4 whitespace-nowrap text-sm space-x-2">
                                             {member.status === 'pending' && (
                                                 <>
