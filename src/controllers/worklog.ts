@@ -92,7 +92,7 @@ export async function getWorklog(c: Context, sql: Sql) {
             totalPages: Math.ceil(total / limit),
         });
     } catch (error: any) {
-        console.error('[Work Ticket] Error:', error);
+        console.error('[Work Tickets] Error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -127,11 +127,11 @@ export async function approveBucket(c: Context, sql: Sql) {
             WHERE id = ${bucketId}
         `;
 
-        console.log(`[Work Ticket] Bucket #${bucketId} approved by user ${user.id}`);
+        console.log(`[Work Tickets] Bucket #${bucketId} approved by user ${user.id}`);
 
         return c.json({ success: true });
     } catch (error: any) {
-        console.error('[Work Ticket] Approve error:', error);
+        console.error('[Work Tickets] Approve error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -187,11 +187,11 @@ export async function updateBucket(c: Context, sql: Sql) {
             return c.json({ error: 'rawText or projectId is required' }, 400);
         }
 
-        console.log(`[Work Ticket] Bucket #${bucketId} updated by user ${user.id}`);
+        console.log(`[Work Tickets] Bucket #${bucketId} updated by user ${user.id}`);
 
         return c.json({ success: true });
     } catch (error: any) {
-        console.error('[Work Ticket] Update error:', error);
+        console.error('[Work Tickets] Update error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -226,11 +226,11 @@ export async function rejectBucket(c: Context, sql: Sql) {
             WHERE id = ${bucketId}
         `;
 
-        console.log(`[Work Ticket] Bucket #${bucketId} rejected by user ${user.id}`);
+        console.log(`[Work Tickets] Bucket #${bucketId} rejected by user ${user.id}`);
 
         return c.json({ success: true });
     } catch (error: any) {
-        console.error('[Work Ticket] Reject error:', error);
+        console.error('[Work Tickets] Reject error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }

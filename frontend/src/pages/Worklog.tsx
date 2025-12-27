@@ -107,7 +107,7 @@ export function Worklog() {
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'open':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-indigo-100 text-indigo-800';
             case 'submitted':
                 return 'bg-green-100 text-green-800';
             case 'pending_review':
@@ -271,7 +271,7 @@ export function Worklog() {
     return (
         <Layout>
             <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-6">Work Ticket</h1>
+                <h1 className="text-3xl font-bold text-gray-900 mb-6">Work Tickets</h1>
 
                 {/* Search and Filters */}
                 <div className="card p-4 mb-6">
@@ -345,9 +345,9 @@ export function Worklog() {
                         <div className="flex items-end">
                             <button
                                 onClick={() => fetchBuckets()}
-                                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                                className="btn-primary"
                             >
-                                🔄 Refresh
+                                Refresh
                             </button>
                         </div>
                     </div>
@@ -514,7 +514,7 @@ export function Worklog() {
                                                                         <button
                                                                             onClick={() => handleSaveEdit(bucket.id)}
                                                                             disabled={actionLoading === bucket.id}
-                                                                            className="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700 disabled:opacity-50"
+                                                                            className="btn-primary"
                                                                         >
                                                                             {actionLoading === bucket.id ? 'Saving...' : 'Save'}
                                                                         </button>

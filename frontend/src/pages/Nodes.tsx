@@ -117,9 +117,9 @@ export function Nodes() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => fetchNodes()}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                            className="btn-primary"
                         >
-                            🔄 Refresh
+                            Refresh
                         </button>
                         <button
                             onClick={() => setShowForm(!showForm)}
@@ -130,7 +130,7 @@ export function Nodes() {
                     </div>
                 </div>
 
-                <div className="card p-6 mb-6 bg-blue-50 border-blue-200">
+                <div className="card p-6 mb-6 bg-indigo-50 border-indigo-200">
                     <h2 className="text-lg font-semibold mb-2">🏢 Nodes Management</h2>
                     <p className="text-sm text-gray-700">
                         Nodes represent construction companies or entities. Each node has its own
@@ -197,7 +197,7 @@ export function Nodes() {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => handleEdit(node)}
-                                        className="px-3 py-1 text-sm text-blue-600 hover:bg-blue-50 rounded"
+                                        className="btn-primary"
                                     >
                                         Edit
                                     </button>

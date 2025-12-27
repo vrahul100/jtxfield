@@ -152,9 +152,9 @@ export function Users() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => fetchData()}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                            className="btn-primary"
                         >
-                            🔄 Refresh
+                            Refresh
                         </button>
                         <button
                             onClick={() => setShowForm(!showForm)}

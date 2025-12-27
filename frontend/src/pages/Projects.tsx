@@ -202,9 +202,9 @@ export function Projects() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => fetchProjects()}
-                            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg flex items-center gap-2"
+                            className="btn-primary"
                         >
-                            🔄 Refresh
+                            Refresh
                         </button>
                         <button
                             onClick={() => setShowForm(!showForm)}
@@ -348,7 +348,7 @@ export function Projects() {
                                             {parseAliases(project.aliases).map((alias, idx) => (
                                                 <span
                                                     key={idx}
-                                                    className="px-2 py-1 bg-blue-50 text-blue-700 text-xs rounded"
+                                                    className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded"
                                                 >
                                                     {alias}
                                                 </span>
