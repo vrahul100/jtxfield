@@ -198,6 +198,11 @@ You're now activated. Start sending your work updates via text, photos, or voice
   const validation = await validateBucket(sql, bucket);
   console.log(`[VALIDATE] Complete: ${validation.isComplete}, Errors: ${validation.errors.length}`);
 
+  // Count attempts (number of messages added to this bucket)
+  const messageSids = bucket.message_sids ? JSON.parse(bucket.message_sids) : [];
+  const attemptCount = messageSids.length;
+  console.log(`[BUCKET] Attempt count: ${attemptCount}`);
+
   if (validation.isComplete) {
     // Close bucket and send confirmation
     await closeBucket(sql, bucket.id);
@@ -222,6 +227,17 @@ You're now activated. Start sending your work updates via text, photos, or voice
     const confirmationMsg = `${summaryLine}✅ ${tagLine}Logged to: ${projectName}\n\nType N within 5 min if wrong project.`;
 
     return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  } else if (attemptCount >= 2) {
+    // After 2 attempts, send for review instead of asking more questions
+    await sql`
+      UPDATE buckets 
+      SET status = 'pending_review', updated_at = NOW() 
+      WHERE id = ${bucket.id}
+    `;
+    console.log(`[BUCKET] Sent #${bucket.id} for review after ${attemptCount} attempts`);
+
+    const reviewMsg = `📋 Got it! Your entry has been sent for review. An admin will follow up if needed.`;
+    return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   } else {
     // Bucket incomplete - show helpful questions to guide user
     const responseMsg = validation.questions.length > 0

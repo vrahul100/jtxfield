@@ -291,39 +291,34 @@ export async function addProjectAlias(
 // Open Bucket Logic
 // ============================================================================
 
+const BUCKET_TIME_WINDOW_MINUTES = 10; // Time window to group messages into same bucket
+
 /**
- * Find an open bucket for a member + project combination
+ * Find an open bucket for a member within a time window
+ * Ignores project ID - if member has ANY open bucket within time window, use it
+ * This prevents creating new buckets when multiple media is sent quickly
  */
 export async function findOpenBucket(
     sql: Sql,
     memberId: number,
-    projectId: number | null
+    projectId: number | null // kept for API compatibility but not used for matching
 ): Promise<Bucket | null> {
-    let buckets;
+    // Find any open bucket for this member created within the time window
+    const buckets = await sql`
+        SELECT * FROM buckets 
+        WHERE member_id = ${memberId}
+          AND status = 'open'
+          AND created_at > NOW() - INTERVAL '${sql.unsafe(String(BUCKET_TIME_WINDOW_MINUTES))} minutes'
+        ORDER BY created_at DESC
+        LIMIT 1
+    `;
 
-    if (projectId === null) {
-        // Find open bucket with no project assigned
-        buckets = await sql`
-            SELECT * FROM buckets 
-            WHERE member_id = ${memberId}
-              AND status = 'open'
-              AND project_id IS NULL
-            ORDER BY created_at DESC
-            LIMIT 1
-        `;
-    } else {
-        // Find open bucket with specific project
-        buckets = await sql`
-            SELECT * FROM buckets 
-            WHERE member_id = ${memberId}
-              AND status = 'open'
-              AND project_id = ${projectId}
-            ORDER BY created_at DESC
-            LIMIT 1
-        `;
+    if (buckets.length > 0) {
+        console.log(`[BucketService] Found open bucket #${buckets[0].id} within ${BUCKET_TIME_WINDOW_MINUTES}min window`);
+        return buckets[0] as Bucket;
     }
 
-    return buckets.length > 0 ? buckets[0] as Bucket : null;
+    return null;
 }
 
 /**

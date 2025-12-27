@@ -293,6 +293,7 @@ export function Worklog() {
                             >
                                 <option value="all">All</option>
                                 <option value="open">Open</option>
+                                <option value="pending_review">Pending Review</option>
                                 <option value="closed">Closed</option>
                                 <option value="processing">Processing</option>
                                 <option value="awaiting_correction">Awaiting Correction</option>
