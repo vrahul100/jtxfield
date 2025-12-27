@@ -24,6 +24,15 @@ import {
 import { sendTwilioMessage } from '../services/twilio.js'
 import { handleJoinRequest } from './joinHandler.js'
 import { confirmMemberByPhone } from './members.js'
+import {
+  classifyIntent,
+  getConversationHistory,
+  appendConversation,
+  generateResponse,
+  cancelBucket,
+  submitBucket,
+  ConversationMessage
+} from '../services/conversationEngine.js'
 
 const validator = getMediaValidator();
 
@@ -129,6 +138,87 @@ You're now activated. Start sending your work updates via text, photos, or voice
   // Count total media in current message
   const newMediaCount = imageUrls.length + audioUrls.length;
 
+  // 8. CLASSIFY INTENT using conversation history
+  let conversationHistory: ConversationMessage[] = [];
+  if (bucket) {
+    conversationHistory = getConversationHistory(bucket);
+  }
+
+  const intent = await classifyIntent(conversationHistory, {
+    text: fullText,
+    hasMedia: newMediaCount > 0
+  });
+  console.log(`[INTENT] ${intent.intent} (confidence: ${intent.confidence})`);
+
+  // 9. HANDLE INTENTS
+
+  // CANCEL - User wants to abandon ticket
+  if (intent.intent === 'CANCEL' && bucket) {
+    await cancelBucket(sql, bucket.id);
+    await appendConversation(sql, bucket.id, [
+      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+      { role: 'assistant', content: `🚫 Ticket #${bucket.id} cancelled.`, timestamp: new Date().toISOString() }
+    ]);
+    return c.text(`<Response><Message>🚫 Ticket #${bucket.id} cancelled. Send a new message when you're ready to log work.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+
+  // CORRECTION - User wants to fix something
+  if (intent.intent === 'CORRECTION' && bucket) {
+    // Clear the pending validation question
+    await sql`UPDATE buckets SET ai_response = NULL, updated_at = NOW() WHERE id = ${bucket.id}`;
+    await appendConversation(sql, bucket.id, [
+      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+      { role: 'assistant', content: 'No problem! Send the corrected info or photo.', timestamp: new Date().toISOString() }
+    ]);
+    return c.text(`<Response><Message>No problem! What would you like to correct? Send the updated info or photo.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+
+  // CONFIRM - User is confirming/accepting (only if bucket exists)
+  if (intent.intent === 'CONFIRM' && bucket) {
+    const validation = await validateBucket(sql, bucket);
+
+    if (validation.isComplete) {
+      // Submit the ticket
+      await submitBucket(sql, bucket.id, validation.errors.length > 0);
+      await closeBucket(sql, bucket.id);
+
+      // Infer project before closing
+      const { extractMessageInfo } = await import('../services/extractionService.js');
+      const extraction = await extractMessageInfo(
+        bucket.raw_text || '',
+        bucket.transcripts ? JSON.parse(bucket.transcripts) : [],
+        bucket.image_urls ? JSON.parse(bucket.image_urls) : [],
+        member.domain || 'construction'
+      );
+
+      let projectName = 'Inbox';
+      if (extraction.projectName) {
+        const matchedProject = await findProjectByAlias(sql, member.company_id, extraction.projectName);
+        if (matchedProject) {
+          projectName = matchedProject.name;
+          await sql`UPDATE buckets SET project_id = ${matchedProject.id} WHERE id = ${bucket.id}`;
+        }
+      }
+
+      const confirmMsg = `✅ Ticket #${bucket.id} submitted for ${projectName}! Thanks for your report.`;
+      await appendConversation(sql, bucket.id, [
+        { role: 'user', content: fullText, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: confirmMsg, timestamp: new Date().toISOString() }
+      ]);
+      return c.text(`<Response><Message>${confirmMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    } else {
+      // Ticket not complete - ask for missing info
+      const question = validation.questions[0] || 'Please add more details.';
+      await sql`UPDATE buckets SET ai_response = ${question}, updated_at = NOW() WHERE id = ${bucket.id}`;
+      await appendConversation(sql, bucket.id, [
+        { role: 'user', content: fullText, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: question, timestamp: new Date().toISOString() }
+      ]);
+      return c.text(`<Response><Message>Got it, but we still need: ${question}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+  }
+
+  // ADD_CONTENT - Adding work details (or new ticket)
   if (bucket) {
     // Check existing media count (max 5)
     const existingImages = bucket.image_urls ? JSON.parse(bucket.image_urls) : [];
@@ -170,7 +260,7 @@ You're now activated. Start sending your work updates via text, photos, or voice
     console.log(`[TICKET] Opened ticket #${bucket.id}`);
   }
 
-  // 8. VALIDATE TICKET COMPLETENESS
+  // 10. VALIDATE TICKET COMPLETENESS
   const validation = await validateBucket(sql, bucket);
   console.log(`[VALIDATE] Complete: ${validation.isComplete}, Errors: ${validation.errors.length}`);
 
@@ -272,6 +362,13 @@ You're now activated. Start sending your work updates via text, photos, or voice
       ? `\n\nReason: ${validation.questions[0].replace('⚠️ ', '').replace('The details don\'t look right. ', '')}`
       : '';
     const reviewMsg = `${t(lang, 'ticket_review', { id: bucket.id })}${reasonLine}\n\n${t(lang, 'admin_followup')}`;
+
+    // Store conversation
+    await appendConversation(sql, bucket.id, [
+      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+      { role: 'assistant', content: reviewMsg, timestamp: new Date().toISOString() }
+    ]);
+
     return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
 
   } else {
@@ -290,12 +387,31 @@ You're now activated. Start sending your work updates via text, photos, or voice
       const questionMsg = isNewTicket
         ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${questionText}`
         : `Ticket #${bucket.id}: ${questionText}`;
+
+      // Store conversation
+      await appendConversation(sql, bucket.id, [
+        { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: questionMsg, timestamp: new Date().toISOString() }
+      ]);
+
       return c.text(`<Response><Message>${questionMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     } else if (isNewTicket) {
       const openMsg = `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${t(lang, 'send_photos')}`;
+
+      await appendConversation(sql, bucket.id, [
+        { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: openMsg, timestamp: new Date().toISOString() }
+      ]);
+
       return c.text(`<Response><Message>${openMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     } else {
       const responseMsg = `${t(lang, 'ticket_received', { id: bucket.id })} ${t(lang, 'send_details')}`;
+
+      await appendConversation(sql, bucket.id, [
+        { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+        { role: 'assistant', content: responseMsg, timestamp: new Date().toISOString() }
+      ]);
+
       return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
   }

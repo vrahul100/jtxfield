@@ -3,7 +3,7 @@ import { extractMessageInfo } from './extractionService.js';
 import { getQueue } from '../queue/index.js';
 import { getSchemaForDomain, FIELD_QUESTIONS } from '../schemas/domainSchemas.js';
 
-export type BucketStatus = 'open' | 'submitted' | 'pending_review' | 'rejected';
+export type BucketStatus = 'open' | 'submitted' | 'pending_review' | 'rejected' | 'cancelled';
 
 export interface Bucket {
     id: number;
@@ -24,6 +24,7 @@ export interface Bucket {
     validation_errors: string | null;
     ai_response: string | null;
     message_sids: string | null;    // JSON array
+    conversation_history: any;      // JSONB - array of conversation messages
     created_at: Date;
     updated_at: Date;
 }
