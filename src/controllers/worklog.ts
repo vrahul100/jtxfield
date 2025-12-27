@@ -43,15 +43,27 @@ export async function getWorklog(c: Context, sql: Sql) {
             conditions.push(`b.member_id = ${parseInt(memberId)}`);
         }
 
-        // Search across member name, phone, project name, and raw text
+        // Search across ID, member name, phone, project name, and raw text
         if (search.trim()) {
             const searchTerm = search.trim().replace(/'/g, "''");
-            conditions.push(`(
-                m.full_name ILIKE '%${searchTerm}%' 
-                OR m.phone_number ILIKE '%${searchTerm}%'
-                OR p.name ILIKE '%${searchTerm}%'
-                OR b.raw_text ILIKE '%${searchTerm}%'
-            )`);
+            // Check if search term is a number (for ID search)
+            const isNumeric = /^\d+$/.test(searchTerm);
+            if (isNumeric) {
+                conditions.push(`(
+                    b.id = ${parseInt(searchTerm)}
+                    OR m.full_name ILIKE '%${searchTerm}%' 
+                    OR m.phone_number ILIKE '%${searchTerm}%'
+                    OR p.name ILIKE '%${searchTerm}%'
+                    OR b.raw_text ILIKE '%${searchTerm}%'
+                )`);
+            } else {
+                conditions.push(`(
+                    m.full_name ILIKE '%${searchTerm}%' 
+                    OR m.phone_number ILIKE '%${searchTerm}%'
+                    OR p.name ILIKE '%${searchTerm}%'
+                    OR b.raw_text ILIKE '%${searchTerm}%'
+                )`);
+            }
         }
 
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';

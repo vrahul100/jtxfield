@@ -278,9 +278,18 @@ You're now activated. Start sending your work updates via text, photos, or voice
     // Ticket incomplete - ask clarifying questions
     const lang = getLang(member);
     if (validation.questions.length > 0) {
+      const questionText = validation.questions.join('\n\n');
+
+      // Store the question in ai_response so we can include it as context in the next message
+      await sql`
+        UPDATE buckets 
+        SET ai_response = ${questionText}, updated_at = NOW()
+        WHERE id = ${bucket.id}
+      `;
+
       const questionMsg = isNewTicket
-        ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${validation.questions.join('\n\n')}`
-        : `Ticket #${bucket.id}: ${validation.questions.join('\n\n')}`;
+        ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${questionText}`
+        : `Ticket #${bucket.id}: ${questionText}`;
       return c.text(`<Response><Message>${questionMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     } else if (isNewTicket) {
       const openMsg = `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${t(lang, 'send_photos')}`;
