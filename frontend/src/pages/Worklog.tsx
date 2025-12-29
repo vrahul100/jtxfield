@@ -1,5 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
+import {
+    Pencil,
+    Music,
+    Paperclip,
+    ChevronRight,
+    ChevronDown
+} from 'lucide-react';
 
 interface ConversationMessage {
     role: 'user' | 'assistant';
@@ -403,7 +410,7 @@ export function Worklog() {
                                                         className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 border rounded"
                                                         title={isExpanded ? 'Collapse' : 'Expand'}
                                                     >
-                                                        {isExpanded ? '−' : '+'}
+                                                        {isExpanded ? <ChevronDown /> : <ChevronRight />}
                                                     </button>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -474,8 +481,9 @@ export function Worklog() {
                                                         {bucket.raw_text || '(No text content)'}
                                                     </div>
                                                     {(bucket.image_urls || bucket.audio_urls) && (
-                                                        <div className="text-xs text-blue-600 mt-1">
-                                                            📎 Has attachments
+                                                        <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                                                            <Paperclip className="w-3 h-3" />
+                                                            <span>Has attachments</span>
                                                         </div>
                                                     )}
                                                 </td>
@@ -511,9 +519,10 @@ export function Worklog() {
                                                                 {isEditable(bucket.status) && editingBucketId !== bucket.id && (
                                                                     <button
                                                                         onClick={() => startEdit(bucket)}
-                                                                        className="text-blue-600 hover:text-blue-800 text-sm"
+                                                                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
                                                                     >
-                                                                        ✏️ Edit
+                                                                        <Pencil className="w-3.5 h-3.5" />
+                                                                        <span>Edit</span>
                                                                     </button>
                                                                 )}
                                                             </div>
@@ -589,7 +598,7 @@ export function Worklog() {
                                                                             if (Array.isArray(urls)) {
                                                                                 return urls.map((url: string, i: number) => (
                                                                                     <div key={`audio-${i}`} className="flex items-center gap-2 bg-white px-3 py-2 rounded border">
-                                                                                        <span className="text-lg">🎵</span>
+                                                                                        <Music className="w-4 h-4 text-indigo-600" />
                                                                                         <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">Voice Note {i + 1}</a>
                                                                                     </div>
                                                                                 ));

@@ -83,7 +83,7 @@ You're now activated. Start sending your work updates via text, photos, or voice
   }
 
   // 3. CHECK FOR JOIN REQUEST (before authentication)
-  if (messageText === 'JOIN JTX' || messageText === 'JOIN') {
+  if (messageText.toUpperCase() === 'JOIN JTX' || messageText.toUpperCase() === 'JOIN') {
     return await handleJoinRequest(c, sql, normalized, body);
   }
 
