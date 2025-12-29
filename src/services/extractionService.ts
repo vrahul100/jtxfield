@@ -178,12 +178,47 @@ export async function extractMessageInfo(
         const completion = await getGroq().chat.completions.create({
             model,
             messages,
-            temperature: 0.3,
+            temperature: 0.1,  // Low temperature for strict JSON output
             response_format: { type: 'json_object' },
         });
 
         const rawResponse = completion.choices[0]?.message?.content || '{}';
-        const extracted = JSON.parse(rawResponse);
+        let extracted: any;
+
+        try {
+            extracted = JSON.parse(rawResponse);
+        } catch (parseError) {
+            // Auto-repair: Try to extract JSON from response
+            console.warn('[EXTRACTION] JSON parse failed, attempting repair...');
+            const jsonMatch = rawResponse.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                try {
+                    extracted = JSON.parse(jsonMatch[0]);
+                    console.log('[EXTRACTION] JSON repair successful');
+                } catch {
+                    // Final fallback: Ask Groq to fix the JSON
+                    console.warn('[EXTRACTION] Repair failed, requesting LLM fix...');
+                    try {
+                        const fixCompletion = await getGroq().chat.completions.create({
+                            model: 'llama-3.1-8b-instant',
+                            messages: [
+                                { role: 'user', content: `You generated invalid JSON. Fix this and return ONLY valid JSON:\n\n${rawResponse}` }
+                            ],
+                            temperature: 0,
+                            max_tokens: 1000,
+                        });
+                        const fixedResponse = fixCompletion.choices[0]?.message?.content || '{}';
+                        const fixedMatch = fixedResponse.match(/\{[\s\S]*\}/);
+                        extracted = fixedMatch ? JSON.parse(fixedMatch[0]) : {};
+                    } catch {
+                        console.error('[EXTRACTION] LLM fix also failed, using defaults');
+                        extracted = {};
+                    }
+                }
+            } else {
+                extracted = {};
+            }
+        }
 
         return {
             domain: extracted.domain || domain,
