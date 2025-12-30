@@ -1,4 +1,4 @@
-# JTX Field - Construction Work Ticket System
+# JField - Construction Work Ticket System
 
 A zero-app field worklog system for construction workers and recovery teams. Workers send messages via WhatsApp/SMS, AI extracts structured data, and office managers review and assign work through a web dashboard.
 

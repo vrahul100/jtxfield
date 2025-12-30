@@ -6,6 +6,9 @@ export default {
     ],
     theme: {
         extend: {
+            fontSize: {
+                base: '1.125rem', // 18px
+            },
             colors: {
                 primary: {
                     50: '#eff6ff',
