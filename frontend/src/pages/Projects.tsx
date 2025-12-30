@@ -88,6 +88,7 @@ export function Projects() {
     };
 
     const fetchProjects = async () => {
+        setLoading(true);
         try {
             const params = new URLSearchParams();
             if (search.trim()) params.append('search', search.trim());
@@ -143,10 +144,14 @@ export function Projects() {
             });
             if (response.ok) {
                 resetForm();
-                fetchProjects();
+                await fetchProjects();
+            } else {
+                const data = await response.json();
+                alert(`Save failed: ${data.error || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Failed to save project:', error);
+            alert('Failed to save project. Check console for details.');
         }
     };
 
@@ -171,10 +176,15 @@ export function Projects() {
                 credentials: 'include',
             });
             if (response.ok) {
-                fetchProjects();
+                // Force a fresh fetch
+                await fetchProjects();
+            } else {
+                const data = await response.json();
+                alert(`Delete failed: ${data.error || 'Unknown error'}`);
             }
         } catch (error) {
             console.error('Failed to delete project:', error);
+            alert('Failed to delete project. Check console for details.');
         }
     };
 

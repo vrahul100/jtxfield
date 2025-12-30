@@ -142,23 +142,41 @@ export async function updateProject(c: Context, sql: Sql) {
 
 /**
  * DELETE /api/projects/:id
- * Soft delete a project (mark as inactive)
+ * Hard delete a project (only if no associated tickets)
  */
 export async function deleteProject(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const projectId = parseInt(c.req.param('id'));
 
-        const [project] = await sql`
-            UPDATE projects
-            SET is_active = false
-            WHERE id = ${projectId}
-            ${user.role === 'OM' ? sql`AND node_id = ${user.nodeId}` : sql``}
-            RETURNING *
+        // Check if project has any associated buckets/tickets
+        const [ticketCount] = await sql`
+            SELECT COUNT(*)::int as count FROM buckets WHERE project_id = ${projectId}
         `;
 
-        if (!project) {
-            return c.json({ error: 'Project not found or access denied' }, 404);
+        if (ticketCount.count > 0) {
+            return c.json({
+                error: `Cannot delete: project has ${ticketCount.count} associated ticket(s)`
+            }, 400);
+        }
+
+        // Check access for OM users
+        if (user.role === 'OM') {
+            const [project] = await sql`
+                SELECT id FROM projects WHERE id = ${projectId} AND node_id = ${user.nodeId}
+            `;
+            if (!project) {
+                return c.json({ error: 'Project not found or access denied' }, 404);
+            }
+        }
+
+        // Hard delete the project
+        const [deleted] = await sql`
+            DELETE FROM projects WHERE id = ${projectId} RETURNING id
+        `;
+
+        if (!deleted) {
+            return c.json({ error: 'Project not found' }, 404);
         }
 
         return c.json({ success: true });
