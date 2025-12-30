@@ -610,34 +610,7 @@ export function Worklog() {
                                                             </div>
                                                         )}
 
-                                                        {/* Conversation History */}
-                                                        {bucket.conversation_history && bucket.conversation_history.length > 0 && (
-                                                            <div className="mt-4">
-                                                                <strong>Conversation History:</strong>
-                                                                <div className="mt-2 space-y-2 max-h-64 overflow-y-auto bg-slate-100 rounded-lg p-3">
-                                                                    {bucket.conversation_history.map((msg, i) => (
-                                                                        <div
-                                                                            key={i}
-                                                                            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
-                                                                        >
-                                                                            <div
-                                                                                className={`max-w-[80%] px-3 py-2 rounded-lg text-sm ${msg.role === 'user'
-                                                                                    ? 'bg-indigo-600 text-white'
-                                                                                    : 'bg-white border border-slate-200'
-                                                                                    }`}
-                                                                            >
-                                                                                <div className="whitespace-pre-wrap">{msg.content}</div>
-                                                                                {msg.media && msg.media.length > 0 && (
-                                                                                    <div className="text-xs mt-1 opacity-75">
-                                                                                        📎 {msg.media.length} attachment(s)
-                                                                                    </div>
-                                                                                )}
-                                                                            </div>
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        )}
+
 
                                                         <div className="text-xs text-gray-500 mt-4">
                                                             Created: {formatDate(bucket.created_at)}
