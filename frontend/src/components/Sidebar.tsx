@@ -25,9 +25,13 @@ export function Sidebar() {
                 {/* OM & SU Links */}
                 <NavLink to="/worklog" className={navLinkClass}>
                     <ClipboardList className="w-5 h-5" />
-                    <span className="text-base">Work Tickets</span>
+                    <span className="text-base">Tickets</span>
                 </NavLink>
 
+                <NavLink to="/transactions" className={navLinkClass}>
+                    <Receipt className="w-5 h-5" />
+                    <span className="text-base">Transactions</span>
+                </NavLink>
                 <NavLink to="/members" className={navLinkClass}>
                     <Users className="w-5 h-5" />
                     <span className="text-base">Members</span>
@@ -38,21 +42,6 @@ export function Sidebar() {
                     <span className="text-base">Projects</span>
                 </NavLink>
 
-                <div className="pt-4">
-                    <div className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2">
-                        Coming Soon
-                    </div>
-                    <div className="opacity-50 cursor-not-allowed">
-                        <div className="flex items-center gap-3 px-4 py-3 text-slate-600">
-                            <DollarSign className="w-5 h-5" />
-                            <span className="text-base">Rate Card</span>
-                        </div>
-                        <div className="flex items-center gap-3 px-4 py-3 text-slate-600">
-                            <Receipt className="w-5 h-5" />
-                            <span className="text-base">Transactions</span>
-                        </div>
-                    </div>
-                </div>
 
                 {/* SU Only Links */}
                 {user?.role === 'SU' && (

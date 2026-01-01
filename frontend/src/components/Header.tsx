@@ -22,7 +22,7 @@ export function Header() {
                         <Building2 className="w-6 h-6 text-white" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900 tracking-tight">JTX Field</h1>
+                        <h1 className="text-xl font-bold text-slate-900 tracking-tight">JField</h1>
                     </div>
                 </div>
 

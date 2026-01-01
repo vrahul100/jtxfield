@@ -5,6 +5,7 @@ import { Login } from './pages/Login';
 import { Worklog } from './pages/Worklog';
 import { Members } from './pages/Members';
 import { Projects } from './pages/Projects';
+import { Transactions } from './pages/Transactions';
 import { Nodes } from './pages/Nodes';
 import { Users } from './pages/Users';
 import './index.css';
@@ -54,6 +55,14 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Projects />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/transactions"
+                        element={
+                            <ProtectedRoute>
+                                <Transactions />
                             </ProtectedRoute>
                         }
                     />

@@ -9,6 +9,7 @@ import { getMembers, approveMember, inviteMember, updateMember, deleteMember, re
 import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
 import { getNodes, createNode, updateNode, deleteNode } from './controllers/nodes.js'
 import { getUsersList, createNewUser, updateUserInfo, deleteUser } from './controllers/users.js'
+import { getTransactions } from './controllers/transactions.js'
 import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 
 export const createApp = (sql: Sql) => {
@@ -42,7 +43,10 @@ export const createApp = (sql: Sql) => {
     app.put('/api/projects/:id', requireOM(sql), (c) => updateProject(c, sql))
     app.delete('/api/projects/:id', requireOM(sql), (c) => deleteProject(c, sql))
 
-    // 6. NODES API (SU only)
+    // 6. TRANSACTIONS API (OM & SU)
+    app.get('/api/transactions', requireOM(sql), (c) => getTransactions(c, sql))
+
+    // 7. NODES API (SU only)
     app.get('/api/nodes', requireSU(sql), (c) => getNodes(c, sql))
     app.post('/api/nodes', requireSU(sql), (c) => createNode(c, sql))
     app.put('/api/nodes/:id', requireSU(sql), (c) => updateNode(c, sql))

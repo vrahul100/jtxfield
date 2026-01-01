@@ -69,12 +69,12 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
 
   // 2. CHECK FOR MEMBER CONFIRMATION (before authentication)
   const messageText = normalized.text.trim().toUpperCase();
-  if (messageText === 'CONFIRM') {
+  if (messageText === 'YES') {
     const confirmResult = await confirmMemberByPhone(sql, normalized.sender);
     if (confirmResult.success) {
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
       const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `✅ Welcome to JTX Field${name}!${teamMsg}
+      const welcomeMsg = `✅ Welcome to JField${name}!${teamMsg}
 
 You're now activated. Start sending your work updates via text, photos, or voice notes.`;
       return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
@@ -191,6 +191,13 @@ You're now activated. Start sending your work updates via text, photos, or voice
         member.domain || 'construction'
       );
 
+      // Store extraction results for later use (e.g., transactions)
+      await sql`
+        UPDATE buckets 
+        SET extracted_data = ${JSON.stringify(extraction)}
+        WHERE id = ${bucket.id}
+      `;
+
       let projectName = 'Inbox';
       if (extraction.projectName) {
         const matchedProject = await findProjectByAlias(sql, member.company_id, extraction.projectName);
@@ -199,6 +206,13 @@ You're now activated. Start sending your work updates via text, photos, or voice
           await sql`UPDATE buckets SET project_id = ${matchedProject.id} WHERE id = ${bucket.id}`;
         }
       }
+
+      // Extract transaction asynchronously
+      import('../services/transactionService.js').then(({ extractTransactionFromBucket }) => {
+        extractTransactionFromBucket(sql, bucket.id).catch((err) => {
+          console.error(`[WEBHOOK] Failed to extract transaction for bucket #${bucket.id}:`, err);
+        });
+      });
 
       const confirmMsg = `✅ Ticket #${bucket.id} submitted for ${projectName}! Thanks for your report.`;
       await appendConversation(sql, bucket.id, [

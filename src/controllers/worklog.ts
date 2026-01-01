@@ -104,7 +104,7 @@ export async function getWorklog(c: Context, sql: Sql) {
             totalPages: Math.ceil(total / limit),
         });
     } catch (error: any) {
-        console.error('[Work Tickets] Error:', error);
+        console.error('[Tickets] Error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -139,11 +139,18 @@ export async function approveBucket(c: Context, sql: Sql) {
             WHERE id = ${bucketId}
         `;
 
-        console.log(`[Work Tickets] Bucket #${bucketId} approved by user ${user.id}`);
+        console.log(`[Tickets] Bucket #${bucketId} approved by user ${user.id}`);
+
+        // Extract transaction asynchronously (don't wait for it)
+        import('../services/transactionService.js').then(({ extractTransactionFromBucket }) => {
+            extractTransactionFromBucket(sql, bucketId).catch((err) => {
+                console.error(`[Tickets] Failed to extract transaction for bucket #${bucketId}:`, err);
+            });
+        });
 
         return c.json({ success: true });
     } catch (error: any) {
-        console.error('[Work Tickets] Approve error:', error);
+        console.error('[Tickets] Approve error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -199,11 +206,11 @@ export async function updateBucket(c: Context, sql: Sql) {
             return c.json({ error: 'rawText or projectId is required' }, 400);
         }
 
-        console.log(`[Work Tickets] Bucket #${bucketId} updated by user ${user.id}`);
+        console.log(`[Tickets] Bucket #${bucketId} updated by user ${user.id}`);
 
         return c.json({ success: true });
     } catch (error: any) {
-        console.error('[Work Tickets] Update error:', error);
+        console.error('[Tickets] Update error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -238,11 +245,11 @@ export async function rejectBucket(c: Context, sql: Sql) {
             WHERE id = ${bucketId}
         `;
 
-        console.log(`[Work Tickets] Bucket #${bucketId} rejected by user ${user.id}`);
+        console.log(`[Tickets] Bucket #${bucketId} rejected by user ${user.id}`);
 
         return c.json({ success: true });
     } catch (error: any) {
-        console.error('[Work Tickets] Reject error:', error);
+        console.error('[Tickets] Reject error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }

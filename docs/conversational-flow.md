@@ -2,7 +2,7 @@
 
 ## Overview
 
-The JTX Field application uses an **intent-driven conversational flow** to handle incoming WhatsApp/SMS messages from construction workers. Instead of a rigid linear flow, each message is classified by intent, allowing for natural, out-of-sequence responses.
+The JField application uses an **intent-driven conversational flow** to handle incoming WhatsApp/SMS messages from construction workers. Instead of a rigid linear flow, each message is classified by intent, allowing for natural, out-of-sequence responses.
 
 ## Architecture
 
@@ -203,7 +203,7 @@ Extract data if ADD_CONTENT: hours, projectHint, workDescription
 
 ## Frontend Display
 
-The Work Tickets page shows conversation history in the expanded view:
+The Tickets page shows conversation history in the expanded view:
 - Chat-style bubbles (user = right/indigo, assistant = left/white)
 - Shows timestamps and attachment counts
 - Scrollable container for long conversations

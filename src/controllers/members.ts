@@ -27,9 +27,9 @@ function normalizePhoneNumber(phone: string): string {
  */
 async function sendConfirmationMessage(phoneNumber: string, memberName?: string): Promise<void> {
     const name = memberName ? ` ${memberName}` : '';
-    const message = `👋 Hello${name}! You've been added to the JTX Field system. 
+    const message = `👋 Hello${name}! You've been added to the JField system. 
 
-Please reply with CONFIRM to activate your account and start logging work.`;
+Please reply with YES to activate your account and start logging work.`;
 
     await sendTwilioMessage(phoneNumber, message, 'whatsapp');
 }
@@ -40,9 +40,9 @@ Please reply with CONFIRM to activate your account and start logging work.`;
 async function sendInvitationMessage(phoneNumber: string, memberName?: string, nodeName?: string): Promise<void> {
     const name = memberName ? ` ${memberName}` : '';
     const company = nodeName || 'our team';
-    const message = `👋 Hello${name}! You've been invited to join ${company} on JTX Field.
+    const message = `👋 Hello${name}! You've been invited to join ${company} on JField.
 
-Reply CONFIRM to accept and start logging your work.`;
+Reply YES to accept and start logging your work.`;
 
     await sendTwilioMessage(phoneNumber, message, 'whatsapp');
 }
