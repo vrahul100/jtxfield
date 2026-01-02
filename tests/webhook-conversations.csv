@@ -1,0 +1,22 @@
+# Multi-Turn Conversation Test Cases
+# Format: conversation_id,turn_number,phone_number,message_text,image_url,audio_url,expected_bucket_status,expected_hours,expected_materials,description
+
+# Conversation 1: Simple work log with hours clarification
+conv1,1,+15102198037,Did wiring work,,,pending_clarification,,,AI should ask for hours
+conv1,2,+15102198037,3 hours,,,submitted,3,,User provides hours
+
+# Conversation 2: Material extraction from image
+conv2,1,+15102198037,Foundation work,https://via.placeholder.com/800x600.png?text=Rebar,,submitted,,rebar,Image should trigger submission
+
+# Conversation 3: Inconsistency resolution
+conv3,1,+15102198037,Installed outlets,https://via.placeholder.com/800x600.png?text=Plumbing,,pending_clarification,,,AI should ask about inconsistency
+conv3,2,+15102198037,Actually it was electrical work,,,submitted,,,User clarifies
+
+# Conversation 4: Project selection
+conv4,1,+15555550102,Painted walls for 4 hours,,,pending_project,4,,AI should ask for project
+conv4,2,+15555550102,Downtown Office,,,submitted,4,,User provides project
+
+# Conversation 5: Complete conversation with all steps
+conv5,1,+15102198037,Did some work,,,,,,Initial vague message
+conv5,2,+15102198037,Used concrete and rebar,,,pending_clarification,,concrete;rebar,AI asks for hours
+conv5,3,+15102198037,8 hours,,,submitted,8,concrete;rebar,Complete

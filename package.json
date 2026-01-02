@@ -9,6 +9,8 @@
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",
+    "test:webhook": "tsx tests/run-webhook-tests.ts",
+    "test:conversations": "tsx tests/run-conversation-tests.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/data/seed.ts"
@@ -17,6 +19,7 @@
     "@types/aws-lambda": "^8.10.159",
     "@types/node": "^24.10.1",
     "autoprefixer": "^10.4.23",
+    "csv-parse": "^6.1.0",
     "drizzle-kit": "^0.31.7",
     "esbuild": "^0.21.4",
     "npm-run-all2": "^6.2.0",

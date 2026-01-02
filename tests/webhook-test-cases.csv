@@ -1,0 +1,9 @@
+# Webhook Test Cases
+# Format: phone_number,message_text,image_url,audio_url,expected_hours,expected_materials,description
++15102198037,Did electrical wiring for 3 hours,,,3,wires,Simple text with hours
++15102198037,Installed outlets,,,,outlets,Text without hours
++15102198037,Used rebar and wire for foundation work 5 hours,,,5,"rebar,wire",Materials and hours
++15102198037,Cutting rebar for construction,https://api.twilio.com/2010-04-01/Accounts/ACb4d2e407ffbe87b50e75ae7108b2d316/Messages/MM116b5c35e29c39769c68114aa23d0d29/Media/MEb9caa05615a2aca7c036807cf11ded63,,,rebar,Image with text
++15102198037,Foundation work complete, https://api.twilio.com/2010-04-01/Accounts/ACb4d2e407ffbe87b50e75ae7108b2d316/Messages/MM116b5c35e29c39769c68114aa23d0d29/Media/MEb9caa05615a2aca7c036807cf11ded63,,,,Foundation with image
++15102198037,Plumbing work 4 hours using copper pipes,,,4,copper,Different member test
++15102198037,,,https://mms.twiliocdn.com/ACb4d2e407ffbe87b50e75ae7108b2d316/65af277b89e27d26f5ed50c896c20a59?Expires=1767384182&Signature=hMlceSFl9bQCvwNy1f-XPpBNqQRIQ0LOwSlRCtCpGzzA7qyAlaesKmiLcoZPCU-tTK~PKacgfNd8DVDjEw2e0QW7Lh4fImrBWB1KBcL7obs4RHdtgNkWCgMkBMDyStZrb~SOVtPOVKnZLXEdCiJbSXiVeT6OxMkhJJGYFexzpSENGQZaPq20AsChFBE36bBT7kycZW0S94-tb-5pVbUWotojv13jGFzcFN2jLtQsi0zbh8yvLc~NzMO7cSEg84c0vs7JNhEz7VSoIWAmGtMYJ3K161qyGcOQmj4gjfFFC6pqQBI~3k1qiwhhw4faOIP3pZASAyahHuv4Z8raXxR4HA__&Key-Pair-Id=APKAIRUDFXVKPONS3KUA,,,Audio only (should ask for details)
