@@ -30,8 +30,8 @@ export const ConstructionExtractionSchema = BaseExtractionSchema.extend({
         .describe('Number of workers. Default to 1 if not mentioned'),
     materialsUsed: z.array(z.string()).default([])
         .describe('List of materials mentioned. Empty array [] if none mentioned'),
-    location: z.string().optional()
-        .describe('Specific location like "floor 3", "unit 5B", "lobby". Omit if not mentioned'),
+    location: z.string().nullable().optional()
+        .describe('Specific location like "floor 3", "unit 5B", "lobby". Use null if not mentioned'),
 });
 
 export type ConstructionExtraction = z.infer<typeof ConstructionExtractionSchema>;

@@ -1,5 +1,6 @@
 import { Hono } from 'hono'
 import { Sql } from 'postgres'
+import { serveStatic } from '@hono/node-server/serve-static'
 import { handleTwilioWebhook } from './controllers/webhook.js'
 import { createAdminRoutes } from './controllers/admin.js'
 import { getInbox, bulkAssign, addAlias } from './controllers/inbox.js'
@@ -14,6 +15,12 @@ import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 
 export const createApp = (sql: Sql) => {
     const app = new Hono()
+
+    // 0. STATIC FILES (for test fixtures)
+    app.get('/test-fixtures/*', serveStatic({
+        root: './tests/fixtures',
+        rewriteRequestPath: (path) => path.replace(/^\/test-fixtures/, '')
+    }))
 
     // 1. TWILIO WEBHOOK (public)
     app.post('/twhook', (c) => handleTwilioWebhook(c, sql))

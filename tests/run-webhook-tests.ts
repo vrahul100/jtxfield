@@ -36,17 +36,22 @@ async function simulateWebhookCall(testCase: TestCase): Promise<Response> {
     const formData = new URLSearchParams();
     formData.append('From', `whatsapp:${testCase.phone_number}`);
     formData.append('Body', testCase.message_text);
+    formData.append('ForceNewBucket', 'true'); // Always create new bucket for testing
 
     let mediaCount = 0;
     if (testCase.image_url) {
         formData.append('MediaUrl0', testCase.image_url);
+        formData.append('MediaContentType0', 'image/jpeg');
         mediaCount++;
     }
     if (testCase.audio_url) {
         formData.append(`MediaUrl${mediaCount}`, testCase.audio_url);
+        formData.append(`MediaContentType${mediaCount}`, 'audio/ogg'); // OGG format
         mediaCount++;
     }
     formData.append('NumMedia', mediaCount.toString());
+
+    console.log(`   📤 Sending: NumMedia=${mediaCount}, Audio=${testCase.audio_url || 'none'}`);
 
     return fetch(`${BASE_URL}/twhook`, {
         method: 'POST',
@@ -55,12 +60,51 @@ async function simulateWebhookCall(testCase: TestCase): Promise<Response> {
     });
 }
 
-async function verifyBucketCreation(phoneNumber: string): Promise<{ id: number; extracted_data: any } | null> {
-    // Wait a bit for async processing
+async function verifyBucketCreation(phoneNumber: string): Promise<{ id: number; extracted_data: any; status: string; validation_errors: string | null; transcripts: string | null } | null> {
+    // Initial wait for webhook processing to start
     await new Promise(resolve => setTimeout(resolve, 2000));
 
+    // Poll for bucket completion instead of fixed wait
+    const maxAttempts = 30; // 30 seconds max after initial wait
+    const pollInterval = 1000; // Check every 1 second
+
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        const buckets = await sql`
+            SELECT b.id, b.extracted_data, b.status, b.validation_errors, b.transcripts, b.created_at
+            FROM buckets b
+            JOIN members m ON b.member_id = m.id
+            WHERE m.phone_number = ${phoneNumber}
+            ORDER BY b.created_at DESC
+            LIMIT 1
+        `;
+
+        if (buckets.length > 0) {
+            const bucket = buckets[0];
+
+            // Track this bucket for cleanup
+            if (!createdBucketIds.includes(bucket.id)) {
+                createdBucketIds.push(bucket.id);
+            }
+
+            // Check if validation completed (submitted) or has extracted_data
+            if (bucket.status === 'submitted' || bucket.extracted_data) {
+                console.log(`   ⏱️  Processing completed in ${2 + attempt}s`);
+                return bucket;
+            }
+
+            // Show progress every 5 seconds
+            if (attempt % 5 === 4) {
+                console.log(`   ⏳ Waiting for LLM... (${2 + attempt}s, status: ${bucket.status})`);
+            }
+        }
+
+        await new Promise(resolve => setTimeout(resolve, pollInterval));
+    }
+
+    // Timeout - return whatever we have
+    console.log(`   ⚠️  Timeout after ${2 + maxAttempts}s`);
     const buckets = await sql`
-        SELECT b.id, b.extracted_data, b.created_at
+        SELECT b.id, b.extracted_data, b.status, b.validation_errors, b.transcripts, b.created_at
         FROM buckets b
         JOIN members m ON b.member_id = m.id
         WHERE m.phone_number = ${phoneNumber}
@@ -72,6 +116,7 @@ async function verifyBucketCreation(phoneNumber: string): Promise<{ id: number; 
         createdBucketIds.push(buckets[0].id);
         return buckets[0];
     }
+
     return null;
 }
 
@@ -119,6 +164,18 @@ async function runTest(testCase: TestCase): Promise<TestResult> {
         }
 
         console.log(`   ✅ Bucket created: #${bucket.id}`);
+        console.log(`   📊 Status: ${bucket.status}`);
+
+        if (bucket.transcripts) {
+            try {
+                const transcripts = JSON.parse(bucket.transcripts);
+                console.log(`   🎤 Transcripts:`, transcripts);
+            } catch { /* ignore */ }
+        }
+
+        if (bucket.validation_errors) {
+            console.log(`   ⚠️  Validation errors:`, bucket.validation_errors);
+        }
 
         // Parse extracted data
         let extractedHours: number | null = null;
@@ -128,11 +185,17 @@ async function runTest(testCase: TestCase): Promise<TestResult> {
             const data = typeof bucket.extracted_data === 'string'
                 ? JSON.parse(bucket.extracted_data)
                 : bucket.extracted_data;
+
+            // Show full LLM extraction for debugging
+            console.log(`   🤖 LLM Extraction:`, JSON.stringify(data, null, 2));
+
             extractedHours = data.hoursWorked || null;
             extractedMaterials = data.materialsUsed?.join(', ') || null;
 
-            console.log(`   Extracted hours: ${extractedHours}`);
-            console.log(`   Extracted materials: ${extractedMaterials}`);
+            console.log(`   ⏱️  Extracted hours: ${extractedHours}`);
+            console.log(`   🔨 Extracted materials: ${extractedMaterials}`);
+        } else {
+            console.log(`   ⚠️  No extracted_data found in bucket`);
         }
 
         // Verify transaction if expected

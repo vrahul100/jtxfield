@@ -18,37 +18,43 @@ export async function transcribeAudio(audioUrl: string, contentType: string): Pr
     const tempFilePath = path.join(os.tmpdir(), `upload-${Date.now()}.mp3`);
 
     try {
-        console.log(`🎙️ Fetching audio from: ${audioUrl}`);
+        console.log(`🎙️ Transcribing audio from: ${audioUrl}`);
 
-        // 1. Download the Audio File (Stream to /tmp to save RAM)
+        // Download the Audio File (Groq SDK doesn't support URL parameter reliably)
+        console.log(`📥 Downloading audio file...`);
         const response = await fetch(audioUrl);
         if (!response.ok || !response.body) {
             throw new Error(`Failed to fetch audio: ${response.statusText}`);
         }
 
-        // Node.js specific: Write web stream to file system
-        // @ts-ignore - ReadableStream/NodeStream mismatch is common in Lambda types, pipeline handles it
+        // Stream to temp file
+        // @ts-ignore - ReadableStream/NodeStream mismatch
         await pipeline(response.body, createWriteStream(tempFilePath));
 
-        // 2. Send to Groq Whisper
-        console.log(`📤 Sending to Groq Whisper...`);
-
+        // Upload to Groq Whisper
+        console.log(`📤 Uploading to Groq Whisper...`);
         const transcription = await getGroq().audio.transcriptions.create({
             file: fs.createReadStream(tempFilePath),
             model: "whisper-large-v3",
             response_format: "json",
-            temperature: 0.0, // Strict decoding
-            // language: "en", // Optional: Remove to enable auto-detect (Polyglot mode)
+            temperature: 0.0,
         });
 
         console.log(`✅ Transcript: "${transcription.text}"`);
         return transcription.text;
 
     } catch (error) {
-        console.error("❌ Transcription Failed:", error);
+        console.error("❌ Transcription Failed:");
+        console.error("   URL:", audioUrl);
+        console.error("   Type:", contentType);
+        console.error("   Error:", error);
+        if (error instanceof Error) {
+            console.error("   Message:", error.message);
+            console.error("   Stack:", error.stack);
+        }
         return ""; // Return empty string so the pipeline doesn't crash
     } finally {
-        // 3. Cleanup: Always delete the temp file
+        // Cleanup temp file
         if (fs.existsSync(tempFilePath)) {
             fs.unlinkSync(tempFilePath);
         }

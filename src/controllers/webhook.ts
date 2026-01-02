@@ -128,17 +128,21 @@ You're now activated. Start sending your work updates via text, photos, or voice
     fullText = `${fullText}\n[VOICE]: ${transcripts.join(' ')}`.trim();
   }
 
-  // 7. FIND OR CREATE BUCKET (without project assignment yet)
+  // 7. CHECK FOR FORCE NEW BUCKET FLAG
+  // Can be set via ForceNewBucket parameter (useful for testing or "start new ticket" feature)
+  const forceNewBucket = body.ForceNewBucket === 'true' || body.ForceNewBucket === '1';
+
+  // 8. FIND OR CREATE BUCKET (without project assignment yet)
   // Use Inbox as temporary placeholder - will be reassigned when validated
   const inboxProjectId = await ensureInboxProject(sql, member.company_id);
 
-  let bucket = await findOpenBucket(sql, member.id, inboxProjectId);
+  let bucket = forceNewBucket ? null : await findOpenBucket(sql, member.id, inboxProjectId);
   let isNewTicket = false;
 
   // Count total media in current message
   const newMediaCount = imageUrls.length + audioUrls.length;
 
-  // 8. CLASSIFY INTENT using conversation history
+  // 9. CLASSIFY INTENT using conversation history
   let conversationHistory: ConversationMessage[] = [];
   if (bucket) {
     conversationHistory = getConversationHistory(bucket);
@@ -148,7 +152,7 @@ You're now activated. Start sending your work updates via text, photos, or voice
     text: fullText,
     hasMedia: newMediaCount > 0
   });
-  console.log(`[INTENT] ${intent.intent} (confidence: ${intent.confidence})`);
+  console.log(`[INTENT] ${intent.intent} (confidence: ${intent.confidence})${forceNewBucket ? ' [FORCE NEW]' : ''}`);
 
   // 9. HANDLE INTENTS
 
@@ -283,17 +287,26 @@ You're now activated. Start sending your work updates via text, photos, or voice
   const attemptCount = messageSids.length;
   console.log(`[TICKET] Attempt count: ${attemptCount}`);
 
-  if (validation.isComplete) {
-    // 9. NOW INFER PROJECT (only when ticket is complete)
-    const { extractMessageInfo } = await import('../services/extractionService.js');
-    const extraction = await extractMessageInfo(
-      bucket.raw_text || '',
-      bucket.transcripts ? JSON.parse(bucket.transcripts) : [],
-      bucket.image_urls ? JSON.parse(bucket.image_urls) : [],
-      member.domain || 'construction'
-    );
+  // ALWAYS extract data (for testing, transactions, etc.) even if validation incomplete
+  const { extractMessageInfo } = await import('../services/extractionService.js');
+  const extraction = await extractMessageInfo(
+    bucket.raw_text || '',
+    bucket.transcripts ? JSON.parse(bucket.transcripts) : [],
+    bucket.image_urls ? JSON.parse(bucket.image_urls) : [],
+    member.domain || 'construction'
+  );
 
-    console.log(`[AI EXTRACTION] Project: "${extraction.projectName}", Clear: ${extraction.isProjectClear}`);
+  console.log(`[AI EXTRACTION] Project: "${extraction.projectName}", Clear: ${extraction.isProjectClear}`);
+
+  // Store extraction results for later use (transactions, testing, etc.)
+  await sql`
+    UPDATE buckets 
+    SET extracted_data = ${JSON.stringify(extraction)}
+    WHERE id = ${bucket.id}
+  `;
+
+  if (validation.isComplete) {
+    // 11. NOW INFER PROJECT (only when ticket is complete)
 
     let finalProjectId: number | null = null;
     let projectName = '';
