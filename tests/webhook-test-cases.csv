@@ -4,3 +4,11 @@
 # Audio test - save audio file to tests/fixtures/test-audio.mp3 first
 +15102198037,,,http://localhost:3000/test-fixtures/a1.ogg,,,Audio only test
 
++15102198037,Did electrical wiring for 3 hours,,,3,wires,Simple text with hours
++15102198037,Installed outlets,,,,outlets,Text without hours
++15102198037,Used rebar and wire for foundation work 5 hours,,,5,"rebar,wire",Materials and hours
++15102198037,Cutting rebar for construction,https://api.twilio.com/2010-04-01/Accounts/ACb4d2e407ffbe87b50e75ae7108b2d316/Messages/MM116b5c35e29c39769c68114aa23d0d29/Media/MEb9caa05615a2aca7c036807cf11ded63,,,rebar,Image with text
++15102198037,Foundation work complete, https://api.twilio.com/2010-04-01/Accounts/ACb4d2e407ffbe87b50e75ae7108b2d316/Messages/MM116b5c35e29c39769c68114aa23d0d29/Media/MEb9caa05615a2aca7c036807cf11ded63,,,,Foundation with image
++15102198037,Plumbing work 4 hours using copper pipes,,,4,copper,Different member test
+
+
