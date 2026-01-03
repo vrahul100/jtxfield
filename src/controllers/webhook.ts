@@ -74,7 +74,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     if (confirmResult.success) {
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
       const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `✅ Welcome to JField${name}!${teamMsg}
+      const welcomeMsg = `✅ Welcome to Jentyx AIField${name}!${teamMsg}
 
 You're now activated. Start sending your work updates via text, photos, or voice notes.`;
       return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });

@@ -36,7 +36,7 @@ export function Login() {
                 </div>
 
                 <h2 className="text-2xl font-bold text-center text-gray-900 mb-2">
-                    Welcome to JField
+                    Welcome to Jentyx AIField
                 </h2>
                 <p className="text-center text-gray-600 mb-8">
                     Sign in to your account
