@@ -17,7 +17,7 @@ export function Login() {
 
         try {
             await login(email, password);
-            navigate('/worklog');
+            navigate('/tickets');
         } catch (err: any) {
             setError(err.message || 'Login failed');
         } finally {

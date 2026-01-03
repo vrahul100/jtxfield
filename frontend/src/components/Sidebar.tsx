@@ -23,7 +23,7 @@ export function Sidebar() {
         <aside className="w-64 bg-slate-900 h-screen fixed left-0 top-16 overflow-y-auto">
             <nav className="p-4 space-y-1">
                 {/* OM & SU Links */}
-                <NavLink to="/worklog" className={navLinkClass}>
+                <NavLink to="/tickets" className={navLinkClass}>
                     <ClipboardList className="w-5 h-5" />
                     <span className="text-base">Tickets</span>
                 </NavLink>

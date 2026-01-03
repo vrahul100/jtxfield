@@ -40,7 +40,7 @@ interface Project {
     name: string;
 }
 
-export function Worklog() {
+export function Tickets() {
     const [buckets, setBuckets] = useState<Bucket[]>([]);
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
@@ -234,7 +234,7 @@ export function Worklog() {
 
     // Helper to check if item is editable
     const isEditable = (status: string) => {
-        return status === 'open' || status === 'pending_review';
+        return true; // All tickets are now editable
     };
 
     const startEditProject = (bucket: Bucket) => {
@@ -470,15 +470,14 @@ export function Worklog() {
                                                     ) : (
                                                         <div className="flex items-center gap-2">
                                                             <span className="text-sm text-gray-900">{bucket.project_name}</span>
-                                                            {(bucket.status === 'open' || bucket.status === 'pending_review') && (
-                                                                <button
-                                                                    onClick={() => startEditProject(bucket)}
-                                                                    className="text-blue-600 hover:text-blue-800 text-xs"
-                                                                    title="Change project"
-                                                                >
-                                                                    ✏️
-                                                                </button>
-                                                            )}
+                                                            {/* Project is now always editable */}
+                                                            <button
+                                                                onClick={() => startEditProject(bucket)}
+                                                                className="text-blue-600 hover:text-blue-800 text-xs"
+                                                                title="Change project"
+                                                            >
+                                                                ✏️
+                                                            </button>
                                                         </div>
                                                     )}
                                                 </td>

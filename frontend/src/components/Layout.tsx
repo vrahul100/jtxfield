@@ -16,9 +16,9 @@ export function Layout({ children }: LayoutProps) {
                     {children}
                 </main>
             </div>
-            {/* Footer */}
-            <footer className="ml-64 bg-white border-t border-slate-200 py-4 px-8 text-center">
-                <div className="flex flex-col md:flex-row justify-between items-center text-sm text-slate-500">
+            {/* Footer - Fixed at bottom */}
+            <footer className="fixed bottom-0 left-64 right-0 bg-gray-50 border-t border-slate-200 py-2 px-8 text-center z-10">
+                <div className="flex flex-col md:flex-row justify-between items-center text-med text-slate-500">
                     <p>© 2024 JField. All rights reserved.</p>
                     <div className="flex gap-4 mt-2 md:mt-0">
                         <a href="#" className="hover:text-blue-600 transition-colors">Terms of Service</a>

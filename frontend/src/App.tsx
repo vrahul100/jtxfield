@@ -2,7 +2,7 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './hooks/useAuth';
 import { Login } from './pages/Login';
-import { Worklog } from './pages/Worklog';
+import { Tickets } from './pages/Tickets';
 import { Members } from './pages/Members';
 import { Projects } from './pages/Projects';
 import { Transactions } from './pages/Transactions';
@@ -35,10 +35,10 @@ function App() {
                 <Routes>
                     <Route path="/login" element={<Login />} />
                     <Route
-                        path="/worklog"
+                        path="/tickets"
                         element={
                             <ProtectedRoute>
-                                <Worklog />
+                                <Tickets />
                             </ProtectedRoute>
                         }
                     />
@@ -82,7 +82,7 @@ function App() {
                             </ProtectedRoute>
                         }
                     />
-                    <Route path="/" element={<Navigate to="/worklog" replace />} />
+                    <Route path="/" element={<Navigate to="/tickets" replace />} />
                 </Routes>
             </BrowserRouter>
         </AuthProvider>

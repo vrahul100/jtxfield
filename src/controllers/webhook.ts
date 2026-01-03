@@ -298,10 +298,11 @@ You're now activated. Start sending your work updates via text, photos, or voice
 
   console.log(`[AI EXTRACTION] Project: "${extraction.projectName}", Clear: ${extraction.isProjectClear}`);
 
-  // Store extraction results for later use (transactions, testing, etc.)
+  // Store extraction results and clarity score
   await sql`
     UPDATE buckets 
-    SET extracted_data = ${JSON.stringify(extraction)}
+    SET extracted_data = ${JSON.stringify(extraction)},
+        clarity_score = ${extraction.clarityScore || 0.5}
     WHERE id = ${bucket.id}
   `;
 
