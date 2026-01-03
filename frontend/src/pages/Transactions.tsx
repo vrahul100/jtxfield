@@ -69,7 +69,7 @@ export function Transactions() {
         <Layout>
             <div>
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Transactions</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Work Logs</h1>
                     <button onClick={fetchTransactions} className="btn-primary">
                         Refresh
                     </button>
@@ -87,6 +87,7 @@ export function Transactions() {
                             <tr>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time (hrs)</th>
@@ -100,6 +101,7 @@ export function Transactions() {
                                 <tr key={txn.id} className="hover:bg-gray-50">
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.id}</td>
                                     <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(txn.created_at)}</td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.bucket_id}</td>
                                     <td className="px-6 py-4 text-sm">
                                         <div>{txn.member_name || 'Unknown'}</div>
                                         {txn.member_phone && (

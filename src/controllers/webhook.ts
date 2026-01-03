@@ -365,6 +365,13 @@ You're now activated. Start sending your work updates via text, photos, or voice
       WHERE id = ${bucket.id}
     `;
 
+    // Extract transaction asynchronously
+    import('../services/transactionService.js').then(({ extractTransactionFromBucket }) => {
+      extractTransactionFromBucket(sql, bucket.id).catch((err) => {
+        console.error(`[WEBHOOK] Failed to extract transaction for bucket #${bucket.id}:`, err);
+      });
+    });
+
     // Update last confirmed if not Inbox
     if (finalProjectId !== inboxProjectId) {
       await updateLastConfirmedProject(sql, member.id, finalProjectId!);

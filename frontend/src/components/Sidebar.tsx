@@ -15,8 +15,8 @@ export function Sidebar() {
 
     const navLinkClass = ({ isActive }: { isActive: boolean }) =>
         `flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
-            ? 'bg-indigo-600 text-white font-medium shadow-lg shadow-indigo-900/20'
-            : 'text-slate-400 hover:bg-slate-700/50 hover:text-white'
+            ? 'bg-indigo-200 text-black font-medium shadow-lg shadow-indigo-900/20'
+            : 'text-slate-400 hover:bg-slate-300/50 hover:text-white'
         }`;
 
     return (
@@ -30,7 +30,7 @@ export function Sidebar() {
 
                 <NavLink to="/transactions" className={navLinkClass}>
                     <Receipt className="w-5 h-5" />
-                    <span className="text-base">Transactions</span>
+                    <span className="text-base">Work Logs</span>
                 </NavLink>
                 <NavLink to="/members" className={navLinkClass}>
                     <Users className="w-5 h-5" />

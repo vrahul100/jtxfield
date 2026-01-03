@@ -32,11 +32,34 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
         return;
     }
 
-    // Extract time from conversation history or raw_text
+    // PRIORITY 1: Use AI extracted_data if available
     let time: number | null = null;
+    let material: string | null = null;
 
-    // First, check conversation_history for user's hour response
-    if (bucket.conversation_history) {
+    if (bucket.extracted_data) {
+        try {
+            const extracted = typeof bucket.extracted_data === 'string'
+                ? JSON.parse(bucket.extracted_data)
+                : bucket.extracted_data;
+
+            // Use AI-extracted hours
+            if (extracted.hoursWorked && typeof extracted.hoursWorked === 'number') {
+                time = extracted.hoursWorked;
+                console.log(`[TxnExtraction] Using AI-extracted hours: ${time}`);
+            }
+
+            // Use AI-extracted materials
+            if (extracted.materialsUsed && Array.isArray(extracted.materialsUsed) && extracted.materialsUsed.length > 0) {
+                material = extracted.materialsUsed.join(', ');
+                console.log(`[TxnExtraction] Using AI-extracted materials: ${material}`);
+            }
+        } catch (e) {
+            console.warn(`[TxnExtraction] Failed to parse extracted_data:`, e);
+        }
+    }
+
+    // PRIORITY 2: Fallback to conversation history parsing (if AI data missing)
+    if (!time && bucket.conversation_history) {
         try {
             const history = typeof bucket.conversation_history === 'string'
                 ? JSON.parse(bucket.conversation_history)
@@ -62,7 +85,7 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
         }
     }
 
-    // Fallback: extract from raw_text
+    // PRIORITY 3: Fallback to raw_text parsing
     if (!time && bucket.raw_text) {
         const hoursMatch = bucket.raw_text.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/i);
         if (hoursMatch) {
@@ -70,18 +93,17 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
         }
     }
 
-    // Extract labor description from raw_text
-    const labor = bucket.raw_text || null;
-
-    // Try to extract materials from raw_text
-    let material: string | null = null;
-    if (bucket.raw_text) {
+    // Extract materials from raw_text if not from AI
+    if (!material && bucket.raw_text) {
         // Simple material extraction - looks for common construction materials
-        const materialWords = bucket.raw_text.match(/\b(rebar|wire|concrete|lumber|steel|brick|drywall|paint|nails|screws|wood|metal|pipe|cable)\b/gi);
+        const materialWords = bucket.raw_text.match(/\b(rebar|wire|concrete|lumber|steel|brick|drywall|paint|nails|screws|wood|metal|pipe|cable|copper|pvc|outlets|wires)\b/gi);
         if (materialWords && materialWords.length > 0) {
             material = [...new Set(materialWords.map((m: string) => m.toLowerCase()))].join(', ');
         }
     }
+
+    // Extract labor description from raw_text
+    const labor = bucket.raw_text || null;
 
     // Build evidence JSON (images + audio)
     let evidence: string | null = null;
