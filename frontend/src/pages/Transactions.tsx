@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EditModal, EditField } from '../components/EditModal';
-import { Pencil, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Pencil, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
 
 interface Transaction {
     id: number;
@@ -36,6 +36,7 @@ export function Transactions() {
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+    const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
 
     useEffect(() => {
         fetchProjects();
@@ -75,6 +76,18 @@ export function Transactions() {
 
     const formatDate = (dateString: string) => {
         return new Date(dateString).toLocaleString();
+    };
+
+    const toggleExpand = (id: number) => {
+        setExpandedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(id)) {
+                newSet.delete(id);
+            } else {
+                newSet.add(id);
+            }
+            return newSet;
+        });
     };
 
     const handleEdit = (txn: Transaction) => {
@@ -164,7 +177,8 @@ export function Transactions() {
                     <table className="table-auto w-full">
                         <thead className="bg-gray-50">
                             <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
+                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
@@ -177,43 +191,90 @@ export function Transactions() {
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200">
-                            {transactions.map((txn) => (
-                                <tr key={txn.id} className="hover:bg-gray-50">
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.id}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(txn.created_at)}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.bucket_id}</td>
-                                    <td className="px-6 py-4 text-sm">
-                                        <div>{txn.member_name || 'Unknown'}</div>
-                                        {txn.member_phone && (
-                                            <div className="text-xs text-gray-500">{txn.member_phone}</div>
+                            {transactions.map((txn) => {
+                                const isExpanded = expandedIds.has(txn.id);
+                                return (
+                                    <React.Fragment key={txn.id}>
+                                        <tr className="hover:bg-gray-50">
+                                            <td className="px-6 py-4 whitespace-nowrap">
+                                                <button
+                                                    onClick={() => toggleExpand(txn.id)}
+                                                    className="p-1 hover:bg-gray-200 rounded"
+                                                >
+                                                    {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                </button>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.id}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(txn.created_at)}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.bucket_id}</td>
+                                            <td className="px-6 py-4 text-sm">
+                                                <div>{txn.member_name || 'Unknown'}</div>
+                                                {txn.member_phone && (
+                                                    <div className="text-xs text-gray-500">{txn.member_phone}</div>
+                                                )}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm">{txn.project_name || '-'}</td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                {txn.time ? Number(txn.time).toFixed(1) : '-'}
+                                            </td>
+                                            <td className="px-6 py-4 text-sm">
+                                                <div className="line-clamp-2">{txn.labor || '-'}</div>
+                                            </td>
+                                            <td className="px-6 py-4 text-sm">
+                                                <div className="line-clamp-2">{txn.material || '-'}</div>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
+                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                                                    {txn.status}
+                                                </span>
+                                            </td>
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                                <button
+                                                    onClick={() => handleEdit(txn)}
+                                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                                                >
+                                                    <Pencil className="w-4 h-4" />
+                                                    Edit
+                                                </button>
+                                            </td>
+                                        </tr>
+
+                                        {/* Expanded Row */}
+                                        {isExpanded && (
+                                            <tr className="bg-gray-50">
+                                                <td colSpan={11} className="px-6 py-4">
+                                                    <div className="grid grid-cols-2 gap-4 text-sm">
+                                                        <div>
+                                                            <strong className="text-gray-700">Job Description:</strong>
+                                                            <p className="mt-1 text-gray-600">{txn.job || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong className="text-gray-700">Scope:</strong>
+                                                            <p className="mt-1 text-gray-600 whitespace-pre-wrap">{txn.scope_description || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong className="text-gray-700">Labor Details:</strong>
+                                                            <p className="mt-1 text-gray-600 whitespace-pre-wrap">{txn.labor || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong className="text-gray-700">Materials:</strong>
+                                                            <p className="mt-1 text-gray-600 whitespace-pre-wrap">{txn.material || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong className="text-gray-700">Evidence:</strong>
+                                                            <p className="mt-1 text-gray-600">{txn.evidence || 'N/A'}</p>
+                                                        </div>
+                                                        <div>
+                                                            <strong className="text-gray-700">Status:</strong>
+                                                            <p className="mt-1 text-gray-600">{txn.status}</p>
+                                                        </div>
+                                                    </div>
+                                                </td>
+                                            </tr>
                                         )}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm">{txn.project_name || '-'}</td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        {txn.time ? Number(txn.time).toFixed(1) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm">
-                                        <div className="line-clamp-2">{txn.labor || '-'}</div>
-                                    </td>
-                                    <td className="px-6 py-4 text-sm">
-                                        <div className="line-clamp-2">{txn.material || '-'}</div>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                            {txn.status}
-                                        </span>
-                                    </td>
-                                    <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                        <button
-                                            onClick={() => handleEdit(txn)}
-                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
-                                        >
-                                            <Pencil className="w-4 h-4" />
-                                            <span>Edit</span>
-                                        </button>
-                                    </td>
-                                </tr>
-                            ))}
+                                    </React.Fragment>
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>

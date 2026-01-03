@@ -1,103 +1,171 @@
-# Webhook Test Suite
+# Webhook Testing Guide
 
-Automated testing framework for webhook functionality with CSV-driven test cases.
+## Overview
 
-## Quick Start
+This directory contains automated test suites for the Twilio webhook endpoint that processes incoming WhatsApp messages.
+
+## Test Modes
+
+### 1. Standard Mode (Auto-Cleanup)
+Runs tests and automatically deletes all test data after completion.
 
 ```bash
-# Run all webhook tests
 npm run test:webhook
 ```
 
-## How It Works
-
-1. **Reads test cases** from `tests/webhook-test-cases.csv`
-2. **Simulates WhatsApp webhook calls** for each test case
-3. **Verifies bucket creation** and data extraction
-4. **Checks transaction creation** (if applicable)
-5. **Validates extracted data** against expected values
-6. **Cleans up** all test data after completion
-
-## Test CSV Format
-
-```csv
-phone_number,message_text,image_url,audio_url,expected_hours,expected_materials,description
-+15555550101,Did wiring for 3 hours,,,3,wires,Simple text with hours
-+15555550101,Used rebar,https://example.com/image.jpg,,,"rebar",Image with text
-```
-
-### Columns:
-- **phone_number**: Member's phone (must exist in database)
-- **message_text**: Text message content
-- **image_url**: Optional image URL
-- **audio_url**: Optional audio URL
-- **expected_hours**: Expected extracted hours (leave blank if N/A)
-- **expected_materials**: Expected materials (comma-separated)
-- **description**: Test case description
-
-## Features
-
-### ✅ Automated Verification
-- Bucket creation
-- Data extraction (hours, materials, work type)
-- Transaction creation
-- Expected value matching
-
-### 🧹 Auto-Cleanup
-- Deletes all test buckets after run
-- Deletes all test transactions
-- Leaves database clean
-
-### 📊 Detailed Reporting
-- Shows each test result
-- Final summary (passed/failed)
-- Exits with error code if any tests fail
-
-## Example Output
-
-```
-🚀 Starting Webhook Test Suite
-
-Found 7 test cases
-
-🧪 Testing: Simple text with hours
-   Phone: +15555550101
-   Text: Did electrical wiring for 3 hours
-   ✅ Bucket created: #123
-   Extracted hours: 3
-   Extracted materials: wires
-   ✅ Transaction created: #45
-   Transaction hours: 3
-
-🧹 Cleaning up test data...
-   Deleted 7 transactions
-   Deleted 7 buckets
-
-============================================================
-📊 TEST SUMMARY
-============================================================
-Total: 7
-✅ Passed: 6
-❌ Failed: 1
-```
-
-## Adding New Test Cases
-
-Simply add rows to `tests/webhook-test-cases.csv`:
-
-```csv
-+15555550102,Installed drywall for 8 hours,,,8,drywall,Full day drywall work
-```
-
-## Integration with CI/CD
+### 2. Persist Mode ✨ NEW
+Runs tests and **keeps** all test buckets in the database for manual review in the UI.
 
 ```bash
-# In your CI pipeline
+npm run test:webhook:persist
+```
+
+**Use cases:**
+- Review AI extraction quality in the Tickets UI
+- Debug specific test cases
+- Verify conversational flows
+- Manual QA before deployment
+
+**Test identification:**
+- All persisted test messages are tagged with `[TEST_RUN:<timestamp>]`
+- View them in the Tickets page alongside real data
+- Each test run has a unique ID for easy filtering
+
+### 3. Cleanup Mode ✨ NEW
+Delete all test buckets from previous persist mode runs.
+
+```bash
+# Interactive cleanup with confirmation
+npm run test:cleanup
+
+# Preview what will be deleted (dry-run)
+npm run test:cleanup -- --dry-run
+
+# Force delete without confirmation
+npm run test:cleanup -- --force
+```
+
+## Test Files
+
+### `webhook-test-cases.csv`
+Defines individual test cases with expected outcomes.
+
+**Columns:**
+- `phone_number`: Test phone number
+- `message_text`: Message content to send
+- `image_url`: Optional image URL
+- `audio_url`: Optional audio URL (requires transcription)
+- `expected_hours`: Expected hours extracted
+- `expected_materials`: Expected materials extracted
+- `description`: Test case description
+
+### `run-webhook-tests.ts`
+Main test runner that:
+1. Reads test cases from CSV
+2. Simulates Twilio webhook calls
+3. Waits for async LLM processing
+4. Verifies bucket and transaction creation
+5. Validates extracted data
+6. (Optional) Cleans up or persists test data
+
+### `cleanup-test-buckets.ts`
+Utility script to delete test data created by persist mode:
+- Finds all buckets with `[TEST_RUN:]` marker
+- Shows preview of what will be deleted
+- Requires confirmation (unless `--force`)
+- Deletes buckets and associated transactions
+
+## Running Tests
+
+### Quick Test (Auto-cleanup)
+```bash
 npm run test:webhook
 ```
 
-Exit code `0` = all tests passed  
-Exit code `1` = one or more tests failed
+### Test + UI Review Workflow
+```bash
+# 1. Run tests in persist mode
+npm run test:webhook:persist
+
+# 2. Review in UI at /tickets
+#    Look for messages with [TEST_RUN:...] tag
+
+# 3. Clean up when done
+npm run test:cleanup
+```
+
+### Adding New Test Cases
+
+1. Add a new row to `webhook-test-cases.csv`:
+```csv
++15102198037,New test message,,,2,steel,Description of test
+```
+
+2. Run tests:
+```bash
+npm run test:webhook
+```
+
+## Test Features
+
+### Automatic Transcription
+- Audio URLs are automatically transcribed using Groq Whisper
+- Transcripts are validated and stored
+- Test cases can verify transcription output
+
+### LLM Extraction
+- All messages processed through AI extraction pipeline
+- Tests verify `extracted_data` is populated
+- Validates hours, materials, location extraction
+
+### Transaction Creation
+- Verifies work logs (transactions) are created
+- Validates extracted data flows to transactions
+- Tests project inference logic
+
+### ForceNewBucket
+- Each test creates a fresh bucket
+- Prevents test interference
+- Ensures clean state per test
+
+## Debugging Failed Tests
+
+1. **Check logs:** Test output shows detailed step-by-step progress
+2. **Use persist mode:** Keep test data for manual inspection
+3. **Review UI:** Check Tickets page to see actual extraction results
+4. **Check timestamps:** Verify LLM processing completed
+5. **Inspect database:** Query `buckets` table for `extracted_data`
+
+## Best Practices
+
+✅ **Do:**
+- Use persist mode when debugging
+- Clean up test data after manual review
+- Add diverse test cases (audio, images, edge cases)
+- Test Spanish messages for i18n
+- Verify both text and media handling
+
+❌ **Don't:**
+- Leave test data in production database long-term
+- Use real Twilio URLs (they expire)
+- Skip cleanup after persist mode
+- Test with real user phone numbers
+
+## Example Workflow
+
+```bash
+# 1. Add new test case to CSV
+# 2. Run in persist mode
+npm run test:webhook:persist
+
+# 3. Check Tickets UI - find buckets with [TEST_RUN:...] tag
+# 4. Verify extraction looks correct
+# 5. Clean up test data
+npm run test:cleanup
+
+# 6. Once satisfied, run normal tests
+npm run test:webhook
+```
 
 ## Environment
 
@@ -105,4 +173,33 @@ Set `TEST_BASE_URL` if testing against non-local server:
 
 ```bash
 TEST_BASE_URL=https://staging.example.com npm run test:webhook
+```
+
+## Example Output
+
+```
+🧪 Webhook Test Runner
+Mode: PERSIST (buckets will remain for review)
+Test Run ID: 2026-01-03T08:48:00.000Z
+
+🚀 Running 7 test cases...
+
+📋 Test 1: Simple text with hours
+   Phone: +15102198037
+   ✅ Bucket created: #123
+   ✅ Transaction created: #45
+
+...
+
+📦 PERSIST MODE: Test buckets preserved for UI review
+   Test Run ID: 2026-01-03T08:48:00.000Z
+   Created 7 buckets
+   To clean up later, run: npm run test:cleanup
+
+============================================================
+📊 TEST SUMMARY
+============================================================
+Total: 7
+✅ Passed: 7
+❌ Failed: 0
 ```

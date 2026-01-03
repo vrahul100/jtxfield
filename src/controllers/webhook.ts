@@ -298,11 +298,12 @@ You're now activated. Start sending your work updates via text, photos, or voice
 
   console.log(`[AI EXTRACTION] Project: "${extraction.projectName}", Clear: ${extraction.isProjectClear}`);
 
-  // Store extraction results and clarity score
+  // Store extraction results, clarity score, and summary
   await sql`
     UPDATE buckets 
     SET extracted_data = ${JSON.stringify(extraction)},
-        clarity_score = ${extraction.clarityScore || 0.5}
+        clarity_score = ${extraction.clarityScore || 0.5},
+        summary = ${extraction.summary || null}
     WHERE id = ${bucket.id}
   `;
 
@@ -407,48 +408,51 @@ You're now activated. Start sending your work updates via text, photos, or voice
     return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
 
   } else {
-    // Ticket incomplete - ask clarifying questions
+    // Ticket incomplete - send validation feedback
     const lang = getLang(member);
-    if (validation.questions.length > 0) {
-      const questionText = validation.questions.join('\n\n');
 
-      // Store the question in ai_response so we can include it as context in the next message
-      await sql`
-        UPDATE buckets 
-        SET ai_response = ${questionText}, updated_at = NOW()
-        WHERE id = ${bucket.id}
-      `;
+    // Build feedback message with specific validation  issues
+    let feedbackMsg = '⚠️ ' + (lang === 'es' ? 'Tu reporte está incompleto.' : 'Your work log is incomplete.');
 
-      const questionMsg = isNewTicket
-        ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${questionText}`
-        : `Ticket #${bucket.id}: ${questionText}`;
-
-      // Store conversation
-      await appendConversation(sql, bucket.id, [
-        { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-        { role: 'assistant', content: questionMsg, timestamp: new Date().toISOString() }
-      ]);
-
-      return c.text(`<Response><Message>${questionMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-    } else if (isNewTicket) {
-      const openMsg = `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${t(lang, 'send_photos')}`;
-
-      await appendConversation(sql, bucket.id, [
-        { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-        { role: 'assistant', content: openMsg, timestamp: new Date().toISOString() }
-      ]);
-
-      return c.text(`<Response><Message>${openMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-    } else {
-      const responseMsg = `${t(lang, 'ticket_received', { id: bucket.id })} ${t(lang, 'send_details')}`;
-
-      await appendConversation(sql, bucket.id, [
-        { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-        { role: 'assistant', content: responseMsg, timestamp: new Date().toISOString() }
-      ]);
-
-      return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    // Add validation errors/missing fields
+    if (validation.errors.length > 0) {
+      feedbackMsg += '\n\n' + (lang === 'es' ? 'Falta información:' : 'Missing information:');
+      validation.errors.forEach(error => {
+        feedbackMsg += `\n• ${error}`;
+      });
     }
+
+    // Add inconsistency reason if exists
+    if (extraction.isConsistent === false && extraction.inconsistencyReason) {
+      feedbackMsg += '\n\n' + (lang === 'es' ? '⚠️ Inconsistencia detectada:' : '⚠️ Inconsistency detected:');
+      feedbackMsg += `\n${extraction.inconsistencyReason}`;
+    }
+
+    // Add next question if available
+    if (validation.questions.length > 0) {
+      feedbackMsg += '\n\n' + validation.questions[0];
+    }
+
+    console.log(`[VALIDATE] Sending feedback to user. Attempt: ${attemptCount}/5`);
+
+    // Store the feedback in ai_response
+    await sql`
+      UPDATE buckets 
+      SET ai_response = ${feedbackMsg}, updated_at = NOW()
+      WHERE id = ${bucket.id}
+    `;
+
+    const responseMsg = isNewTicket
+      ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${feedbackMsg}`
+      : `Ticket #${bucket.id}: ${feedbackMsg}`;
+
+    // Store conversation
+    await appendConversation(sql, bucket.id, [
+      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
+      { role: 'assistant', content: responseMsg, timestamp: new Date().toISOString() }
+    ]);
+
+    return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 }
 

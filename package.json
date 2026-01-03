@@ -10,7 +10,9 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:webhook": "tsx tests/run-webhook-tests.ts",
+    "test:webhook:persist": "tsx tests/run-webhook-tests.ts --persist",
     "test:conversations": "tsx tests/run-conversation-tests.ts",
+    "test:cleanup": "tsx tests/cleanup-test-buckets.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:seed": "tsx src/data/seed.ts"

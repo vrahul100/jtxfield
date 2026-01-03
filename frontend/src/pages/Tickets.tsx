@@ -28,6 +28,7 @@ interface Bucket {
     node_name: string;
     status: string;
     raw_text: string;
+    summary: string | null;
     image_urls: string | null;
     audio_urls: string | null;
     transcripts: string | null;
@@ -253,7 +254,7 @@ export function Tickets() {
                     </div>
                     <div className="flex gap-4 flex-wrap">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Status
                             </label>
                             <select
@@ -269,7 +270,7 @@ export function Tickets() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Project
                             </label>
                             <select
@@ -284,7 +285,7 @@ export function Tickets() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Sort By
                             </label>
                             <select
@@ -297,7 +298,7 @@ export function Tickets() {
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
                                 Order
                             </label>
                             <select
@@ -328,6 +329,7 @@ export function Tickets() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Status
                                     </th>
+
                                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Confidence Score
                                     </th>
@@ -360,10 +362,10 @@ export function Tickets() {
                                                         {isExpanded ? <ChevronDown /> : <ChevronRight />}
                                                     </button>
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs">
                                                     {bucket.id}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs">
                                                     {formatDate(bucket.created_at)}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
@@ -371,6 +373,7 @@ export function Tickets() {
                                                         {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
                                                     </span>
                                                 </td>
+
                                                 <td className="px-4 py-4 text-center">
                                                     <div
                                                         className="flex justify-center items-center"
@@ -386,14 +389,14 @@ export function Tickets() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <div className="text-sm font-medium text-gray-900">{bucket.member_name || bucket.member_phone || 'Unknown'}</div>
+                                                    <div className="text-xs font-medium text-gray-900">{bucket.member_name || bucket.member_phone || 'Unknown'}</div>
                                                     {bucket.member_name && <div className="text-xs text-gray-500">{bucket.member_phone}</div>}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
-                                                    <span className="text-sm text-gray-900">{bucket.project_name}</span>
+                                                    <span className="text-xs text-gray-900">{bucket.project_name}</span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="text-sm text-gray-900 line-clamp-2">
+                                                    <div className="text-xs text-gray-900 line-clamp-2">
                                                         {bucket.raw_text || '(No text content)'}
                                                     </div>
                                                     {(bucket.image_urls || bucket.audio_urls) && (
@@ -403,7 +406,7 @@ export function Tickets() {
                                                         </div>
                                                     )}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
+                                                <td className="px-6 py-4 whitespace-nowrap text-xs font-medium" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={() => handleEdit(bucket)}
                                                         className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
@@ -416,9 +419,20 @@ export function Tickets() {
                                             {isExpanded && (
                                                 <tr className="bg-gray-50">
                                                     <td colSpan={9} className="px-6 py-4">
-                                                        <div className="text-sm text-gray-900 mb-4">
+                                                        <div className="text-xs text-gray-900 mb-4">
+
+
+                                                            {/* AI Summary */}
+                                                            {bucket.summary && (
+                                                                <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                                                                    <div className="flex items-center gap-2 mb-1">
+                                                                        <span className="text-indigo-600 font-semibold text-xs">✨ AI Summary:</span>
+                                                                    </div>
+                                                                    <p className="text-gray-700 italic">{bucket.summary}</p>
+                                                                </div>
+                                                            )}
                                                             <strong>Full Message:</strong>
-                                                            <p className="whitespace-pre-wrap mt-1">{bucket.raw_text}</p>
+                                                            <p className="whitespace-pre-wrap mt-1 text-xs">{bucket.raw_text}</p>
                                                         </div>
 
                                                         {/* Transcripts */}
@@ -466,7 +480,7 @@ export function Tickets() {
                                                                                 return urls.map((url: string, i: number) => (
                                                                                     <div key={`audio-${i}`} className="flex items-center gap-2 bg-white px-3 py-2 rounded border">
                                                                                         <Music className="w-4 h-4 text-indigo-600" />
-                                                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-sm">Voice Note {i + 1}</a>
+                                                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">Voice Note {i + 1}</a>
                                                                                     </div>
                                                                                 ));
                                                                             }
@@ -501,7 +515,7 @@ export function Tickets() {
                 {/* Pagination */}
                 {totalPages > 1 && (
                     <div className="flex justify-between items-center mt-6">
-                        <span className="text-sm text-gray-600">
+                        <span className="text-xs text-gray-600">
                             Showing {buckets.length} of {total} work entries
                         </span>
                         <div className="flex gap-2">
@@ -513,7 +527,7 @@ export function Tickets() {
                                 <ChevronLeft className="w-4 h-4" />
                                 Previous
                             </button>
-                            <span className="px-3 py-1 text-sm">
+                            <span className="px-3 py-1 text-xs">
                                 Page {page} of {totalPages}
                             </span>
                             <button

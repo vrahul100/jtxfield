@@ -28,14 +28,27 @@ interface TestResult {
 const BASE_URL = process.env.TEST_BASE_URL || 'http://localhost:3000';
 const sql = postgres(process.env.DATABASE_URL!);
 
+// Parse command-line arguments
+const args = process.argv.slice(2);
+const persistMode = args.includes('--persist');
+const testRunId = new Date().toISOString();
+
+console.log(`\n🧪 Webhook Test Runner`);
+console.log(`Mode: ${persistMode ? 'PERSIST (buckets will remain for review)' : 'CLEANUP (buckets will be deleted)'}`);
+console.log(`Test Run ID: ${testRunId}\n`);
+
 // Track created buckets for cleanup
 const createdBucketIds: number[] = [];
 const createdTransactionIds: number[] = [];
 
-async function simulateWebhookCall(testCase: TestCase): Promise<Response> {
+async function simulateWebhookCall(testCase: TestCase, testRunId: string): Promise<Response> {
     const formData = new URLSearchParams();
+
+    // Add test run marker to message for identification
+    const messageWithMarker = `${testCase.message_text} [TEST_RUN:${testRunId}]`;
+
     formData.append('From', `whatsapp:${testCase.phone_number}`);
-    formData.append('Body', testCase.message_text);
+    formData.append('Body', messageWithMarker);
     formData.append('ForceNewBucket', 'true'); // Always create new bucket for testing
 
     let mediaCount = 0;
@@ -135,8 +148,8 @@ async function verifyTransactionCreation(bucketId: number): Promise<{ id: number
     return null;
 }
 
-async function runTest(testCase: TestCase): Promise<TestResult> {
-    console.log(`\n🧪 Testing: ${testCase.description}`);
+async function runTest(testCase: TestCase, index: number, testRunId: string): Promise<TestResult> {
+    console.log(`\n📋 Test ${index + 1}: ${testCase.description}`);
     console.log(`   Phone: ${testCase.phone_number}`);
     console.log(`   Text: ${testCase.message_text || '(none)'}`);
     console.log(`   Image: ${testCase.image_url || '(none)'}`);
@@ -144,7 +157,7 @@ async function runTest(testCase: TestCase): Promise<TestResult> {
 
     try {
         // Call webhook
-        const response = await simulateWebhookCall(testCase);
+        const response = await simulateWebhookCall(testCase, testRunId);
         if (!response.ok) {
             return {
                 testCase,
@@ -266,29 +279,36 @@ async function main() {
 
     // Read test cases from CSV
     const csvContent = readFileSync('tests/webhook-test-cases.csv', 'utf-8');
-    const records = parse(csvContent, {
-        columns: ['phone_number', 'message_text', 'image_url', 'audio_url', 'expected_hours', 'expected_materials', 'description'],
+    const testCases = parse(csvContent, {
+        columns: true,
         skip_empty_lines: true,
-        comment: '#',
-        from_line: 3, // Skip header comment lines
         trim: true,
     }) as TestCase[];
 
-    console.log(`Found ${records.length} test cases\n`);
+    console.log(`\n🚀 Running ${testCases.length} test cases...\n`);
 
     const results: TestResult[] = [];
+    const testRunId = crypto.randomUUID(); // Generate a unique ID for this test run
 
     // Run all tests
-    for (const testCase of records) {
-        const result = await runTest(testCase);
+    for (let i = 0; i < testCases.length; i++) {
+        const result = await runTest(testCases[i], i, testRunId);
         results.push(result);
 
         // Add delay between tests
         await new Promise(resolve => setTimeout(resolve, 1000));
     }
 
-    // Cleanup
-    await cleanup();
+    // Conditional cleanup
+    if (!persistMode) {
+        console.log('\n🧹 Cleaning up test data...');
+        await cleanup();
+    } else {
+        console.log('\n📦 PERSIST MODE: Test buckets preserved for UI review');
+        console.log(`   Test Run ID: ${testRunId}`);
+        console.log(`   Created ${createdBucketIds.length} buckets`);
+        console.log(`   To clean up later, run: npm run test:cleanup`);
+    }
 
     // Print summary
     console.log('\n' + '='.repeat(60));

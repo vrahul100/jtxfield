@@ -82,7 +82,21 @@ export async function getWorklog(c: Context, sql: Sql) {
         // Get buckets with joins and pagination
         const buckets = await sql.unsafe(`
             SELECT 
-                b.*,
+                b.id,
+                b.raw_text,
+                b.summary,
+                b.image_urls,
+                b.audio_urls,
+                b.transcripts,
+                b.ai_response,
+                b.status,
+                b.clarity_score,
+                b.extracted_data,
+                b.created_at,
+                b.updated_at,
+                b.node_id,
+                b.project_id,
+                b.member_id,
                 p.name as project_name,
                 m.full_name as member_name,
                 m.phone_number as member_phone,
