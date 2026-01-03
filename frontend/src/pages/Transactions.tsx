@@ -195,13 +195,15 @@ export function Transactions() {
                                 const isExpanded = expandedIds.has(txn.id);
                                 return (
                                     <React.Fragment key={txn.id}>
-                                        <tr className="hover:bg-gray-50">
+                                        <tr
+                                            className="hover:bg-gray-50 cursor-pointer"
+                                            onClick={() => toggleExpand(txn.id)}
+                                        >
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <button
-                                                    onClick={() => toggleExpand(txn.id)}
                                                     className="p-1 hover:bg-gray-200 rounded"
                                                 >
-                                                    {isExpanded ? <ChevronLeft className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.id}</td>
@@ -228,7 +230,7 @@ export function Transactions() {
                                                     {txn.status}
                                                 </span>
                                             </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={() => handleEdit(txn)}
                                                     className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
