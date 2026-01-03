@@ -7,7 +7,8 @@ import {
     DollarSign,
     Receipt,
     Building2,
-    Shield
+    Shield,
+    ChartBar
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -31,6 +32,10 @@ export function Sidebar() {
                 <NavLink to="/transactions" className={navLinkClass}>
                     <Receipt className="w-5 h-5" />
                     <span className="text-base">Timesheets</span>
+                </NavLink>
+                <NavLink to="/reports" className={navLinkClass}>
+                    <ChartBar className="w-5 h-5" />
+                    <span className="text-base">Reports</span>
                 </NavLink>
                 <NavLink to="/members" className={navLinkClass}>
                     <Users className="w-5 h-5" />

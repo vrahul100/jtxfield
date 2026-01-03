@@ -10,6 +10,7 @@ import { getMembers, approveMember, inviteMember, updateMember, deleteMember, re
 import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
 import { getNodes, createNode, updateNode, deleteNode } from './controllers/nodes.js'
 import { getUsersList, createNewUser, updateUserInfo, deleteUser } from './controllers/users.js'
+import { getSummaryReport } from './controllers/reports.js'
 import { getTransactions, updateTransaction } from './controllers/transactions.js'
 import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 
@@ -71,7 +72,10 @@ export const createApp = (sql: Sql) => {
     app.post('/api/inbox/bulk-assign', requireOM(sql), (c) => bulkAssign(c, sql))
     app.post('/api/inbox/add-alias', requireOM(sql), (c) => addAlias(c, sql))
 
-    // 9. ADMIN API (legacy)
+    // 9. REPORTS API (OM & SU)
+    app.get('/api/reports/summary', requireOM(sql), (c) => getSummaryReport(c, sql))
+
+    // 10. ADMIN API (legacy)
     app.route('/admin', createAdminRoutes(sql))
 
     return app

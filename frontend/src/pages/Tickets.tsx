@@ -329,7 +329,7 @@ export function Tickets() {
                                         Status
                                     </th>
                                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Conf.
+                                        Confidence Score
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Member
@@ -371,10 +371,19 @@ export function Tickets() {
                                                         {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
                                                     </span>
                                                 </td>
-                                                <td className="px-4 py-4 whitespace-nowrap text-center">
-                                                    <span title={`Confidence: ${bucket.clarity_score ? Math.round(bucket.clarity_score * 100) + '%' : 'N/A'}`}>
+                                                <td className="px-4 py-4 text-center">
+                                                    <div
+                                                        className="flex justify-center items-center"
+                                                        title={
+                                                            (bucket.clarity_score ?? 0.5) >= 0.8
+                                                                ? `High Confidence (${Math.round((bucket.clarity_score ?? 0.5) * 100)}%): AI is very confident in the extracted data`
+                                                                : (bucket.clarity_score ?? 0.5) >= 0.5
+                                                                    ? `Medium Confidence (${Math.round((bucket.clarity_score ?? 0.5) * 100)}%): AI extracted data but has some uncertainty`
+                                                                    : `Low Confidence (${Math.round((bucket.clarity_score ?? 0.5) * 100)}%): AI is unsure - review recommended`
+                                                        }
+                                                    >
                                                         <Circle className={`w-4 h-4 fill-current ${getConfidenceColor(bucket.clarity_score)}`} />
-                                                    </span>
+                                                    </div>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm font-medium text-gray-900">{bucket.member_name || bucket.member_phone || 'Unknown'}</div>

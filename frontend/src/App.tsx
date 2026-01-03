@@ -6,6 +6,7 @@ import { Tickets } from './pages/Tickets';
 import { Members } from './pages/Members';
 import { Projects } from './pages/Projects';
 import { Transactions } from './pages/Transactions';
+import { Reports } from './pages/Reports';
 import { Nodes } from './pages/Nodes';
 import { Users } from './pages/Users';
 import './index.css';
@@ -63,6 +64,14 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Transactions />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/reports"
+                        element={
+                            <ProtectedRoute>
+                                <Reports />
                             </ProtectedRoute>
                         }
                     />
