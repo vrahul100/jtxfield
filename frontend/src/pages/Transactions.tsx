@@ -153,17 +153,12 @@ export function Transactions() {
         <Layout>
             <div>
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Work Logs</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Timesheets</h1>
                     <button onClick={fetchTransactions} className="btn-primary">
                         Refresh
                     </button>
                 </div>
 
-                <div className="card p-4 mb-6">
-                    <div className="text-sm text-gray-600">
-                        Total Transactions: <span className="font-semibold">{total}</span>
-                    </div>
-                </div>
 
                 <div className="card overflow-hidden">
                     <table className="table-auto w-full">

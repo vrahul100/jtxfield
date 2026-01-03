@@ -234,8 +234,12 @@ export function Tickets() {
     return (
         <Layout>
             <div>
-                <h1 className="text-3xl font-bold text-gray-900 mb-6">Tickets</h1>
-
+                <div className="flex justify-between items-center mb-6">
+                    <h1 className="text-3xl font-bold text-gray-900">Tickets</h1>
+                    <button onClick={fetchBuckets} className="btn-primary">
+                        Refresh
+                    </button>
+                </div>
                 {/* Search and Filters */}
                 <div className="card p-4 mb-6">
                     <div className="mb-4">
@@ -304,14 +308,6 @@ export function Tickets() {
                                 <option value="desc">Newest First</option>
                                 <option value="asc">Oldest First</option>
                             </select>
-                        </div>
-                        <div className="flex items-end">
-                            <button
-                                onClick={() => fetchBuckets()}
-                                className="btn-primary"
-                            >
-                                Refresh
-                            </button>
                         </div>
                     </div>
                 </div>

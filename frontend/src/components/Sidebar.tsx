@@ -30,7 +30,7 @@ export function Sidebar() {
 
                 <NavLink to="/transactions" className={navLinkClass}>
                     <Receipt className="w-5 h-5" />
-                    <span className="text-base">Work Logs</span>
+                    <span className="text-base">Timesheets</span>
                 </NavLink>
                 <NavLink to="/members" className={navLinkClass}>
                     <Users className="w-5 h-5" />
