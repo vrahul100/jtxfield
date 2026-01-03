@@ -1,3 +1,4 @@
+import { Hono } from 'hono';
 import { Context } from 'hono';
 import { Sql } from 'postgres';
 import { User } from '../services/auth.js';
@@ -10,7 +11,7 @@ export async function getTransactions(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const page = parseInt(c.req.query('page') || '1');
-        const limit = parseInt(c.req.query('limit') || '20');
+        const limit = parseInt(c.req.query('limit') || '10');
         const offset = (page - 1) * limit;
 
         // Build conditions
@@ -59,4 +60,65 @@ export async function getTransactions(c: Context, sql: Sql) {
         console.error('[Transactions] Get error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
+}
+
+/**
+ * PUT /api/transactions/:id
+ * Update a transaction
+ */
+export async function updateTransaction(c: Context, sql: Sql) {
+    const id = Number(c.req.param('id'));
+    const { labor, material, projectId, time } = await c.req.json();
+
+    try {
+        const updateFields: string[] = [];
+        const updateValues: any[] = [];
+
+        if (labor !== undefined) {
+            updateFields.push('labor = $' + (updateValues.length + 1));
+            updateValues.push(labor);
+        }
+
+        if (material !== undefined) {
+            updateFields.push('material = $' + (updateValues.length + 1));
+            updateValues.push(material);
+        }
+
+        if (projectId !== undefined) {
+            updateFields.push('project_id = $' + (updateValues.length + 1));
+            updateValues.push(projectId);
+        }
+
+        if (time !== undefined) {
+            updateFields.push('time = $' + (updateValues.length + 1));
+            updateValues.push(time ? Number(time) : null);
+        }
+
+        if (updateFields.length === 0) {
+            return c.json({ error: 'No fields to update' }, 400);
+        }
+
+        updateValues.push(id);
+        const query = `UPDATE txns SET ${updateFields.join(', ')} WHERE id = $${updateValues.length} RETURNING *`;
+
+        const result = await sql.unsafe(query, updateValues);
+
+        if (result.length === 0) {
+            return c.json({ error: 'Transaction not found' }, 404);
+        }
+
+        return c.json({ success: true, transaction: result[0] });
+    } catch (error) {
+        console.error('[Transactions] Update failed:', error);
+        return c.json({ error: 'Failed to update transaction' }, 500);
+    }
+}
+
+export default function transactionsController(sql: Sql) {
+    const router = new Hono();
+
+    router.get('/', (c) => getTransactions(c, sql));
+    router.put('/:id', (c) => updateTransaction(c, sql));
+
+    return router;
 }

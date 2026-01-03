@@ -93,7 +93,7 @@ export function Projects() {
             const params = new URLSearchParams();
             if (search.trim()) params.append('search', search.trim());
             params.append('page', page.toString());
-            params.append('limit', '20');
+            params.append('limit', '10');
 
             const response = await fetch(`/api/projects?${params.toString()}`, {
                 credentials: 'include',

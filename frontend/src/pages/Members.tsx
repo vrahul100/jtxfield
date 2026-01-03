@@ -44,7 +44,7 @@ export function Members() {
             if (filter !== 'all') params.append('status', filter);
             if (search.trim()) params.append('search', search.trim());
             params.append('page', page.toString());
-            params.append('limit', '20');
+            params.append('limit', '10');
 
             const response = await fetch(`/api/members?${params.toString()}`, {
                 credentials: 'include',

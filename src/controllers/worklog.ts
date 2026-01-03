@@ -20,7 +20,7 @@ export async function getWorklog(c: Context, sql: Sql) {
         const order = c.req.query('order') || 'desc';
         const search = c.req.query('search') || '';
         const page = parseInt(c.req.query('page') || '1');
-        const limit = parseInt(c.req.query('limit') || '20');
+        const limit = parseInt(c.req.query('limit') || '10');
         const offset = (page - 1) * limit;
 
         // Build WHERE clause based on role

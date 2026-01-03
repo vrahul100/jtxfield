@@ -1,11 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
+import { EditModal, EditField } from '../components/EditModal';
 import {
     Pencil,
     Music,
     Paperclip,
     ChevronRight,
-    ChevronDown
+    ChevronDown,
+    Circle,
+    ChevronLeft
 } from 'lucide-react';
 
 interface ConversationMessage {
@@ -47,10 +50,7 @@ export function Tickets() {
 
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [expandedBucketIds, setExpandedBucketIds] = useState<number[]>([]);
-    const [editingBucketId, setEditingBucketId] = useState<number | null>(null);
-    const [editText, setEditText] = useState<string>('');
-    const [editingProjectBucketId, setEditingProjectBucketId] = useState<number | null>(null);
-    const [editProjectId, setEditProjectId] = useState<number | null>(null);
+    const [editingBucket, setEditingBucket] = useState<Bucket | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [projectFilter, setProjectFilter] = useState<string>('all');
     const [sortBy, setSortBy] = useState('created_at');
@@ -94,7 +94,7 @@ export function Tickets() {
             params.append('sortBy', sortBy);
             params.append('order', sortOrder);
             params.append('page', page.toString());
-            params.append('limit', '20');
+            params.append('limit', '10');
             if (search.trim()) params.append('search', search.trim());
 
             const response = await fetch(`/api/worklog?${params.toString()}`, {
@@ -176,101 +176,49 @@ export function Tickets() {
         );
     };
 
-    const startEdit = (bucket: Bucket) => {
-        setEditingBucketId(bucket.id);
-        setEditText(bucket.raw_text || '');
+    const handleEdit = (bucket: Bucket) => {
+        setEditingBucket(bucket);
     };
 
-    const cancelEdit = () => {
-        setEditingBucketId(null);
-        setEditText('');
-    };
+    const handleSave = async (values: Record<string, any>) => {
+        if (!editingBucket) return;
 
-    const handleSaveEdit = async (bucketId: number) => {
-        setActionLoading(bucketId);
-        try {
-            const response = await fetch(`/api/worklog/${bucketId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ rawText: editText }),
-            });
-            if (response.ok) {
-                setEditingBucketId(null);
-                setEditText('');
-                fetchBuckets();
-            } else {
-                alert('Failed to save');
-            }
-        } catch (error) {
-            console.error('Failed to save:', error);
-            alert('Failed to save');
-        } finally {
-            setActionLoading(null);
+        const response = await fetch(`/api/worklog/${editingBucket.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                rawText: values.message,
+                projectId: values.projectId ? Number(values.projectId) : null,
+            }),
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to update');
         }
+
+        await fetchBuckets();
     };
 
-    const handleReject = async (bucketId: number) => {
-        if (!confirm('Reject this work item?')) return;
+    const getEditFields = (): EditField[] => {
+        if (!editingBucket) return [];
 
-        setActionLoading(bucketId);
-        try {
-            const response = await fetch(`/api/worklog/${bucketId}/reject`, {
-                method: 'POST',
-                credentials: 'include',
-            });
-            if (response.ok) {
-                fetchBuckets();
-            } else {
-                alert('Failed to reject');
-            }
-        } catch (error) {
-            console.error('Failed to reject:', error);
-            alert('Failed to reject');
-        } finally {
-            setActionLoading(null);
-        }
-    };
-
-    // Helper to check if item is editable
-    const isEditable = (status: string) => {
-        return true; // All tickets are now editable
-    };
-
-    const startEditProject = (bucket: Bucket) => {
-        setEditingProjectBucketId(bucket.id);
-        setEditProjectId(bucket.project_id);
-    };
-
-    const cancelEditProject = () => {
-        setEditingProjectBucketId(null);
-        setEditProjectId(null);
-    };
-
-    const handleSaveProject = async (bucketId: number) => {
-        if (editProjectId === null) return;
-
-        setActionLoading(bucketId);
-        try {
-            const response = await fetch(`/api/worklog/${bucketId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
-                credentials: 'include',
-                body: JSON.stringify({ projectId: editProjectId }),
-            });
-            if (response.ok) {
-                setEditingProjectBucketId(null);
-                setEditProjectId(null);
-                fetchBuckets();
-            } else {
-                alert('Failed to save');
-            }
-        } catch (error) {
-            console.error('Failed to save:', error);
-            alert('Failed to save');
-        } finally {
-            setActionLoading(null);
-        }
+        return [
+            {
+                name: 'message',
+                label: 'Message',
+                type: 'textarea',
+                value: editingBucket.raw_text,
+                rows: 4,
+            },
+            {
+                name: 'projectId',
+                label: 'Project',
+                type: 'select',
+                value: editingBucket.project_id,
+                options: projects.map(p => ({ value: p.id, label: p.name })),
+            },
+        ];
     };
 
     if (loading) {
@@ -428,58 +376,16 @@ export function Tickets() {
                                                     </span>
                                                 </td>
                                                 <td className="px-4 py-4 whitespace-nowrap text-center">
-                                                    <span
-                                                        className={`text-lg ${getConfidenceColor(bucket.clarity_score)}`}
-                                                        title={`Confidence: ${bucket.clarity_score ? Math.round(bucket.clarity_score * 100) + '%' : 'N/A'}`}
-                                                    >
-                                                        ●
+                                                    <span title={`Confidence: ${bucket.clarity_score ? Math.round(bucket.clarity_score * 100) + '%' : 'N/A'}`}>
+                                                        <Circle className={`w-4 h-4 fill-current ${getConfidenceColor(bucket.clarity_score)}`} />
                                                     </span>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap">
                                                     <div className="text-sm font-medium text-gray-900">{bucket.member_name || bucket.member_phone || 'Unknown'}</div>
                                                     {bucket.member_name && <div className="text-xs text-gray-500">{bucket.member_phone}</div>}
                                                 </td>
-                                                <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
-                                                    {editingProjectBucketId === bucket.id ? (
-                                                        <div className="flex items-center gap-2">
-                                                            <select
-                                                                value={editProjectId || ''}
-                                                                onChange={(e) => setEditProjectId(Number(e.target.value) || null)}
-                                                                className="text-sm border rounded px-2 py-1"
-                                                            >
-                                                                {projects.map((p) => (
-                                                                    <option key={p.id} value={p.id}>{p.name}</option>
-                                                                ))}
-                                                            </select>
-                                                            <button
-                                                                onClick={() => handleSaveProject(bucket.id)}
-                                                                disabled={actionLoading === bucket.id}
-                                                                className="text-green-600 hover:text-green-800"
-                                                                title="Save"
-                                                            >
-                                                                ✓
-                                                            </button>
-                                                            <button
-                                                                onClick={cancelEditProject}
-                                                                className="text-red-600 hover:text-red-800"
-                                                                title="Cancel"
-                                                            >
-                                                                ✗
-                                                            </button>
-                                                        </div>
-                                                    ) : (
-                                                        <div className="flex items-center gap-2">
-                                                            <span className="text-sm text-gray-900">{bucket.project_name}</span>
-                                                            {/* Project is now always editable */}
-                                                            <button
-                                                                onClick={() => startEditProject(bucket)}
-                                                                className="text-blue-600 hover:text-blue-800 text-xs"
-                                                                title="Change project"
-                                                            >
-                                                                ✏️
-                                                            </button>
-                                                        </div>
-                                                    )}
+                                                <td className="px-6 py-4 whitespace-nowrap">
+                                                    <span className="text-sm text-gray-900">{bucket.project_name}</span>
                                                 </td>
                                                 <td className="px-6 py-4">
                                                     <div className="text-sm text-gray-900 line-clamp-2">
@@ -493,70 +399,21 @@ export function Tickets() {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-                                                    <div className="flex items-center gap-2">
-                                                        {(bucket.status === 'open' || bucket.status === 'pending_review') && (
-                                                            <>
-                                                                <button
-                                                                    onClick={() => handleApprove(bucket.id)}
-                                                                    disabled={actionLoading === bucket.id}
-                                                                    className="px-3 py-1 bg-green-600 text-white text-sm rounded hover:bg-green-700 disabled:opacity-50"
-                                                                >
-                                                                    {actionLoading === bucket.id ? '...' : 'Approve'}
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => handleReject(bucket.id)}
-                                                                    disabled={actionLoading === bucket.id}
-                                                                    className="px-3 py-1 bg-red-600 text-white text-sm rounded hover:bg-red-700 disabled:opacity-50"
-                                                                >
-                                                                    Reject
-                                                                </button>
-                                                            </>
-                                                        )}
-                                                    </div>
+                                                    <button
+                                                        onClick={() => handleEdit(bucket)}
+                                                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                                                    >
+                                                        <Pencil className="w-4 h-4" />
+                                                        <span>Edit</span>
+                                                    </button>
                                                 </td>
                                             </tr>
                                             {isExpanded && (
                                                 <tr className="bg-gray-50">
-                                                    <td colSpan={7} className="px-6 py-4">
+                                                    <td colSpan={9} className="px-6 py-4">
                                                         <div className="text-sm text-gray-900 mb-4">
-                                                            <div className="flex justify-between items-start mb-2">
-                                                                <strong>Full Message:</strong>
-                                                                {isEditable(bucket.status) && editingBucketId !== bucket.id && (
-                                                                    <button
-                                                                        onClick={() => startEdit(bucket)}
-                                                                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800 text-sm"
-                                                                    >
-                                                                        <Pencil className="w-3.5 h-3.5" />
-                                                                        <span>Edit</span>
-                                                                    </button>
-                                                                )}
-                                                            </div>
-                                                            {editingBucketId === bucket.id ? (
-                                                                <div>
-                                                                    <textarea
-                                                                        value={editText}
-                                                                        onChange={(e) => setEditText(e.target.value)}
-                                                                        className="w-full p-2 border rounded text-sm min-h-[100px]"
-                                                                    />
-                                                                    <div className="flex gap-2 mt-2">
-                                                                        <button
-                                                                            onClick={() => handleSaveEdit(bucket.id)}
-                                                                            disabled={actionLoading === bucket.id}
-                                                                            className="btn-primary"
-                                                                        >
-                                                                            {actionLoading === bucket.id ? 'Saving...' : 'Save'}
-                                                                        </button>
-                                                                        <button
-                                                                            onClick={cancelEdit}
-                                                                            className="px-3 py-1 border text-sm rounded hover:bg-gray-50"
-                                                                        >
-                                                                            Cancel
-                                                                        </button>
-                                                                    </div>
-                                                                </div>
-                                                            ) : (
-                                                                <p className="whitespace-pre-wrap mt-1">{bucket.raw_text}</p>
-                                                            )}
+                                                            <strong>Full Message:</strong>
+                                                            <p className="whitespace-pre-wrap mt-1">{bucket.raw_text}</p>
                                                         </div>
 
                                                         {/* Transcripts */}
@@ -646,8 +503,9 @@ export function Tickets() {
                             <button
                                 onClick={() => setPage(p => Math.max(1, p - 1))}
                                 disabled={page === 1}
-                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
+                                <ChevronLeft className="w-4 h-4" />
                                 Previous
                             </button>
                             <span className="px-3 py-1 text-sm">
@@ -656,14 +514,23 @@ export function Tickets() {
                             <button
                                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
-                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                                 Next
+                                <ChevronRight className="w-4 h-4" />
                             </button>
                         </div>
                     </div>
                 )}
             </div>
+
+            <EditModal
+                isOpen={!!editingBucket}
+                title={`Edit Ticket #${editingBucket?.id}`}
+                fields={getEditFields()}
+                onSave={handleSave}
+                onClose={() => setEditingBucket(null)}
+            />
         </Layout>
     );
 }
