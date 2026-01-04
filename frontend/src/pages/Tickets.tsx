@@ -418,7 +418,7 @@ export function Tickets() {
                                             </tr>
                                             {isExpanded && (
                                                 <tr className="bg-gray-50">
-                                                    <td colSpan={9} className="px-6 py-4">
+                                                    <td colSpan={8} className="px-6 py-4">
                                                         <div className="text-xs text-gray-900 mb-4">
 
 

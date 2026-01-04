@@ -33,10 +33,7 @@ export function Reports() {
     const [loading, setLoading] = useState(true);
     const [activeTab, setActiveTab] = useState<'project' | 'member'>('project');
     const [dateRange, setDateRange] = useState<string>('month');
-
-    useEffect(() => {
-        fetchSummary();
-    }, [dateRange]);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
 
     const getDateRange = () => {
         const now = new Date();
@@ -85,6 +82,11 @@ export function Reports() {
         }
     };
 
+    useEffect(() => {
+        fetchSummary();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dateRange, refreshTrigger]);
+
     if (loading) {
         return (
             <Layout>
@@ -110,7 +112,10 @@ export function Reports() {
                             <option value="month">Last 30 Days</option>
                             <option value="quarter">Last 90 Days</option>
                         </select>
-                        <button onClick={fetchSummary} className="btn-primary">
+                        <button
+                            onClick={() => setRefreshTrigger(prev => prev + 1)}
+                            className="btn-primary"
+                        >
                             Refresh
                         </button>
                     </div>

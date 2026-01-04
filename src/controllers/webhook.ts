@@ -202,6 +202,19 @@ You're now activated. Start sending your work updates via text, photos, or voice
         WHERE id = ${bucket.id}
       `;
 
+      console.log(`[WEBHOOK] Bucket #${bucket.id} submitted via CONFIRM`);
+
+      // Extract transaction asynchronously (non-blocking)
+      (async () => {
+        try {
+          const { extractTransactionFromBucket } = await import('../services/transactionService.js');
+          await extractTransactionFromBucket(sql, bucket.id);
+          console.log(`[WEBHOOK] ✅ Transaction created for bucket #${bucket.id}`);
+        } catch (err) {
+          console.error(`[WEBHOOK] ❌ CRITICAL: Transaction failed for bucket #${bucket.id}:`, err);
+        }
+      })().catch(err => console.error(`[WEBHOOK] ❌ Async wrapper failed for bucket #${bucket.id}:`, err));
+
       let projectName = 'Inbox';
       if (extraction.projectName) {
         const matchedProject = await findProjectByAlias(sql, member.company_id, extraction.projectName);
@@ -367,12 +380,18 @@ You're now activated. Start sending your work updates via text, photos, or voice
       WHERE id = ${bucket.id}
     `;
 
-    // Extract transaction asynchronously
-    import('../services/transactionService.js').then(({ extractTransactionFromBucket }) => {
-      extractTransactionFromBucket(sql, bucket.id).catch((err) => {
-        console.error(`[WEBHOOK] Failed to extract transaction for bucket #${bucket.id}:`, err);
-      });
-    });
+    console.log(`[WEBHOOK] Bucket #${bucket.id} submitted to project: ${projectName} (ID: ${finalProjectId})`);
+
+    // Extract transaction asynchronously (non-blocking)
+    (async () => {
+      try {
+        const { extractTransactionFromBucket } = await import('../services/transactionService.js');
+        await extractTransactionFromBucket(sql, bucket.id);
+        console.log(`[WEBHOOK] ✅ Transaction created for bucket #${bucket.id}`);
+      } catch (err) {
+        console.error(`[WEBHOOK] ❌ CRITICAL: Transaction failed for bucket #${bucket.id}:`, err);
+      }
+    })().catch(err => console.error(`[WEBHOOK] ❌ Async wrapper failed for bucket #${bucket.id}:`, err));
 
     // Update last confirmed if not Inbox
     if (finalProjectId !== inboxProjectId) {

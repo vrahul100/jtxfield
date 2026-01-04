@@ -37,6 +37,9 @@ export function Transactions() {
     const [total, setTotal] = useState(0);
     const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
     const [expandedIds, setExpandedIds] = useState<Set<number>>(new Set());
+    const [search, setSearch] = useState('');
+    const [projectFilter, setProjectFilter] = useState('all');
+    const [statusFilter, setStatusFilter] = useState('all');
 
     useEffect(() => {
         fetchProjects();
@@ -172,6 +175,50 @@ export function Transactions() {
                     </button>
                 </div>
 
+
+                {/* Search and Filters */}
+                <div className="card p-4 mb-6">
+                    <div className="mb-4">
+                        <input
+                            type="text"
+                            placeholder="Search by member, project, or job..."
+                            value={search}
+                            onChange={(e) => setSearch(e.target.value)}
+                            className="input-field w-full"
+                        />
+                    </div>
+                    <div className="flex gap-4 flex-wrap">
+                        <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Status
+                            </label>
+                            <select
+                                value={statusFilter}
+                                onChange={(e) => setStatusFilter(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="all">All</option>
+                                <option value="COMPLETED">Completed</option>
+                                <option value="PENDING">Pending</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                Project
+                            </label>
+                            <select
+                                value={projectFilter}
+                                onChange={(e) => setProjectFilter(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="all">All Projects</option>
+                                {projects.map(p => (
+                                    <option key={p.id} value={p.id}>{p.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                    </div>
+                </div>
 
                 <div className="card overflow-hidden">
                     <table className="table-auto w-full">
