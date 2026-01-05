@@ -309,28 +309,28 @@ export function Transactions() {
                                                 <td colSpan={11} className="px-6 py-4">
                                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                                         <div>
-                                                            <strong className="text-gray-700">Job Description:</strong>
-                                                            <p className="mt-1 text-gray-600">{txn.job || 'N/A'}</p>
+                                                            <strong className="ttx-title">Job Description:</strong>
+                                                            <p className="text-xs mt-1 text-gray-600">{txn.job || 'N/A'}</p>
                                                         </div>
                                                         <div>
-                                                            <strong className="text-gray-700">Scope:</strong>
-                                                            <p className="mt-1 text-gray-600 whitespace-pre-wrap">{txn.scope_description || 'N/A'}</p>
+                                                            <strong className="ttx-title">Scope:</strong>
+                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap">{txn.scope_description || 'N/A'}</p>
                                                         </div>
                                                         <div>
-                                                            <strong className="text-gray-700">Labor Details:</strong>
-                                                            <p className="mt-1 text-gray-600 whitespace-pre-wrap">{txn.labor || 'N/A'}</p>
+                                                            <strong className="ttx-title">Labor Details:</strong>
+                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap">{txn.labor || 'N/A'}</p>
                                                         </div>
                                                         <div>
-                                                            <strong className="text-gray-700">Materials:</strong>
-                                                            <p className="mt-1 text-gray-600 whitespace-pre-wrap">{txn.material || 'N/A'}</p>
+                                                            <strong className="ttx-title">Materials:</strong>
+                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap">{txn.material || 'N/A'}</p>
                                                         </div>
                                                         <div>
-                                                            <strong className="text-gray-700">Evidence:</strong>
-                                                            <p className="mt-1 text-gray-600">{txn.evidence || 'N/A'}</p>
+                                                            <strong className="ttx-title">Evidence:</strong>
+                                                            <a className="text-xs underline mt-1 text-gray-600" href={txn.evidence || ''}>Link </a>
                                                         </div>
                                                         <div>
-                                                            <strong className="text-gray-700">Status:</strong>
-                                                            <p className="mt-1 text-gray-600">{txn.status}</p>
+                                                            <strong className="ttx-title">Status:</strong>
+                                                            <p className="text-xs mt-1 text-gray-600">{txn.status}</p>
                                                         </div>
                                                     </div>
                                                 </td>

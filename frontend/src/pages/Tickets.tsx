@@ -431,7 +431,7 @@ export function Tickets() {
                                                                     <p className="text-gray-700 italic">{bucket.summary}</p>
                                                                 </div>
                                                             )}
-                                                            <strong>Full Message:</strong>
+                                                            <span className='ttx-title'>Full Message:</span>
                                                             <p className="whitespace-pre-wrap mt-1 text-xs">{bucket.raw_text}</p>
                                                         </div>
 
@@ -442,9 +442,9 @@ export function Tickets() {
                                                                 if (Array.isArray(transcripts) && transcripts.length > 0) {
                                                                     return (
                                                                         <div className="mb-4">
-                                                                            <strong>Transcripts:</strong>
+                                                                            <span className='ttx-title'>Transcripts:</span>
                                                                             {transcripts.map((t: string, i: number) => (
-                                                                                <p key={i} className="italic mt-1">"{t}"</p>
+                                                                                <p key={i} className="text-xs italic mt-1">"{t}"</p>
                                                                             ))}
                                                                         </div>
                                                                     );

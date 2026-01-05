@@ -9,7 +9,7 @@
 @layer base {
   html {
     font-family: 'Public Sans', system-ui, sans-serif;
-    font-size: 105%;
+    font-size: 111%;
     /* 18px base font size */
     /* line-height: 1.6; */
   }
@@ -75,5 +75,9 @@
   /* Footer */
   .footer {
     @apply text-center py-4 text-sm text-slate-500 border-t border-slate-200 bg-white mt-auto;
+  }
+
+  .ttx-title {
+    @apply text-sm font-semibold text-indigo-500 uppercase;
   }
 }

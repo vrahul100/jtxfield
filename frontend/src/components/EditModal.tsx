@@ -56,7 +56,7 @@ export function EditModal({ isOpen, title, fields, onSave, onClose, loading }: E
             <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
                 {/* Header */}
                 <div className="flex items-center justify-between p-6 border-b">
-                    <h2 className="text-lg font-semibold text-indigo-900">{title}</h2>
+                    <h2 className="text-lg font-semibold text-indigo-600">{title}</h2>
                     <button
                         onClick={onClose}
                         className="text-gray-400 hover:text-gray-600"
