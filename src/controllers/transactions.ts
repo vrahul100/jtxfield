@@ -12,6 +12,9 @@ export async function getTransactions(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const page = parseInt(c.req.query('page') || '1');
         const limit = parseInt(c.req.query('limit') || '10');
+        const status = c.req.query('status');
+        const projectId = c.req.query('projectId');
+        const search = c.req.query('search') || '';
         const offset = (page - 1) * limit;
 
         // Build conditions
@@ -22,12 +25,42 @@ export async function getTransactions(c: Context, sql: Sql) {
             conditions.push(`t.company_id = ${user.nodeId}`);
         }
 
+        if (status && status !== 'all') {
+            conditions.push(`t.status = '${status}'`);
+        }
+        if (projectId && projectId !== 'all') {
+            conditions.push(`t.project_id = ${parseInt(projectId)}`);
+        }
+
+        if (search.trim()) {
+            const searchTerm = search.trim().replace(/'/g, "''");
+            const isNumeric = /^\d+$/.test(searchTerm);
+            if (isNumeric) {
+                conditions.push(`(
+                    t.id = ${parseInt(searchTerm)}
+                    OR m.full_name ILIKE '%${searchTerm}%' 
+                    OR m.phone_number ILIKE '%${searchTerm}%'
+                    OR p.name ILIKE '%${searchTerm}%'
+                    OR t.job ILIKE '%${searchTerm}%'
+                )`);
+            } else {
+                conditions.push(`(
+                    m.full_name ILIKE '%${searchTerm}%' 
+                    OR m.phone_number ILIKE '%${searchTerm}%'
+                    OR p.name ILIKE '%${searchTerm}%'
+                    OR t.job ILIKE '%${searchTerm}%'
+                )`);
+            }
+        }
+
         const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
 
         // Get total count
         const countResult = await sql.unsafe(`
             SELECT COUNT(*)::int as total
             FROM txns t
+            LEFT JOIN members m ON t.user_id = m.id
+            LEFT JOIN projects p ON t.project_id = p.id
             ${whereClause}
         `);
         const total = countResult[0]?.total || 0;

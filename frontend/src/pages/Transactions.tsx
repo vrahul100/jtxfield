@@ -43,8 +43,16 @@ export function Transactions() {
 
     useEffect(() => {
         fetchProjects();
+        fetchTransactions(true);
+    }, []);
+
+    useEffect(() => {
+        setPage(1); // Reset to page 1 when filters change
+    }, [statusFilter, projectFilter, search]);
+
+    useEffect(() => {
         fetchTransactions();
-    }, [page]);
+    }, [statusFilter, projectFilter, search, page]);
 
     const fetchProjects = async () => {
         try {
@@ -58,10 +66,17 @@ export function Transactions() {
         }
     };
 
-    const fetchTransactions = async () => {
-        setLoading(true);
+    const fetchTransactions = async (isInitialLoad = false) => {
+        if (isInitialLoad) setLoading(true);
         try {
-            const response = await fetch(`/api/transactions?page=${page}&limit=10`, {
+            const params = new URLSearchParams();
+            if (statusFilter !== 'all') params.append('status', statusFilter);
+            if (projectFilter !== 'all') params.append('projectId', projectFilter);
+            params.append('page', page.toString());
+            params.append('limit', '10');
+            if (search.trim()) params.append('search', search.trim());
+
+            const response = await fetch(`/api/transactions?${params.toString()}`, {
                 credentials: 'include',
             });
             if (response.ok) {
@@ -73,7 +88,7 @@ export function Transactions() {
         } catch (error) {
             console.error('Failed to fetch transactions:', error);
         } finally {
-            setLoading(false);
+            if (isInitialLoad) setLoading(false);
         }
     };
 
@@ -170,7 +185,7 @@ export function Transactions() {
             <div>
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Timesheets</h1>
-                    <button onClick={fetchTransactions} className="btn-primary">
+                    <button onClick={() => fetchTransactions(true)} className="btn-primary">
                         Refresh
                     </button>
                 </div>
