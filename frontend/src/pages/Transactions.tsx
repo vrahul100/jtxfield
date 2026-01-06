@@ -16,6 +16,7 @@ interface Transaction {
     evidence: string | null;
     scope_description: string | null;
     status: string;
+    ai_summary: string | null;
     created_at: string;
     member_name: string | null;
     member_phone: string | null;
@@ -305,9 +306,17 @@ export function Transactions() {
 
                                         {/* Expanded Row */}
                                         {isExpanded && (
-                                            <tr className="bg-gray-50">
+                                            <tr className="bg-yellow-50">
                                                 <td colSpan={11} className="px-6 py-4">
                                                     <div className="grid grid-cols-2 gap-4 text-sm">
+                                                        {txn.ai_summary && (
+                                                            <div className="col-span-2 p-3 bg-blue-50 rounded-lg border border-gray-500 mb-2">
+                                                                <div className="flex items-center gap-2 mb-1">
+                                                                    <span className="text-black font-semibold uppercase text-xs">✨ AI Summary:</span>
+                                                                </div>
+                                                                <p className="text-gray-700 italic">{txn.ai_summary}</p>
+                                                            </div>
+                                                        )}
                                                         <div>
                                                             <strong className="ttx-title">Job Description:</strong>
                                                             <p className="text-xs mt-1 text-gray-600">{txn.job || 'N/A'}</p>

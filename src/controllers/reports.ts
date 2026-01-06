@@ -41,23 +41,21 @@ export async function getSummaryReport(c: Context, sql: Sql) {
         // Build WHERE clause for date filtering
         let dateWhere = '';
         if (startDate && endDate) {
-            dateWhere = `AND t.created_at >= '${startDate}' AND t.created_at <= '${endDate}'`;
+            dateWhere = `AND t.created_at::date >= '${startDate}' AND t.created_at::date <= '${endDate}'`;
         }
 
         // Get summary by project
         const byProject = await sql.unsafe<ProjectSummary[]>(`
             SELECT 
-                p.id as project_id,
-                p.name as project_name,
+                COALESCE(p.id, 0) as project_id,
+                COALESCE(p.name, 'Unassigned') as project_name,
                 COALESCE(SUM(t.time), 0)::float as total_hours,
                 COUNT(DISTINCT t.user_id)::int as member_count,
                 COUNT(t.id)::int as transaction_count
-            FROM projects p
-            LEFT JOIN txns t ON t.project_id = p.id
+            FROM txns t
+            LEFT JOIN projects p ON t.project_id = p.id
             WHERE 1=1 ${nodeFilter} ${dateWhere}
-            ${user.role === 'OM' ? `AND p.node_id = ${user.nodeId}` : ''}
             GROUP BY p.id, p.name
-            HAVING COUNT(t.id) > 0
             ORDER BY total_hours DESC
         `);
 

@@ -9,7 +9,7 @@
 @layer base {
   html {
     font-family: 'Public Sans', system-ui, sans-serif;
-    font-size: 111%;
+    font-size: 100%;
     /* 18px base font size */
     /* line-height: 1.6; */
   }

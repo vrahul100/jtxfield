@@ -125,6 +125,65 @@ async function seed() {
         `;
         console.log('  ✅ Created: David Builder (+15559876543)\n');
 
+        // 7. CREATE TRANSACTIONS (Work Logs)
+        console.log('📝 Creating transactions...');
+        const members = [
+            { id: 1, company_id: downtown.id }, // Mike (assumed ID 1)
+            { id: 2, company_id: downtown.id }, // Carlos (assumed ID 2)
+            { id: 3, company_id: westside.id }  // David (assumed ID 3)
+        ];
+
+        // Fetch actual member IDs to be safe
+        const dbMembers = await sql`SELECT id, company_id, phone_number FROM members`;
+
+        const projects = [project1, project2, project3];
+
+        let txnCount = 0;
+
+        // Generate transactions for the last 30 days
+        for (let i = 0; i < 30; i++) {
+            const date = new Date();
+            date.setDate(date.getDate() - i);
+            const dateStr = date.toISOString();
+
+            // Randomly create transactions for each member
+            for (const member of dbMembers) {
+                // 70% chance a member worked on a given day
+                if (Math.random() > 0.3) {
+                    // Pick a random project belonging to the member's company
+                    const memberProjects = projects.filter(p => p.node_id === member.company_id);
+                    if (memberProjects.length === 0) continue;
+
+                    const project = memberProjects[Math.floor(Math.random() * memberProjects.length)];
+                    const hours = 4 + Math.floor(Math.random() * 5); // 4-8 hours
+
+                    // Create a bucket first
+                    const [bucket] = await sql`
+                        INSERT INTO buckets (
+                            node_id, project_id, member_id, 
+                            status, raw_text, summary, source,
+                            from_phone,
+                            created_at, updated_at
+                        )
+                        VALUES (
+                            ${member.company_id}, ${project.id}, ${member.id},
+                            'submitted', 'Work log entry', 'Auto-generated work log', 'web',
+                            ${member.phone_number},
+                            ${dateStr}, ${dateStr}
+                        )
+                        RETURNING id
+                    `;
+
+                    await sql`
+                        INSERT INTO txns (bucket_id, user_id, project_id, company_id, time, created_at)
+                        VALUES (${bucket.id}, ${member.id}, ${project.id}, ${member.company_id}, ${hours}, ${dateStr})
+                    `;
+                    txnCount++;
+                }
+            }
+        }
+        console.log(`  ✅ Created ${txnCount} transactions across varying dates\n`);
+
         console.log('🎉 Seeding complete!\n');
         console.log('═══════════════════════════════════════════');
         console.log('🔐 Test Credentials:');

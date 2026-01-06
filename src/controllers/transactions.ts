@@ -72,11 +72,13 @@ export async function getTransactions(c: Context, sql: Sql) {
                 m.full_name as member_name,
                 m.phone_number as member_phone,
                 p.name as project_name,
-                n.name as node_name
+                n.name as node_name,
+                b.summary as ai_summary
             FROM txns t
             LEFT JOIN members m ON t.user_id = m.id
             LEFT JOIN projects p ON t.project_id = p.id
             LEFT JOIN nodes n ON t.company_id = n.id
+            LEFT JOIN buckets b ON t.bucket_id = b.id
             ${whereClause}
             ORDER BY t.created_at DESC
             LIMIT ${limit} OFFSET ${offset}

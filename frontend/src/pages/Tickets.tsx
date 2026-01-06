@@ -417,16 +417,16 @@ export function Tickets() {
                                                 </td>
                                             </tr>
                                             {isExpanded && (
-                                                <tr className="bg-gray-50">
-                                                    <td colSpan={8} className="px-6 py-4">
+                                                <tr className="bg-yellow-50">
+                                                    <td colSpan={9} className="px-6 py-4">
                                                         <div className="text-xs text-gray-900 mb-4">
 
 
                                                             {/* AI Summary */}
                                                             {bucket.summary && (
-                                                                <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-100">
+                                                                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-gray-500 mb-2">
                                                                     <div className="flex items-center gap-2 mb-1">
-                                                                        <span className="text-indigo-600 font-semibold text-xs">✨ AI Summary:</span>
+                                                                        <span className="text-black font-semibold uppercase text-xs">✨ AI Summary:</span>
                                                                     </div>
                                                                     <p className="text-gray-700 italic">{bucket.summary}</p>
                                                                 </div>
