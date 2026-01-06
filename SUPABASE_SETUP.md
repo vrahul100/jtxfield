@@ -29,7 +29,7 @@ SUPABASE_STORAGE_BUCKET=media
 ## 5. Deploy Edge Functions (Optional)
 If using Supabase Edge Functions for webhooks:
 ```bash
-supabase functions deploy twhook
+supabase functions deploy process-bucket
 ```
 
 ## 6. Local Development

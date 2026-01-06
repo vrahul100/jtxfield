@@ -283,6 +283,7 @@ async function main() {
         columns: true,
         skip_empty_lines: true,
         trim: true,
+        comment: '#',
     }) as TestCase[];
 
     console.log(`\n🚀 Running ${testCases.length} test cases...\n`);

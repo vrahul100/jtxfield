@@ -9,33 +9,38 @@ if (!DATABASE_URL) {
     process.exit(1);
 }
 
-const sql = postgres(DATABASE_URL);
+// Get Supabase config from .env
+const SUPABASE_PROJECT_REF = process.env.SUPABASE_URL?.match(/https:\/\/(.+?)\.supabase\.co/)?.[1] || '[PROJECT_REF]';
+const EDGE_FUNCTION_URL = `https://${SUPABASE_PROJECT_REF}.supabase.co/functions/v1/process-bucket`;
+const SERVICE_KEY = process.env.SUPABASE_SERVICE_KEY || '';
+
+if (!SERVICE_KEY || SERVICE_KEY === 'eyJ...') {
+    console.error('❌ Please set SUPABASE_SERVICE_KEY in your .env file first');
+    process.exit(1);
+}
+
+const sql = postgres(DATABASE_URL, { ssl: 'require' });
 
 async function migrate() {
     console.log('🚀 Setting up Supabase trigger for bucket processing...');
+    console.log(`   Edge Function URL: ${EDGE_FUNCTION_URL}`);
 
     try {
-        // 1. Enable pg_net extension (for HTTP calls)
+        // 1. Enable pg_net extension
         console.log('  - Enabling pg_net extension...');
-        await sql`CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA extensions;`;
+        await sql`CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA net;`;
 
-        // 2. Create the trigger function
+        // 2. Create the trigger function using EXACT Supabase documentation syntax
         console.log('  - Creating trigger function...');
         await sql.unsafe(`
             CREATE OR REPLACE FUNCTION notify_bucket_processing()
             RETURNS TRIGGER AS $$
-            DECLARE
-                edge_function_url TEXT := current_setting('app.edge_function_url', true);
-                service_key TEXT := current_setting('app.supabase_service_key', true);
             BEGIN
-                -- Call the Supabase Edge Function via pg_net
-                PERFORM extensions.http_post(
-                    url := edge_function_url || '/process-bucket',
-                    body := json_build_object('bucketId', NEW.id)::text,
-                    headers := json_build_object(
-                        'Content-Type', 'application/json',
-                        'Authorization', 'Bearer ' || service_key
-                    )::jsonb
+                -- Use exact syntax from Supabase pg_net documentation
+                PERFORM "net"."http_post"(
+                    url:='${EDGE_FUNCTION_URL}'::text,
+                    body:=jsonb_build_object('bucketId', NEW.id),
+                    headers:='{"Content-Type": "application/json", "Authorization": "Bearer ${SERVICE_KEY}"}'::jsonb
                 );
                 RETURN NEW;
             END;
@@ -56,9 +61,7 @@ async function migrate() {
 
         console.log('✅ Trigger setup complete!');
         console.log('');
-        console.log('⚠️  IMPORTANT: Set these in your Supabase Dashboard > Settings > Database > Connection Pooling > Custom Config:');
-        console.log('   app.edge_function_url = https://[PROJECT_REF].supabase.co/functions/v1');
-        console.log('   app.supabase_service_key = [YOUR_SERVICE_ROLE_KEY]');
+        console.log('The trigger will call your Edge Function when a bucket status changes to "pending_processing".');
 
     } catch (error) {
         console.error('❌ Migration failed:', error);

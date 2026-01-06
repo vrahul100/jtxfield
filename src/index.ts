@@ -7,7 +7,9 @@ import { isLocalDevelopment } from './queue/index.js'
 
 dotenv.config()
 
-const sql = postgres(process.env.DATABASE_URL!)
+const sql = postgres(process.env.DATABASE_URL!, {
+  ssl: process.env.NODE_ENV === 'production' || process.env.DEPLOY_MODE === 'remote' ? 'require' : false,
+})
 const app = createApp(sql)
 
 // Start background queue worker for local development

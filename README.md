@@ -26,6 +26,8 @@ cp .env.example .env
 npx tsx drizzle/0000_careless_centennial.sql
 npx tsx drizzle/0001_add_inbox_system.ts
 npx tsx drizzle/0002_add_users_table.ts
+npm run db:generate
+npm run db:migrate
 
 # Seed test data
 npx tsx scripts/seed-test-data.ts
