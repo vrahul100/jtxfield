@@ -1,6 +1,8 @@
 import { Hono } from 'hono'
 import { Sql } from 'postgres'
 import { serveStatic } from '@hono/node-server/serve-static'
+import fs from 'fs'
+import path from 'path'
 import { handleTwilioWebhook } from './controllers/webhook.js'
 import { createAdminRoutes } from './controllers/admin.js'
 import { getInbox, bulkAssign, addAlias } from './controllers/inbox.js'
@@ -18,10 +20,16 @@ export const createApp = (sql: Sql) => {
     const app = new Hono()
 
     // 0. STATIC FILES (for test fixtures)
-    app.get('/test-fixtures/*', serveStatic({
-        root: './tests/fixtures',
-        rewriteRequestPath: (path) => path.replace(/^\/test-fixtures/, '')
-    }))
+    // Only serve in development/test and if directory exists
+    if (process.env.NODE_ENV !== 'production') {
+        const fixturesPath = './tests/fixtures';
+        if (fs.existsSync(fixturesPath)) {
+            app.get('/test-fixtures/*', serveStatic({
+                root: fixturesPath,
+                rewriteRequestPath: (path) => path.replace(/^\/test-fixtures/, '')
+            }))
+        }
+    }
 
     // 1. TWILIO WEBHOOK (public)
     app.post('/twhook', (c) => handleTwilioWebhook(c, sql))

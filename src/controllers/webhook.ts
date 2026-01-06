@@ -103,7 +103,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     const publicUrl = process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL}/twhook` : c.req.url;
 
     if (authToken && signature) {
-      const isValid = validateRequest(
+      const isValid = twilio.validateRequest(
         authToken,
         signature,
         publicUrl,
