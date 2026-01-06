@@ -259,7 +259,7 @@ export function Transactions() {
                                 return (
                                     <React.Fragment key={txn.id}>
                                         <tr
-                                            className="hover:bg-gray-50 cursor-pointer"
+                                            className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-yellow-50' : ''}`}
                                             onClick={() => toggleExpand(txn.id)}
                                         >
                                             <td className="px-6 py-4 whitespace-nowrap">

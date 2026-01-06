@@ -352,7 +352,7 @@ export function Tickets() {
                                     const isExpanded = expandedBucketIds.includes(bucket.id);
                                     return (
                                         <React.Fragment key={bucket.id}>
-                                            <tr className="hover:bg-gray-50 cursor-pointer" onClick={() => toggleExpand(bucket.id)}>
+                                            <tr className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-yellow-50' : ''}`} onClick={() => toggleExpand(bucket.id)}>
                                                 <td className="px-2 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={() => toggleExpand(bucket.id)}
