@@ -1,4 +1,5 @@
-import { pgTable, serial, text, decimal, integer, timestamp, varchar, boolean } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text, decimal, integer, timestamp, varchar, boolean, pgPolicy, uuid, bigint } from 'drizzle-orm/pg-core';
+import { sql } from 'drizzle-orm';
 
 // 1. NODES (formerly companies)
 export const nodes = pgTable('nodes', {
@@ -6,6 +7,15 @@ export const nodes = pgTable('nodes', {
     name: text('name').notNull(),
     defaultHourlyRate: decimal('default_hourly_rate', { precision: 10, scale: 2 }).default('85.00'),
     createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 
 // 2. MEMBERS (formerly users/Foremen)
@@ -28,6 +38,15 @@ export const members = pgTable('members', {
     projectConfirmedAt: timestamp('project_confirmed_at'),
 
     createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 
 // 3. PROJECTS
@@ -39,6 +58,15 @@ export const projects = pgTable('projects', {
     isInbox: boolean('is_inbox').default(false), // Permanent "Inbox" project per node
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 
 // 4. BUCKETS - Message accumulation before processing
@@ -76,6 +104,15 @@ export const buckets = pgTable('buckets', {
 
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 
 // 5. TXNS - Completed transactions from closed buckets
@@ -94,6 +131,15 @@ export const txns = pgTable('txns', {
     status: varchar('status', { length: 20 }).default('PROCESSING'),
 
     createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 
 // 6. RATE CARDS
@@ -103,6 +149,15 @@ export const rateCards = pgTable('rate_cards', {
     positionName: text('position_name').notNull(),
     hourlyRate: decimal('hourly_rate', { precision: 10, scale: 2 }).notNull(),
     createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 
 // 7. HOLDING TANK - Unknown users
@@ -116,6 +171,15 @@ export const holdingTank = pgTable('holding_tank', {
     messageSid: varchar('message_sid', { length: 50 }),
     status: varchar('status', { length: 20 }).default('pending').notNull(), // pending | reviewed | rejected
     createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });
 // 8. USERS - Web dashboard authentication
 export const users = pgTable('users', {
@@ -128,4 +192,29 @@ export const users = pgTable('users', {
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
+});
+
+// 9. SESSIONS
+export const sessions = pgTable('sessions', {
+    id: uuid('id').defaultRandom().primaryKey(),
+    userId: integer('user_id').references(() => users.id).notNull(),
+    expiresAt: bigint('expires_at', { mode: 'number' }).notNull(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
 });

@@ -1,4 +1,5 @@
 import { serve } from '@hono/node-server'
+import { handle } from '@hono/node-server/vercel'
 import postgres from 'postgres'
 import dotenv from 'dotenv'
 import { createApp } from './app.js'
@@ -19,8 +20,12 @@ if (isLocalDevelopment()) {
   worker.start()
 }
 
-console.log(`Server is running on port ${process.env.PORT || 3000}`)
-serve({
-  fetch: app.fetch,
-  port: Number(process.env.PORT || 3000)
-})
+if (process.env.NODE_ENV !== 'production') {
+  console.log(`Server is running on port ${process.env.PORT || 3000}`)
+  serve({
+    fetch: app.fetch,
+    port: Number(process.env.PORT || 3000)
+  })
+}
+
+export default handle(app)

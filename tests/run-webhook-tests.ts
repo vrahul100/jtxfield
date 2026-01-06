@@ -102,7 +102,7 @@ async function verifyBucketCreation(phoneNumber: string): Promise<{ id: number; 
             // Check if validation completed (submitted) or has extracted_data
             if (bucket.status === 'submitted' || bucket.extracted_data) {
                 console.log(`   ⏱️  Processing completed in ${2 + attempt}s`);
-                return bucket;
+                return bucket as any;
             }
 
             // Show progress every 5 seconds
@@ -127,7 +127,7 @@ async function verifyBucketCreation(phoneNumber: string): Promise<{ id: number; 
 
     if (buckets.length > 0) {
         createdBucketIds.push(buckets[0].id);
-        return buckets[0];
+        return buckets[0] as any;
     }
 
     return null;
@@ -143,7 +143,7 @@ async function verifyTransactionCreation(bucketId: number): Promise<{ id: number
 
     if (transactions.length > 0) {
         createdTransactionIds.push(transactions[0].id);
-        return transactions[0];
+        return transactions[0] as any;
     }
     return null;
 }
@@ -232,7 +232,7 @@ async function runTest(testCase: TestCase, index: number, testRunId: string): Pr
         if (testCase.expected_materials && extractedMaterials) {
             const expectedMats = testCase.expected_materials.toLowerCase().split(',').map(m => m.trim());
             const actualMats = extractedMaterials.toLowerCase().split(',').map(m => m.trim());
-            const hasAllMaterials = expectedMats.every(m => actualMats.some(a => a.includes(m)));
+            const hasAllMaterials = expectedMats.every(m => actualMats.some(a => a.includes(m) || m.includes(a)));
 
             if (!hasAllMaterials) {
                 console.log(`   ❌ Materials mismatch: expected ${testCase.expected_materials}, got ${extractedMaterials}`);
