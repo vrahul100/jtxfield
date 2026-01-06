@@ -65,3 +65,23 @@ Sandbox Settings:
 When a message comes in: https://<your-vercel-project-name>.vercel.app/twhook
 Method: POST
 Important: Ensure your Vercel project has the TWILIO_AUTH_TOKEN environment variable set, as the code uses this to validate that the request is genuinely from Twilio.
+
+
+
+Option 1: The "Bulk Upload" Trick (Recommended)
+You can use a simple command to read your local .env file and upload everything to Vercel at once.
+
+Run this in your terminal:
+
+bash
+# This reads .env line-by-line and adds it to Vercel Production
+while read -r line || [[ -n "$line" ]]; do
+  # Skip comments and empty lines
+  if [[ ! "$line" =~ ^# ]] && [[ -n "$line" ]]; then
+    key=$(echo "$line" | cut -d '=' -f 1)
+    value=$(echo "$line" | cut -d '=' -f 2-)
+    # Add to Vercel Production
+    echo "Adding $key..."
+    echo "$value" | vercel env add "$key" production
+  fi
+done < .env
