@@ -26,7 +26,7 @@ export async function login(c: Context, sql: Sql) {
         }
 
         // Create session
-        const sessionId = createSession(user.id);
+        const sessionId = await createSession(sql, user.id);
 
         // Set cookie
         setSessionCookie(c, sessionId);
@@ -51,12 +51,12 @@ export async function login(c: Context, sql: Sql) {
  * POST /api/auth/logout
  * Delete session and clear cookie
  */
-export async function logout(c: Context) {
+export async function logout(c: Context, sql: Sql) {
     try {
         const sessionId = getCookie(c, 'sessionId');
 
         if (sessionId) {
-            deleteSession(sessionId);
+            await deleteSession(sql, sessionId);
         }
 
         clearSessionCookie(c);
@@ -80,7 +80,7 @@ export async function checkSession(c: Context, sql: Sql) {
             return c.json({ error: 'Not authenticated' }, 401);
         }
 
-        const session = getSession(sessionId);
+        const session = await getSession(sql, sessionId);
         if (!session) {
             clearSessionCookie(c);
             return c.json({ error: 'Session expired' }, 401);
@@ -89,7 +89,7 @@ export async function checkSession(c: Context, sql: Sql) {
         // Get user
         const user = await getUserById(sql, session.userId);
         if (!user) {
-            deleteSession(sessionId);
+            await deleteSession(sql, sessionId);
             clearSessionCookie(c);
             return c.json({ error: 'User not found' }, 401);
         }

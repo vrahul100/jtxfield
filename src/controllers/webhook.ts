@@ -119,360 +119,74 @@ You're now activated. Start sending your work updates via text, photos, or voice
     return handleProjectCorrection(c, sql, member, normalized);
   }
 
-  // 6. PROCESS MEDIA
-  const { imageUrls, audioUrls, transcripts, messageSid } = await processMedia(normalized, body);
+  // 6. EXTRACT MEDIA URLS (Worker will copy to storage async)
+  const { imageUrls, audioUrls, messageSid } = extractMediaUrls(normalized, body);
 
-  // Combine text with transcripts
-  let fullText = normalized.text;
-  if (transcripts.length > 0) {
-    fullText = `${fullText}\n[VOICE]: ${transcripts.join(' ')}`.trim();
-  }
-
-  // 7. CHECK FOR FORCE NEW BUCKET FLAG
-  // Can be set via ForceNewBucket parameter (useful for testing or "start new ticket" feature)
-  const forceNewBucket = body.ForceNewBucket === 'true' || body.ForceNewBucket === '1';
-
-  // 8. FIND OR CREATE BUCKET (without project assignment yet)
-  // Use Inbox as temporary placeholder - will be reassigned when validated
+  // 7. FIND OR CREATE BUCKET
   const inboxProjectId = await ensureInboxProject(sql, member.company_id);
-
+  const forceNewBucket = body.ForceNewBucket === 'true' || body.ForceNewBucket === '1';
   let bucket = forceNewBucket ? null : await findOpenBucket(sql, member.id, inboxProjectId);
-  let isNewTicket = false;
 
-  // Count total media in current message
-  const newMediaCount = imageUrls.length + audioUrls.length;
-
-  // 9. CLASSIFY INTENT using conversation history
-  let conversationHistory: ConversationMessage[] = [];
   if (bucket) {
-    conversationHistory = getConversationHistory(bucket);
-  }
-
-  const intent = await classifyIntent(conversationHistory, {
-    text: fullText,
-    hasMedia: newMediaCount > 0
-  });
-  console.log(`[INTENT] ${intent.intent} (confidence: ${intent.confidence})${forceNewBucket ? ' [FORCE NEW]' : ''}`);
-
-  // 9. HANDLE INTENTS
-
-  // CANCEL - User wants to abandon ticket
-  if (intent.intent === 'CANCEL' && bucket) {
-    await cancelBucket(sql, bucket.id);
-    await appendConversation(sql, bucket.id, [
-      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-      { role: 'assistant', content: `🚫 Ticket #${bucket.id} cancelled.`, timestamp: new Date().toISOString() }
-    ]);
-    return c.text(`<Response><Message>🚫 Ticket #${bucket.id} cancelled. Send a new message when you're ready to log work.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-  }
-
-  // CORRECTION - User wants to fix something
-  if (intent.intent === 'CORRECTION' && bucket) {
-    // Clear the pending validation question
-    await sql`UPDATE buckets SET ai_response = NULL, updated_at = NOW() WHERE id = ${bucket.id}`;
-    await appendConversation(sql, bucket.id, [
-      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-      { role: 'assistant', content: 'No problem! Send the corrected info or photo.', timestamp: new Date().toISOString() }
-    ]);
-    return c.text(`<Response><Message>No problem! What would you like to correct? Send the updated info or photo.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-  }
-
-  // CONFIRM - User is confirming/accepting (only if bucket exists)
-  if (intent.intent === 'CONFIRM' && bucket) {
-    const validation = await validateBucket(sql, bucket);
-
-    if (validation.isComplete) {
-      // Submit the ticket
-      await submitBucket(sql, bucket.id, validation.errors.length > 0);
-      await closeBucket(sql, bucket.id);
-
-      // Infer project before closing
-      const { extractMessageInfo } = await import('../services/extractionService.js');
-      const extraction = await extractMessageInfo(
-        bucket.raw_text || '',
-        bucket.transcripts ? JSON.parse(bucket.transcripts) : [],
-        bucket.image_urls ? JSON.parse(bucket.image_urls) : [],
-        member.domain || 'construction'
-      );
-
-      // Store extraction results for later use (e.g., transactions)
-      await sql`
-        UPDATE buckets 
-        SET extracted_data = ${JSON.stringify(extraction)}
-        WHERE id = ${bucket.id}
-      `;
-
-      console.log(`[WEBHOOK] Bucket #${bucket.id} submitted via CONFIRM`);
-
-      // Extract transaction asynchronously (non-blocking)
-      (async () => {
-        try {
-          const { extractTransactionFromBucket } = await import('../services/transactionService.js');
-          await extractTransactionFromBucket(sql, bucket.id);
-          console.log(`[WEBHOOK] ✅ Transaction created for bucket #${bucket.id}`);
-        } catch (err) {
-          console.error(`[WEBHOOK] ❌ CRITICAL: Transaction failed for bucket #${bucket.id}:`, err);
-        }
-      })().catch(err => console.error(`[WEBHOOK] ❌ Async wrapper failed for bucket #${bucket.id}:`, err));
-
-      let projectName = 'Inbox';
-      if (extraction.projectName) {
-        const matchedProject = await findProjectByAlias(sql, member.company_id, extraction.projectName);
-        if (matchedProject) {
-          projectName = matchedProject.name;
-          await sql`UPDATE buckets SET project_id = ${matchedProject.id} WHERE id = ${bucket.id}`;
-        }
-      }
-
-      // Extract transaction asynchronously
-      import('../services/transactionService.js').then(({ extractTransactionFromBucket }) => {
-        extractTransactionFromBucket(sql, bucket.id).catch((err) => {
-          console.error(`[WEBHOOK] Failed to extract transaction for bucket #${bucket.id}:`, err);
-        });
-      });
-
-      const confirmMsg = `✅ Ticket #${bucket.id} submitted for ${projectName}! Thanks for your report.`;
-      await appendConversation(sql, bucket.id, [
-        { role: 'user', content: fullText, timestamp: new Date().toISOString() },
-        { role: 'assistant', content: confirmMsg, timestamp: new Date().toISOString() }
-      ]);
-      return c.text(`<Response><Message>${confirmMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-    } else {
-      // Ticket not complete - ask for missing info
-      const question = validation.questions[0] || 'Please add more details.';
-      await sql`UPDATE buckets SET ai_response = ${question}, updated_at = NOW() WHERE id = ${bucket.id}`;
-      await appendConversation(sql, bucket.id, [
-        { role: 'user', content: fullText, timestamp: new Date().toISOString() },
-        { role: 'assistant', content: question, timestamp: new Date().toISOString() }
-      ]);
-      return c.text(`<Response><Message>Got it, but we still need: ${question}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-    }
-  }
-
-  // ADD_CONTENT - Adding work details (or new ticket)
-  if (bucket) {
-    // Check existing media count (max 5)
-    const existingImages = bucket.image_urls ? JSON.parse(bucket.image_urls) : [];
-    const existingAudio = bucket.audio_urls ? JSON.parse(bucket.audio_urls) : [];
-    const existingMediaCount = existingImages.length + existingAudio.length;
-    const totalAfterAppend = existingMediaCount + newMediaCount;
-
-    if (totalAfterAppend > 5) {
-      console.log(`[TICKET] Ticket #${bucket.id} at media limit`);
-      const limitMsg = `⚠️ Ticket #${bucket.id} has max 5 attachments. Send text details or wait for this ticket to close.`;
-      return c.text(`<Response><Message>${limitMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-    }
-
-    // Append to existing bucket
     bucket = await appendToBucket(sql, bucket, {
-      rawText: fullText,
+      rawText: normalized.text,
       imageUrls,
       audioUrls,
-      transcripts,
+      transcripts: [],
       messageSid,
     });
-    console.log(`[TICKET] Appended to ticket #${bucket.id}`);
   } else {
-    // Create new bucket (in Inbox temporarily)
     bucket = await createBucket(sql, {
       memberId: member.id,
       nodeId: member.company_id,
       projectId: inboxProjectId,
       source: normalized.source,
       fromPhone: normalized.sender,
-      rawText: fullText,
+      rawText: normalized.text,
       imageUrls,
       audioUrls,
-      transcripts,
+      transcripts: [],
       messageSid,
-      suspectedProjectName: null,
     });
-    isNewTicket = true;
-    console.log(`[TICKET] Opened ticket #${bucket.id}`);
   }
 
-  // 10. VALIDATE TICKET COMPLETENESS
-  const validation = await validateBucket(sql, bucket);
-  console.log(`[VALIDATE] Complete: ${validation.isComplete}, Errors: ${validation.errors.length}`);
-
-  // Count attempts (number of messages added to this ticket)
-  const messageSids = bucket.message_sids ? JSON.parse(bucket.message_sids) : [];
-  const attemptCount = messageSids.length;
-  console.log(`[TICKET] Attempt count: ${attemptCount}`);
-
-  // ALWAYS extract data (for testing, transactions, etc.) even if validation incomplete
-  const { extractMessageInfo } = await import('../services/extractionService.js');
-  const extraction = await extractMessageInfo(
-    bucket.raw_text || '',
-    bucket.transcripts ? JSON.parse(bucket.transcripts) : [],
-    bucket.image_urls ? JSON.parse(bucket.image_urls) : [],
-    member.domain || 'construction'
-  );
-
-  console.log(`[AI EXTRACTION] Project: "${extraction.projectName}", Clear: ${extraction.isProjectClear}`);
-
-  // Store extraction results, clarity score, and summary
+  // 8. MARK BUCKET FOR ASYNC PROCESSING (Postgres trigger will fire)
   await sql`
     UPDATE buckets 
-    SET extracted_data = ${JSON.stringify(extraction)},
-        clarity_score = ${extraction.clarityScore || 0.5},
-        summary = ${extraction.summary || null}
+    SET status = 'pending_processing', updated_at = NOW()
     WHERE id = ${bucket.id}
   `;
 
-  if (validation.isComplete) {
-    // 11. NOW INFER PROJECT (only when ticket is complete)
+  console.log(`[WEBHOOK] Bucket #${bucket.id} marked for processing`);
 
-    let finalProjectId: number | null = null;
-    let projectName = '';
+  // 9. RETURN IMMEDIATE ACKNOWLEDGMENT
+  return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
+}
 
-    // Try to match project by alias
-    if (extraction.projectName) {
-      const matchedProject = await findProjectByAlias(sql, member.company_id, extraction.projectName);
-      if (matchedProject) {
-        finalProjectId = matchedProject.id;
-        projectName = matchedProject.name;
-        console.log(`[PROJECT] Alias match: "${extraction.projectName}" → ${matchedProject.name}`);
-      }
+/**
+ * Extract raw Twilio media URLs (no copy, worker handles that async)
+ */
+function extractMediaUrls(normalized: any, body: any): {
+  imageUrls: string[];
+  audioUrls: string[];
+  messageSid: string | null;
+} {
+  const imageUrls: string[] = [];
+  const audioUrls: string[] = [];
+
+  for (const media of normalized.media) {
+    if (media.contentType.startsWith('audio/')) {
+      audioUrls.push(media.url);
+    } else if (media.contentType.startsWith('image/')) {
+      imageUrls.push(media.url);
     }
-
-    // Fallback to last confirmed project
-    if (!finalProjectId) {
-      const lastProject = await getLastConfirmedProject(sql, member);
-      if (lastProject) {
-        finalProjectId = lastProject.id;
-        projectName = lastProject.name;
-        console.log(`[PROJECT] Using last confirmed: ${lastProject.name}`);
-      }
-    }
-
-    // If STILL no project, ASK user which project
-    if (!finalProjectId) {
-      // Get list of projects to offer
-      const projects = await sql`
-        SELECT id, name FROM projects 
-        WHERE node_id = ${member.company_id} AND is_inbox = false AND is_active = true
-        ORDER BY name LIMIT 5
-      `;
-
-      if (projects.length > 0) {
-        // Store pending project selection state (using validation_attempts as flag)
-        await sql`
-          UPDATE buckets 
-          SET validation_attempts = -1, updated_at = NOW()
-          WHERE id = ${bucket.id}
-        `;
-
-        const projectList = projects.map((p: any, i: number) => `${i + 1}. ${p.name}`).join('\n');
-        const askProjectMsg = `📋 Ticket #${bucket.id} is ready!\n\nWhich project is this for?\n\n${projectList}\n\nReply with the number.`;
-        return c.text(`<Response><Message>${askProjectMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-      } else {
-        // No projects to choose from, go to Inbox
-        finalProjectId = inboxProjectId;
-        projectName = 'Inbox';
-      }
-    }
-
-    // Update bucket with final project and submit
-    await sql`
-      UPDATE buckets 
-      SET project_id = ${finalProjectId}, status = 'submitted', updated_at = NOW()
-      WHERE id = ${bucket.id}
-    `;
-
-    console.log(`[WEBHOOK] Bucket #${bucket.id} submitted to project: ${projectName} (ID: ${finalProjectId})`);
-
-    // Extract transaction asynchronously (non-blocking)
-    (async () => {
-      try {
-        const { extractTransactionFromBucket } = await import('../services/transactionService.js');
-        await extractTransactionFromBucket(sql, bucket.id);
-        console.log(`[WEBHOOK] ✅ Transaction created for bucket #${bucket.id}`);
-      } catch (err) {
-        console.error(`[WEBHOOK] ❌ CRITICAL: Transaction failed for bucket #${bucket.id}:`, err);
-      }
-    })().catch(err => console.error(`[WEBHOOK] ❌ Async wrapper failed for bucket #${bucket.id}:`, err));
-
-    // Update last confirmed if not Inbox
-    if (finalProjectId !== inboxProjectId) {
-      await updateLastConfirmedProject(sql, member.id, finalProjectId!);
-    }
-
-    const lang = getLang(member);
-    const summaryLine = validation.summary ? `"${validation.summary}"\n\n` : '';
-    const confirmationMsg = `${t(lang, 'ticket_submitted', { id: bucket.id })}\n\n${summaryLine}${t(lang, 'logged_to', { project: projectName })}`;
-    return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-
-  } else if (attemptCount >= 5) {
-    // After 5 attempts, send for review
-    await sql`
-      UPDATE buckets 
-      SET status = 'pending_review', updated_at = NOW() 
-      WHERE id = ${bucket.id}
-    `;
-    console.log(`[TICKET] Sent ticket #${bucket.id} for review after ${attemptCount} attempts`);
-
-    const lang = getLang(member);
-    const reasonLine = validation.questions.length > 0
-      ? `\n\nReason: ${validation.questions[0].replace('⚠️ ', '').replace('The details don\'t look right. ', '')}`
-      : '';
-    const reviewMsg = `${t(lang, 'ticket_review', { id: bucket.id })}${reasonLine}\n\n${t(lang, 'admin_followup')}`;
-
-    // Store conversation
-    await appendConversation(sql, bucket.id, [
-      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-      { role: 'assistant', content: reviewMsg, timestamp: new Date().toISOString() }
-    ]);
-
-    return c.text(`<Response><Message>${reviewMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-
-  } else {
-    // Ticket incomplete - send validation feedback
-    const lang = getLang(member);
-
-    // Build feedback message with specific validation  issues
-    let feedbackMsg = '⚠️ ' + (lang === 'es' ? 'Tu reporte está incompleto.' : 'Your work log is incomplete.');
-
-    // Add validation errors/missing fields
-    if (validation.errors.length > 0) {
-      feedbackMsg += '\n\n' + (lang === 'es' ? 'Falta información:' : 'Missing information:');
-      validation.errors.forEach(error => {
-        feedbackMsg += `\n• ${error}`;
-      });
-    }
-
-    // Add inconsistency reason if exists
-    if (extraction.isConsistent === false && extraction.inconsistencyReason) {
-      feedbackMsg += '\n\n' + (lang === 'es' ? '⚠️ Inconsistencia detectada:' : '⚠️ Inconsistency detected:');
-      feedbackMsg += `\n${extraction.inconsistencyReason}`;
-    }
-
-    // Add next question if available
-    if (validation.questions.length > 0) {
-      feedbackMsg += '\n\n' + validation.questions[0];
-    }
-
-    console.log(`[VALIDATE] Sending feedback to user. Attempt: ${attemptCount}/5`);
-
-    // Store the feedback in ai_response
-    await sql`
-      UPDATE buckets 
-      SET ai_response = ${feedbackMsg}, updated_at = NOW()
-      WHERE id = ${bucket.id}
-    `;
-
-    const responseMsg = isNewTicket
-      ? `${t(lang, 'ticket_opened', { id: bucket.id })}\n\n${feedbackMsg}`
-      : `Ticket #${bucket.id}: ${feedbackMsg}`;
-
-    // Store conversation
-    await appendConversation(sql, bucket.id, [
-      { role: 'user', content: fullText, media: imageUrls, timestamp: new Date().toISOString() },
-      { role: 'assistant', content: responseMsg, timestamp: new Date().toISOString() }
-    ]);
-
-    return c.text(`<Response><Message>${responseMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
+
+  return {
+    imageUrls,
+    audioUrls,
+    messageSid: body.MessageSid || null,
+  };
 }
 
 /**

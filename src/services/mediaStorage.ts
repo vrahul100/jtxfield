@@ -1,18 +1,23 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
 import { randomUUID } from 'crypto';
 
-// Lazy-initialize S3 client
-let s3Client: S3Client | null = null;
-function getS3Client(): S3Client {
-    if (!s3Client) {
-        s3Client = new S3Client({
-            region: process.env.AWS_REGION || 'us-east-1',
-        });
+// Lazy-initialize Supabase client
+let supabaseClient: SupabaseClient | null = null;
+function getSupabaseClient(): SupabaseClient {
+    if (!supabaseClient) {
+        const supabaseUrl = process.env.SUPABASE_URL;
+        const supabaseKey = process.env.SUPABASE_SERVICE_KEY;
+
+        if (!supabaseUrl || !supabaseKey) {
+            throw new Error('SUPABASE_URL and SUPABASE_SERVICE_KEY must be set');
+        }
+
+        supabaseClient = createClient(supabaseUrl, supabaseKey);
     }
-    return s3Client;
+    return supabaseClient;
 }
 
-const BUCKET_NAME = process.env.S3_MEDIA_BUCKET || 'jtxfield-media';
+const BUCKET_NAME = process.env.SUPABASE_STORAGE_BUCKET || 'media';
 
 export interface MediaUploadResult {
     imageUrl: string | null;
@@ -21,16 +26,16 @@ export interface MediaUploadResult {
     originalAudioUrl: string | null;
 }
 
-interface TwilioMedia {
+export interface TwilioMedia {
     url: string;
     contentType: string;
 }
 
 /**
- * Download media from Twilio and upload to S3 for permanent storage.
- * Twilio media URLs expire, so we need to copy them before queueing.
+ * Download media from Twilio and upload to Supabase Storage.
+ * Used by the background worker (async copy).
  */
-export async function copyTwilioMediaToS3(
+export async function copyTwilioMediaToStorage(
     twilioImages: TwilioMedia[],
     twilioAudio: TwilioMedia[],
     messageId: string
@@ -48,17 +53,16 @@ export async function copyTwilioMediaToS3(
         result.originalImageUrl = lastImage.url;
 
         try {
-            result.imageUrl = await downloadAndUploadToS3(
+            result.imageUrl = await downloadAndUploadToSupabase(
                 lastImage.url,
                 lastImage.contentType,
                 messageId,
                 'images'
             );
-            console.log(`📸 Image copied to S3: ${result.imageUrl}`);
+            console.log(`📸 Image copied to Supabase: ${result.imageUrl}`);
         } catch (error) {
-            console.error('❌ Failed to copy image to S3:', error);
-            // Fallback to original URL (may expire)
-            result.imageUrl = lastImage.url;
+            console.error('❌ Failed to copy image to Supabase:', error);
+            result.imageUrl = lastImage.url; // Fallback to original
         }
     }
 
@@ -68,17 +72,16 @@ export async function copyTwilioMediaToS3(
         result.originalAudioUrl = lastAudio.url;
 
         try {
-            result.audioUrl = await downloadAndUploadToS3(
+            result.audioUrl = await downloadAndUploadToSupabase(
                 lastAudio.url,
                 lastAudio.contentType,
                 messageId,
                 'audio'
             );
-            console.log(`🎵 Audio copied to S3: ${result.audioUrl}`);
+            console.log(`🎵 Audio copied to Supabase: ${result.audioUrl}`);
         } catch (error) {
-            console.error('❌ Failed to copy audio to S3:', error);
-            // Fallback to original URL (may expire)
-            result.audioUrl = lastAudio.url;
+            console.error('❌ Failed to copy audio to Supabase:', error);
+            result.audioUrl = lastAudio.url; // Fallback to original
         }
     }
 
@@ -86,9 +89,9 @@ export async function copyTwilioMediaToS3(
 }
 
 /**
- * Download from URL and upload to S3
+ * Download from URL and upload to Supabase Storage
  */
-async function downloadAndUploadToS3(
+async function downloadAndUploadToSupabase(
     sourceUrl: string,
     contentType: string,
     messageId: string,
@@ -104,25 +107,29 @@ async function downloadAndUploadToS3(
 
     const buffer = await response.arrayBuffer();
 
-    // 2. Generate S3 key
+    // 2. Generate storage path
     const extension = getExtensionFromContentType(contentType);
     const timestamp = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
-    const key = `${folder}/${timestamp}/${messageId}-${randomUUID().slice(0, 8)}${extension}`;
+    const path = `${folder}/${timestamp}/${messageId}-${randomUUID().slice(0, 8)}${extension}`;
 
-    // 3. Upload to S3
-    console.log(`📤 Uploading to S3: ${key}`);
-    const command = new PutObjectCommand({
-        Bucket: BUCKET_NAME,
-        Key: key,
-        Body: Buffer.from(buffer),
-        ContentType: contentType,
-    });
+    // 3. Upload to Supabase Storage
+    console.log(`📤 Uploading to Supabase Storage: ${path}`);
+    const supabase = getSupabaseClient();
 
-    await getS3Client().send(command);
+    const { error } = await supabase.storage
+        .from(BUCKET_NAME)
+        .upload(path, Buffer.from(buffer), {
+            contentType,
+            upsert: false,
+        });
 
-    // 4. Return S3 URL
-    const region = process.env.AWS_REGION || 'us-east-1';
-    return `https://${BUCKET_NAME}.s3.${region}.amazonaws.com/${key}`;
+    if (error) {
+        throw new Error(`Supabase upload failed: ${error.message}`);
+    }
+
+    // 4. Get public URL
+    const { data } = supabase.storage.from(BUCKET_NAME).getPublicUrl(path);
+    return data.publicUrl;
 }
 
 /**
@@ -144,7 +151,7 @@ function getExtensionFromContentType(contentType: string): string {
 }
 
 /**
- * For local development - store media locally instead of S3
+ * For local development - just use original Twilio URLs
  */
 export async function copyTwilioMediaLocal(
     twilioImages: TwilioMedia[],
@@ -158,33 +165,35 @@ export async function copyTwilioMediaLocal(
         originalAudioUrl: null,
     };
 
-    // In local dev, just use the original URLs
-    // They'll work for testing but may expire
     if (twilioImages.length > 0) {
         const lastImage = twilioImages[twilioImages.length - 1];
         result.originalImageUrl = lastImage.url;
-        result.imageUrl = lastImage.url; // Use original in local dev
+        result.imageUrl = lastImage.url;
     }
 
     if (twilioAudio.length > 0) {
         const lastAudio = twilioAudio[twilioAudio.length - 1];
         result.originalAudioUrl = lastAudio.url;
-        result.audioUrl = lastAudio.url; // Use original in local dev
+        result.audioUrl = lastAudio.url;
     }
 
     return result;
 }
 
 /**
- * Copy media based on environment
+ * Copy media based on DEPLOY_MODE
+ * - 'local': Use raw Twilio URLs (no copy)
+ * - 'remote' or 'production': Copy to Supabase Storage
  */
 export async function copyTwilioMedia(
     twilioImages: TwilioMedia[],
     twilioAudio: TwilioMedia[],
     messageId: string
 ): Promise<MediaUploadResult> {
-    if (process.env.NODE_ENV === 'production') {
-        return copyTwilioMediaToS3(twilioImages, twilioAudio, messageId);
+    const mode = process.env.DEPLOY_MODE || 'local';
+
+    if (mode === 'remote' || mode === 'production') {
+        return copyTwilioMediaToStorage(twilioImages, twilioAudio, messageId);
     }
     return copyTwilioMediaLocal(twilioImages, twilioAudio, messageId);
 }

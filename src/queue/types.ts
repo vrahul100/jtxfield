@@ -22,32 +22,25 @@ export interface NormalizedMessage {
 // Queue Message Types
 // ============================================================================
 
-export interface QueueMessage {
+export interface QueueMessage extends EnqueuePayload {
     messageId: string;
-    userId: number;
-    companyId: number;
-    domain: string;  // 'construction' | 'logistics' | etc.
-    source: MessageSource;  // 'sms' | 'whatsapp'
-    fromPhone: string;
-    textBody: string;
-    // S3 URLs (permanent storage)
-    imageUrl: string | null;
-    audioUrl: string | null;
-    // Original Twilio URLs (for reference, may expire)
-    originalImageUrl: string | null;
-    originalAudioUrl: string | null;
     timestamp: string;
     retryCount: number;
+}
+
+export interface BucketMessage {
+    bucketId: number;
+    messageId: string; // Twilio MessageSid
+    timestamp: string;
 }
 
 export interface EnqueuePayload {
     userId: number;
     companyId: number;
     domain: string;
-    source: MessageSource;  // 'sms' | 'whatsapp'
+    source: MessageSource;
     fromPhone: string;
     textBody: string;
-    // S3 URLs (after copying from Twilio)
     imageUrl: string | null;
     audioUrl: string | null;
 }
@@ -57,24 +50,11 @@ export interface EnqueuePayload {
 // ============================================================================
 
 export interface Queue {
-    /**
-     * Add a message to the queue
-     */
     enqueue(payload: EnqueuePayload): Promise<string>;
-
-    /**
-     * Retrieve the next message from the queue (for local worker)
-     */
+    enqueueBucket(payload: BucketMessage): Promise<string>;
     dequeue(): Promise<QueueMessage | null>;
-
-    /**
-     * Acknowledge successful processing (removes from queue)
-     */
+    dequeueBucket(): Promise<BucketMessage | null>;
     acknowledge(messageId: string): Promise<void>;
-
-    /**
-     * Mark message as failed (for retry or dead-letter)
-     */
     fail(messageId: string, error: Error): Promise<void>;
 }
 

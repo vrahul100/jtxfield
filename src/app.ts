@@ -28,7 +28,7 @@ export const createApp = (sql: Sql) => {
 
     // 2. AUTH API (public)
     app.post('/api/auth/login', (c) => login(c, sql))
-    app.post('/api/auth/logout', (c) => logout(c))
+    app.post('/api/auth/logout', (c) => logout(c, sql))
     app.get('/api/auth/session', (c) => checkSession(c, sql))
 
     app.get('/api/worklog', requireOM(sql), (c) => getWorklog(c, sql))

@@ -10,44 +10,42 @@ interface Session {
     expiresAt: number;
 }
 
-const sessions = new Map<string, Session>();
 const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 hours
 
 /**
- * Generate a random session ID
+ * Create a new session for a user in the database
  */
-function generateSessionId(): string {
-    return crypto.randomUUID();
-}
-
-/**
- * Create a new session for a user
- */
-export function createSession(userId: number): string {
-    const sessionId = generateSessionId();
+export async function createSession(sql: Sql, userId: number): Promise<string> {
     const expiresAt = Date.now() + SESSION_DURATION;
 
-    sessions.set(sessionId, { userId, expiresAt });
+    const [session] = await sql`
+        INSERT INTO sessions (user_id, expires_at)
+        VALUES (${userId}, ${expiresAt})
+        RETURNING id
+    `;
 
-    // Clean up expired sessions (prevent memory leak)
-    cleanupExpiredSessions();
-
-    return sessionId;
+    return session.id;
 }
 
 /**
- * Get session by ID
+ * Get session by ID from the database
  */
-export function getSession(sessionId: string): Session | null {
-    const session = sessions.get(sessionId);
+export async function getSession(sql: Sql, sessionId: string): Promise<Session | null> {
+    const sessions = await sql`
+        SELECT id, user_id as "userId", expires_at as "expiresAt"
+        FROM sessions
+        WHERE id = ${sessionId}
+    `;
 
-    if (!session) {
+    if (sessions.length === 0) {
         return null;
     }
 
+    const session = sessions[0] as Session;
+
     // Check if expired
     if (Date.now() > session.expiresAt) {
-        sessions.delete(sessionId);
+        await sql`DELETE FROM sessions WHERE id = ${sessionId}`;
         return null;
     }
 
@@ -55,22 +53,18 @@ export function getSession(sessionId: string): Session | null {
 }
 
 /**
- * Delete a session
+ * Delete a session from the database
  */
-export function deleteSession(sessionId: string): void {
-    sessions.delete(sessionId);
+export async function deleteSession(sql: Sql, sessionId: string): Promise<void> {
+    await sql`DELETE FROM sessions WHERE id = ${sessionId}`;
 }
 
 /**
- * Clean up expired sessions
+ * Clean up expired sessions in the database
  */
-function cleanupExpiredSessions(): void {
+export async function cleanupExpiredSessions(sql: Sql): Promise<void> {
     const now = Date.now();
-    for (const [sessionId, session] of sessions.entries()) {
-        if (now > session.expiresAt) {
-            sessions.delete(sessionId);
-        }
-    }
+    await sql`DELETE FROM sessions WHERE expires_at < ${now}`;
 }
 
 /**
@@ -85,7 +79,7 @@ export function requireAuth(sql: Sql) {
             return c.json({ error: 'Unauthorized' }, 401);
         }
 
-        const session = getSession(sessionId);
+        const session = await getSession(sql, sessionId);
         if (!session) {
             return c.json({ error: 'Session expired' }, 401);
         }
@@ -93,7 +87,7 @@ export function requireAuth(sql: Sql) {
         // Get user from database
         const user = await getUserById(sql, session.userId);
         if (!user) {
-            deleteSession(sessionId);
+            await deleteSession(sql, sessionId);
             deleteCookie(c, 'sessionId');
             return c.json({ error: 'User not found' }, 401);
         }
@@ -116,14 +110,14 @@ export function requireSU(sql: Sql) {
             return c.json({ error: 'Unauthorized' }, 401);
         }
 
-        const session = getSession(sessionId);
+        const session = await getSession(sql, sessionId);
         if (!session) {
             return c.json({ error: 'Session expired' }, 401);
         }
 
         const user = await getUserById(sql, session.userId);
         if (!user) {
-            deleteSession(sessionId);
+            await deleteSession(sql, sessionId);
             deleteCookie(c, 'sessionId');
             return c.json({ error: 'User not found' }, 401);
         }
@@ -148,14 +142,14 @@ export function requireOM(sql: Sql) {
             return c.json({ error: 'Unauthorized' }, 401);
         }
 
-        const session = getSession(sessionId);
+        const session = await getSession(sql, sessionId);
         if (!session) {
             return c.json({ error: 'Session expired' }, 401);
         }
 
         const user = await getUserById(sql, session.userId);
         if (!user) {
-            deleteSession(sessionId);
+            await deleteSession(sql, sessionId);
             deleteCookie(c, 'sessionId');
             return c.json({ error: 'User not found' }, 401);
         }

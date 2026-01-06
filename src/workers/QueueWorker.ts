@@ -3,6 +3,7 @@ import { Queue, QueueMessage } from '../queue/types.js';
 import { getLocalQueue } from '../queue/LocalQueue.js';
 import { getProcessorRegistry } from '../processors/ProcessorRegistry.js';
 import { sendTwilioMessage, formatReplyMessage } from '../services/twilio.js';
+import { processBucketMessage } from '../services/processingService.js';
 
 /**
  * Background worker that processes messages from the local queue.
@@ -48,10 +49,16 @@ export class QueueWorker {
     private async poll(): Promise<void> {
         while (this.isRunning) {
             try {
+                // 1. Check for legacy QueueMessage
                 const message = await this.queue.dequeue();
-
                 if (message) {
                     await this.processMessage(message);
+                }
+
+                // 2. Check for new BucketMessage
+                const bucketMsg = await this.queue.dequeueBucket();
+                if (bucketMsg) {
+                    await this.processBucketMessage(bucketMsg);
                 }
             } catch (error) {
                 console.error('[QueueWorker] Poll error:', error);
@@ -59,6 +66,17 @@ export class QueueWorker {
 
             // Wait before next poll
             await this.sleep(this.pollIntervalMs);
+        }
+    }
+
+    private async processBucketMessage(msg: any): Promise<void> {
+        console.log(`[QueueWorker] Processing bucket #${msg.bucketId}`);
+        try {
+            await processBucketMessage(this.sql, msg.bucketId, msg.messageId);
+            await this.queue.acknowledge(msg.messageId);
+        } catch (error) {
+            console.error(`[QueueWorker] ❌ Failed to process bucket #${msg.bucketId}:`, error);
+            await this.queue.fail(msg.messageId, error as Error);
         }
     }
 
