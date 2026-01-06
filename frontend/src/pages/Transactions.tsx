@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EditModal, EditField } from '../components/EditModal';
-import { Pencil, ChevronLeft, ChevronRight, ChevronDown, ChevronUp } from 'lucide-react';
+import { Pencil, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
 
 interface Transaction {
     id: number;

@@ -49,7 +49,6 @@ export function Tickets() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [expandedBucketIds, setExpandedBucketIds] = useState<number[]>([]);
     const [editingBucket, setEditingBucket] = useState<Bucket | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('all');
@@ -149,27 +148,7 @@ export function Tickets() {
         return 'text-red-600';
     };
 
-    const handleApprove = async (bucketId: number) => {
-        if (!confirm('Approve this work item?')) return;
 
-        setActionLoading(bucketId);
-        try {
-            const response = await fetch(`/api/worklog/${bucketId}/approve`, {
-                method: 'POST',
-                credentials: 'include',
-            });
-            if (response.ok) {
-                fetchBuckets();
-            } else {
-                alert('Failed to approve');
-            }
-        } catch (error) {
-            console.error('Failed to approve:', error);
-            alert('Failed to approve');
-        } finally {
-            setActionLoading(null);
-        }
-    };
 
     const toggleExpand = (id: number) => {
         setExpandedBucketIds(prev =>

@@ -19,6 +19,17 @@ import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 export const createApp = (sql: Sql) => {
     const app = new Hono()
 
+    // Global Request Logger
+    app.use('*', async (c, next) => {
+        const start = Date.now();
+        console.log(`[Request] Incoming: ${c.req.method} ${c.req.url}`);
+        await next();
+        console.log(`[Request] Completed: ${c.req.method} ${c.req.url} in ${Date.now() - start}ms`);
+    })
+
+    // Health Check (No DB)
+    app.get('/api/health', (c) => c.json({ status: 'ok', timestamp: new Date().toISOString() }))
+
     // 0. STATIC FILES (for test fixtures)
     // Only serve in development/test and if directory exists
     if (process.env.NODE_ENV !== 'production') {

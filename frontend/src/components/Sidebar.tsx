@@ -4,7 +4,6 @@ import {
     ClipboardList,
     Users,
     FolderKanban,
-    DollarSign,
     Receipt,
     Building2,
     Shield,

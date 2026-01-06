@@ -2,7 +2,9 @@
   "name": "jtxfield",
   "type": "module",
   "scripts": {
-    "build": "esbuild --bundle --outfile=./dist/index.js --platform=node --target=node20 ./src/index.ts",
+    "build:api": "esbuild --bundle --outfile=./dist/index.js --platform=node --target=node20 ./src/index.ts",
+    "build:ui": "npm install --prefix frontend && npm run build --prefix frontend",
+    "build": "npm run build:api && npm run build:ui",
     "dev": "tsx watch src/index.ts",
     "test": "vitest run",
     "test:watch": "vitest",

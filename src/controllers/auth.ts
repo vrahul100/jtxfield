@@ -11,7 +11,30 @@ import { getUserById } from '../services/auth.js';
  */
 export async function login(c: Context, sql: Sql) {
     try {
-        const body = await c.req.json();
+        console.log(`[Auth] Login request. Headers:`, c.req.header());
+        console.log(`[Auth] Content-Length: ${c.req.header('content-length')}`);
+        console.log(`[Auth] BodyUsed: ${c.req.raw.bodyUsed}`);
+
+        // Deep inspection of Environment and Request
+        console.log(`[Auth] c.env keys: ${Object.keys(c.env)}`);
+
+        // Check if body is pre-parsed in raw request (common in Vercel)
+        // Check if body is pre-parsed in raw request (common in Vercel)
+        let body;
+        const incoming = (c.env as any).incoming;
+
+        // Vercel (by default) parses the body and attaches it to the Node request.
+        if (incoming && incoming.body && typeof incoming.body === 'object') {
+            console.log('[Auth] Found pre-parsed body in c.env.incoming');
+            body = incoming.body;
+        } else {
+            console.log('[Auth] No pre-parsed body. Parsing stream...');
+            // Race condition to detect hang
+            const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('JSON Read Timeout')), 4000));
+            const parsePromise = c.req.json();
+            body = await Promise.race([parsePromise, timeout]) as any;
+        }
+
         const { email, password } = body;
 
         if (!email || !password) {
