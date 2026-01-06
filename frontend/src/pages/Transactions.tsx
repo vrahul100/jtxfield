@@ -335,7 +335,30 @@ export function Transactions() {
                                                         </div>
                                                         <div>
                                                             <strong className="ttx-title">Evidence:</strong>
-                                                            <a className="text-xs underline mt-1 text-gray-600" href={txn.evidence || ''}>Link </a>
+                                                            <div className="flex flex-col gap-1 mt-1">
+                                                                {(() => {
+                                                                    if (!txn.evidence) return <span className="text-xs text-gray-500">N/A</span>;
+                                                                    try {
+                                                                        const links = JSON.parse(txn.evidence);
+                                                                        if (Array.isArray(links)) {
+                                                                            return links.map((link, i) => (
+                                                                                <a
+                                                                                    key={i}
+                                                                                    href={link}
+                                                                                    target="_blank"
+                                                                                    rel="noopener noreferrer"
+                                                                                    className="text-xs underline text-blue-600 hover:text-blue-800 break-all"
+                                                                                >
+                                                                                    {link.split('/').pop() || `Evidence ${i + 1}`}
+                                                                                </a>
+                                                                            ));
+                                                                        }
+                                                                        return <a href={txn.evidence} target="_blank" rel="noopener noreferrer" className="text-xs underline text-blue-600">Link</a>;
+                                                                    } catch {
+                                                                        return <a href={txn.evidence} target="_blank" rel="noopener noreferrer" className="text-xs underline text-blue-600">Link</a>;
+                                                                    }
+                                                                })()}
+                                                            </div>
                                                         </div>
                                                         <div>
                                                             <strong className="ttx-title">Status:</strong>
