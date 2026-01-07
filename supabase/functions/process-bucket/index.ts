@@ -336,7 +336,38 @@ Deno.serve(async (req: Request) => {
         const member = bucket.members // Joined data
         const lang = (member && member.language_preference) ? member.language_preference : 'en'
 
+        // CONTEXT: Check for recent project (4-hour window)
+        // This restores the "sticky project" logic from the original webhook
+        let recentProject: { id: number, name: string } | null = null
+        if (member && member.last_confirmed_project_id && member.project_confirmed_at) {
+            const confirmedAt = new Date(member.project_confirmed_at)
+            const hoursSince = (Date.now() - confirmedAt.getTime()) / (1000 * 60 * 60)
+
+            if (hoursSince < 4) {
+                // Fetch project name for context
+                const { data: pData } = await supabase
+                    .from('projects')
+                    .select('name')
+                    .eq('id', member.last_confirmed_project_id)
+                    .single()
+
+                if (pData) {
+                    recentProject = { id: member.last_confirmed_project_id, name: pData.name }
+                    console.log(`[ProcessBucket] 🕒 Found recent project context: "${pData.name}" (${hoursSince.toFixed(1)}h ago)`)
+                }
+            }
+        }
+
         if (extractedData) {
+            // APPLY CONTEXT: If AI didn't find a project, use the recent one
+            if ((!extractedData.projectName || !extractedData.isProjectClear) && recentProject) {
+                console.log(`[ProcessBucket] 📎 Auto-assigning recent project: ${recentProject.name}`)
+                extractedData.projectName = recentProject.name
+                extractedData.isProjectClear = true
+                // Note: We don't have the project_id in extractedData, but we set it in the bucket below via relation
+                bucket.project_id = recentProject.id
+            }
+
             // A. Consistency Check
             if (!extractedData.isConsistent && extractedData.inconsistencyReason) {
                 if (currentAttempts >= MAX_ATTEMPTS) {
@@ -355,6 +386,15 @@ Deno.serve(async (req: Request) => {
                 const missingFields: string[] = []
                 if (!extractedData.hoursWorked && extractedData.intent === 'log') missingFields.push('hoursWorked')
                 if (!extractedData.workType && extractedData.intent === 'log') missingFields.push('workType')
+
+                // Enforce Project Logic:
+                // If we don't have a specific project name from AI, 
+                // AND we don't have a recent 4-hour context project,
+                // AND the bucket doesn't already have a project_id assigned...
+                // THEN we must ask the user.
+                if (!extractedData.projectName && !recentProject && !bucket.project_id && extractedData.intent === 'log') {
+                    missingFields.push('project')
+                }
 
                 if (missingFields.length > 0) {
                     if (currentAttempts >= MAX_ATTEMPTS) {
@@ -412,7 +452,9 @@ Deno.serve(async (req: Request) => {
                     status: 'open',
                     validation_attempts: currentAttempts + 1,
                     validation_errors: validationErrors.length > 0 ? JSON.stringify(validationErrors) : null,
-                    ai_response: replyText // Save the question text, not the JSON object!
+                    ai_response: replyText, // Save the question text, not the JSON object!
+                    // Persist the auto-assigned project if we found one
+                    project_id: bucket.project_id
                 })
                 .eq('id', bucketId)
 
@@ -435,6 +477,7 @@ Deno.serve(async (req: Request) => {
             image_urls: JSON.stringify(copiedImages.length > 0 ? copiedImages : imageUrls),
             audio_urls: JSON.stringify(copiedAudio.length > 0 ? copiedAudio : audioUrls),
             transcripts: JSON.stringify(transcripts),
+            project_id: bucket.project_id // Save the possibly auto-assigned project ID
         }
 
         if (extractedData) {
@@ -454,6 +497,23 @@ Deno.serve(async (req: Request) => {
         if (shouldCreateTransaction && extractedData) {
             console.log(`[ProcessBucket] 📝 Creating transaction`)
 
+            // Resolve Project ID for Transaction
+            // 1. bucket.project_id (if we auto-assigned it or it was already there)
+            // 2. Lookup by name if AI gave us a name but we don't have ID yet
+            let finalProjectId = bucket.project_id
+
+            if (!finalProjectId && extractedData.projectName) {
+                // Try to resolve name -> ID (simple lookup)
+                const { data: pLookup } = await supabase
+                    .from('projects')
+                    .select('id')
+                    .ilike('name', extractedData.projectName)
+                    .eq('node_id', bucket.node_id)
+                    .maybeSingle()
+
+                if (pLookup) finalProjectId = pLookup.id
+            }
+
             // Build evidence JSON
             const evidenceItems = [
                 ...(copiedImages.length > 0 ? copiedImages : imageUrls),
@@ -464,7 +524,7 @@ Deno.serve(async (req: Request) => {
                 bucket_id: bucketId,
                 company_id: bucket.node_id,
                 user_id: bucket.member_id,
-                project_id: bucket.project_id,
+                project_id: finalProjectId,
                 job: extractedData.projectName,
                 time: extractedData.hoursWorked || null,
                 labor: bucket.raw_text,
@@ -482,6 +542,18 @@ Deno.serve(async (req: Request) => {
                 console.error(`[ProcessBucket] Failed to create transaction:`, txnError)
             } else {
                 console.log(`[ProcessBucket] ✅ Transaction created`)
+
+                // UPDATE MEMBER CONTEXT (The 4-hour rule keeper)
+                if (finalProjectId) {
+                    await supabase
+                        .from('members')
+                        .update({
+                            last_confirmed_project_id: finalProjectId,
+                            project_confirmed_at: new Date().toISOString()
+                        })
+                        .eq('id', bucket.member_id)
+                    console.log(`[ProcessBucket] 📌 Global context updated for member ${bucket.member_id} -> Project ${finalProjectId}`)
+                }
 
                 // RICH SUCCESS MESSAGE
                 // "✅ Ticket #123 submitted!"
@@ -637,7 +709,7 @@ function t(lang: string, key: MessageKey, params?: Record<string, string | numbe
 const FIELD_QUESTIONS: Record<string, MessageKey> = {
     workType: 'work_type_question',
     hoursWorked: 'hours_question',
-    // Fallbacks if we needed them, but we use keys now
+    project: 'which_project',
 }
 
 async function sendTwilioMessage(to: string, body: string, source: 'sms' | 'whatsapp'): Promise<void> {

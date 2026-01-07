@@ -2,7 +2,7 @@
 
 ## Overview
 
-The AIField application uses an **intent-driven conversational flow** to handle incoming WhatsApp/SMS messages from construction workers. Instead of a rigid linear flow, each message is classified by intent, allowing for natural, out-of-sequence responses.
+The JField application uses an **intent-driven conversational flow** to handle incoming WhatsApp/SMS messages from construction workers. Instead of a rigid linear flow, each message is classified by intent, allowing for natural, out-of-sequence responses.
 
 ## Architecture
 
