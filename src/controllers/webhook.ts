@@ -268,7 +268,7 @@ Your message has been saved. An admin will add you to your project soon!`;
   // Only for new buckets or if we are appending to one that was just created
   try {
     const statusMsg = "🤖 Received! Processing your work...";
-    await sendTwilioMessage(normalized.sender, statusMsg, normalized.source as any);
+    // await sendTwilioMessage(normalized.sender, statusMsg, normalized.source as any);
   } catch (e) {
     console.error('[WEBHOOK] Failed to send receipt:', e);
   }

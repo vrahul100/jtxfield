@@ -314,7 +314,7 @@ export function Transactions() {
                                                                 <div className="flex items-center gap-2 mb-1">
                                                                     <span className="text-black font-semibold uppercase text-xs">✨ AI Summary:</span>
                                                                 </div>
-                                                                <p className="text-gray-700 italic">{txn.ai_summary}</p>
+                                                                <p className="text-gray-700 italic whitespace-normal break-words">{txn.ai_summary}</p>
                                                             </div>
                                                         )}
                                                         <div>
@@ -327,11 +327,11 @@ export function Transactions() {
                                                         </div>
                                                         <div>
                                                             <strong className="ttx-title">Labor Details:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap">{txn.labor || 'N/A'}</p>
+                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap break-words overflow-hidden">{txn.labor || 'N/A'}</p>
                                                         </div>
                                                         <div>
                                                             <strong className="ttx-title">Materials:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap">{txn.material || 'N/A'}</p>
+                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap break-words overflow-hidden">{txn.material || 'N/A'}</p>
                                                         </div>
                                                         <div>
                                                             <strong className="ttx-title">Evidence:</strong>

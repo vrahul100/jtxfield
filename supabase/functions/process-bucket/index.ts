@@ -322,8 +322,9 @@ Deno.serve(async (req: Request) => {
             console.log(`[ProcessBucket] Extraction result:`, JSON.stringify(extractedData, null, 2))
         }
 
+
         // ============================================================================
-        // 6. VALIDATION & REPLY LOGIC (Migrated from Webhook)
+        // 6. VALIDATION & REPLY LOGIC (Rich & Localized)
         // ============================================================================
         const MAX_ATTEMPTS = 2
         let validationErrors: string[] = []
@@ -331,22 +332,26 @@ Deno.serve(async (req: Request) => {
         let shouldCreateTransaction = false
         const currentAttempts = bucket.validation_attempts || 0
 
+        // Determine Language
+        const member = bucket.members // Joined data
+        const lang = (member && member.language_preference) ? member.language_preference : 'en'
+
         if (extractedData) {
             // A. Consistency Check
             if (!extractedData.isConsistent && extractedData.inconsistencyReason) {
                 if (currentAttempts >= MAX_ATTEMPTS) {
-                    // Too many attempts, just file it pending review
-                    validationErrors.push('Inconsistency persists after retries')
-                    questions.push('📋 Filing for review.')
+                    validationErrors.push('Inconsistency persists')
+                    questions.push(t(lang, 'ticket_review', { id: bucketId }))
                 } else {
-                    // Ask user
-                    questions.push(`⚠️ The details don't look right. ${extractedData.inconsistencyReason}`)
+                    // "Ticket #123 Report incomplete. The details don't look right..."
+                    const intro = t(lang, 'ticket_incomplete', { id: bucketId })
+                    const reason = extractedData.inconsistencyReason // This comes from LLM, might be English. 
+                    // Ideally we'd ask LLM to reply in user's language, but for now we append.
+                    questions.push(`${intro}\n\n⚠️ ${t(lang, 'inconsistency_desc')}: ${reason}`)
                 }
             }
             // B. Schema Validation
             else {
-                // Check required fields (manually since we don't have Zod in Deno environment easily without imports)
-                // Required: hoursWorked, workType (for Construction)
                 const missingFields: string[] = []
                 if (!extractedData.hoursWorked && extractedData.intent === 'log') missingFields.push('hoursWorked')
                 if (!extractedData.workType && extractedData.intent === 'log') missingFields.push('workType')
@@ -354,20 +359,35 @@ Deno.serve(async (req: Request) => {
                 if (missingFields.length > 0) {
                     if (currentAttempts >= MAX_ATTEMPTS) {
                         validationErrors.push(`Missing fields: ${missingFields.join(', ')}`)
-                        questions.push('📋 Missing details. Filing for review.')
+                        questions.push(t(lang, 'ticket_review', { id: bucketId }))
                     } else {
-                        // Ask specific questions
-                        if (missingFields.includes('hoursWorked')) questions.push(FIELD_QUESTIONS['hoursWorked'])
-                        if (missingFields.includes('workType')) questions.push(FIELD_QUESTIONS['workType'])
+                        // Build concise list
+                        // "Ticket #123 incomplete. Missing info: - hours"
+                        let msg = t(lang, 'ticket_incomplete', { id: bucketId })
+                        msg += `\n\n${t(lang, 'missing_info')}`
+
+                        // Add bullets
+                        for (const field of missingFields) {
+                            msg += `\n• Missing ${field}`
+                        }
+
+                        // Add the specific question for the first missing field
+                        const firstMissing = missingFields[0]
+                        if (FIELD_QUESTIONS[firstMissing]) {
+                            msg += `\n\n${t(lang, FIELD_QUESTIONS[firstMissing])}`
+                        }
+
+                        questions.push(msg)
                     }
                 } else {
                     // C. Clarity Check
+                    // Only check clarity if standard fields are present
                     if (extractedData.clarityScore < 0.6) {
                         if (currentAttempts >= MAX_ATTEMPTS) {
                             validationErrors.push('Low clarity score')
-                            questions.push('📋 Unclear details. Filing for review.')
+                            questions.push(t(lang, 'ticket_review', { id: bucketId }))
                         } else {
-                            questions.push('🤔 Could you provide a bit more detail?')
+                            questions.push(`${t(lang, 'ticket_incomplete', { id: bucketId })}\n\n${t(lang, 'clarity_question')}`)
                         }
                     } else {
                         // ALL GOOD!
@@ -381,18 +401,18 @@ Deno.serve(async (req: Request) => {
         if (questions.length > 0) {
             console.log(`[ProcessBucket] 🗣️ Sending validation questions:`, questions)
 
-            // Combine questions into one message
-            const replyText = questions.join('\n\n')
+            // Send the first question block (usually contains the full status)
+            const replyText = questions[0]
             await sendTwilioMessage(bucket.from_phone, replyText, bucket.source)
 
             // Increment attempts
             await supabase
                 .from('buckets')
                 .update({
-                    status: 'open', // Keep open for reply (or pending_review if given up)
+                    status: 'open',
                     validation_attempts: currentAttempts + 1,
                     validation_errors: validationErrors.length > 0 ? JSON.stringify(validationErrors) : null,
-                    ai_response: extractedData // Save partial extraction
+                    ai_response: replyText // Save the question text, not the JSON object!
                 })
                 .eq('id', bucketId)
 
@@ -463,8 +483,19 @@ Deno.serve(async (req: Request) => {
             } else {
                 console.log(`[ProcessBucket] ✅ Transaction created`)
 
-                // Send Success Message
-                const successMsg = `✅ Ticket logged: ${extractedData.summary}\n• Hours: ${extractedData.hoursWorked}\n• Workers: ${extractedData.workersCount}`
+                // RICH SUCCESS MESSAGE
+                // "✅ Ticket #123 submitted!"
+                // "Wiring the panel..."
+                // "Logged to: Palana St"
+                let successMsg = t(lang, 'ticket_submitted', { id: bucketId })
+                successMsg += `\n\n"${extractedData.summary}"`
+
+                if (extractedData.projectName) {
+                    successMsg += `\n\n${t(lang, 'logged_to', { project: extractedData.projectName })}`
+                } else {
+                    successMsg += `\n\n${t(lang, 'logged_to', { project: 'Inbox' })}`
+                }
+
                 await sendTwilioMessage(bucket.from_phone, successMsg, bucket.source)
             }
         }
@@ -523,16 +554,90 @@ function getExtension(contentType: string): string {
     return map[contentType] || ''
 }
 
+
 // ============================================================================
-// Logic Helpers
+// I18n & Logic Helpers
 // ============================================================================
 
-const FIELD_QUESTIONS: Record<string, string> = {
-    workType: 'What type of work did you do? (electrical, plumbing, hvac, carpentry, etc.)',
-    hoursWorked: 'How many hours did this take?',
-    workersCount: 'How many workers were involved?',
-    materialsUsed: 'What materials did you use?',
-    location: 'Where specifically was this work done? (e.g., "floor 3", "room 5B")',
+type MessageKey =
+    | 'ticket_opened'
+    | 'ticket_submitted'
+    | 'ticket_review'
+    | 'ticket_received'
+    | 'send_photos'
+    | 'send_details'
+    | 'which_project'
+    | 'reply_number'
+    | 'logged_to'
+    | 'admin_followup'
+    | 'max_attachments'
+    | 'invalid_selection'
+    | 'ticket_incomplete'
+    | 'missing_info'
+    | 'hours_question'
+    | 'work_type_question'
+    | 'clarity_question'
+    | 'inconsistency_desc';
+
+const translations: Record<string, Record<MessageKey, string>> = {
+    en: {
+        ticket_opened: '📋 Ticket #{id} opened.',
+        ticket_submitted: '✅ Ticket #{id} submitted!',
+        ticket_review: '📋 Ticket #{id} sent for review.',
+        ticket_received: '📥 Ticket #{id}: Received!',
+        send_photos: 'Send photos and details to complete it.',
+        send_details: 'Send more details to complete.',
+        which_project: 'Which project is this for?',
+        reply_number: 'Reply with the number.',
+        logged_to: 'Logged to: {project}',
+        admin_followup: 'An admin will follow up.',
+        max_attachments: '⚠️ Ticket #{id} has max 5 attachments. Send text details or wait for this ticket to close.',
+        invalid_selection: 'Invalid selection. Reply with a number between 1 and {max}.',
+        ticket_incomplete: '⚠️ Ticket #{id}: Report incomplete.',
+        missing_info: 'Missing information:',
+        hours_question: 'How many hours did this take?',
+        work_type_question: 'What type of work did you do? (electrical, plumbing, etc.)',
+        clarity_question: 'Could you provide a bit more detail?',
+        inconsistency_desc: 'The details don\'t look right.',
+    },
+    es: {
+        ticket_opened: '📋 Ticket #{id} abierto.',
+        ticket_submitted: '✅ ¡Ticket #{id} enviado!',
+        ticket_review: '📋 Ticket #{id} enviado para revisión.',
+        ticket_received: '📥 Ticket #{id}: ¡Recibido!',
+        send_photos: 'Envía fotos y detalles para completarlo.',
+        send_details: 'Envía más detalles para completar.',
+        which_project: '¿Para qué proyecto es esto?',
+        reply_number: 'Responde con el número.',
+        logged_to: 'Registrado en: {project}',
+        admin_followup: 'Un administrador dará seguimiento.',
+        max_attachments: '⚠️ El ticket #{id} tiene máximo 5 archivos. Envía detalles en texto o espera a que se cierre.',
+        invalid_selection: 'Selección inválida. Responde con un número entre 1 y {max}.',
+        ticket_incomplete: '⚠️ Ticket #{id}: Reporte incompleto.',
+        missing_info: 'Falta información:',
+        hours_question: '¿Cuántas horas tomó esto?',
+        work_type_question: '¿Qué tipo de trabajo realizaste? (eléctrico, plomería, etc.)',
+        clarity_question: '¿Podrías dar un poco más de detalle?',
+        inconsistency_desc: 'Los detalles no coinciden.',
+    },
+};
+
+function t(lang: string, key: MessageKey, params?: Record<string, string | number>): string {
+    const language = lang === 'es' ? 'es' : 'en';
+    let message = translations[language][key] || translations['en'][key] || key;
+
+    if (params) {
+        for (const [k, v] of Object.entries(params)) {
+            message = message.replace(`{${k}}`, String(v));
+        }
+    }
+    return message;
+}
+
+const FIELD_QUESTIONS: Record<string, MessageKey> = {
+    workType: 'work_type_question',
+    hoursWorked: 'hours_question',
+    // Fallbacks if we needed them, but we use keys now
 }
 
 async function sendTwilioMessage(to: string, body: string, source: 'sms' | 'whatsapp'): Promise<void> {
