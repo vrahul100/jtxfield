@@ -2,6 +2,7 @@ import { Context } from 'hono';
 import { Sql } from 'postgres';
 import { User } from '../services/auth.js';
 import { sendTwilioMessage } from '../services/twilio.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * Normalize phone number to E.164 format
@@ -172,7 +173,10 @@ export async function approveMember(c: Context, sql: Sql) {
 export async function inviteMember(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
-        const body = await c.req.json();
+
+        // VERCEL ADAPTER FIX: Check if body is pre-parsed
+        // VERCEL ADAPTER FIX: Use helper to handle pre-parsed body
+        const body = await getRequestBody(c);
         const { phoneNumber, fullName } = body;
 
         if (!phoneNumber) {
@@ -274,7 +278,10 @@ export async function updateMember(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const memberId = parseInt(c.req.param('id'));
-        const body = await c.req.json();
+
+        // VERCEL ADAPTER FIX: Check if body is pre-parsed
+        // VERCEL ADAPTER FIX: Use helper to handle pre-parsed body
+        const body = await getRequestBody(c);
 
         // Convert undefined to null for postgres.js compatibility
         const fullName = body.fullName ?? null;

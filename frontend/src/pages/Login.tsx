@@ -87,10 +87,6 @@ export function Login() {
                         {loading ? 'Signing in...' : 'Sign In'}
                     </button>
                 </form>
-
-                <div className="mt-6 text-center text-sm text-gray-600">
-                    <p>Default: admin@jtxfield.com / admin123</p>
-                </div>
             </div>
         </div>
     );

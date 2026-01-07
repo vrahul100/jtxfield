@@ -305,6 +305,7 @@ Deno.serve(async (req: Request) => {
             console.log(`[ProcessBucket] Got ${transcripts.length} transcript(s)`)
         }
 
+
         // 5. AI EXTRACTION - Extract structured data from text/transcripts/images
         let extractedData: ExtractionResult | null = null
 
@@ -321,9 +322,96 @@ Deno.serve(async (req: Request) => {
             console.log(`[ProcessBucket] Extraction result:`, JSON.stringify(extractedData, null, 2))
         }
 
-        // 6. UPDATE BUCKET with processed data
+        // ============================================================================
+        // 6. VALIDATION & REPLY LOGIC (Migrated from Webhook)
+        // ============================================================================
+        const MAX_ATTEMPTS = 2
+        let validationErrors: string[] = []
+        let questions: string[] = []
+        let shouldCreateTransaction = false
+        const currentAttempts = bucket.validation_attempts || 0
+
+        if (extractedData) {
+            // A. Consistency Check
+            if (!extractedData.isConsistent && extractedData.inconsistencyReason) {
+                if (currentAttempts >= MAX_ATTEMPTS) {
+                    // Too many attempts, just file it pending review
+                    validationErrors.push('Inconsistency persists after retries')
+                    questions.push('📋 Filing for review.')
+                } else {
+                    // Ask user
+                    questions.push(`⚠️ The details don't look right. ${extractedData.inconsistencyReason}`)
+                }
+            }
+            // B. Schema Validation
+            else {
+                // Check required fields (manually since we don't have Zod in Deno environment easily without imports)
+                // Required: hoursWorked, workType (for Construction)
+                const missingFields: string[] = []
+                if (!extractedData.hoursWorked && extractedData.intent === 'log') missingFields.push('hoursWorked')
+                if (!extractedData.workType && extractedData.intent === 'log') missingFields.push('workType')
+
+                if (missingFields.length > 0) {
+                    if (currentAttempts >= MAX_ATTEMPTS) {
+                        validationErrors.push(`Missing fields: ${missingFields.join(', ')}`)
+                        questions.push('📋 Missing details. Filing for review.')
+                    } else {
+                        // Ask specific questions
+                        if (missingFields.includes('hoursWorked')) questions.push(FIELD_QUESTIONS['hoursWorked'])
+                        if (missingFields.includes('workType')) questions.push(FIELD_QUESTIONS['workType'])
+                    }
+                } else {
+                    // C. Clarity Check
+                    if (extractedData.clarityScore < 0.6) {
+                        if (currentAttempts >= MAX_ATTEMPTS) {
+                            validationErrors.push('Low clarity score')
+                            questions.push('📋 Unclear details. Filing for review.')
+                        } else {
+                            questions.push('🤔 Could you provide a bit more detail?')
+                        }
+                    } else {
+                        // ALL GOOD!
+                        shouldCreateTransaction = true
+                    }
+                }
+            }
+        }
+
+        // D. Send Reply if Questions Exist
+        if (questions.length > 0) {
+            console.log(`[ProcessBucket] 🗣️ Sending validation questions:`, questions)
+
+            // Combine questions into one message
+            const replyText = questions.join('\n\n')
+            await sendTwilioMessage(bucket.from_phone, replyText, bucket.source)
+
+            // Increment attempts
+            await supabase
+                .from('buckets')
+                .update({
+                    status: 'open', // Keep open for reply (or pending_review if given up)
+                    validation_attempts: currentAttempts + 1,
+                    validation_errors: validationErrors.length > 0 ? JSON.stringify(validationErrors) : null,
+                    ai_response: extractedData // Save partial extraction
+                })
+                .eq('id', bucketId)
+
+            // If we gave up, move to pending_review
+            if (currentAttempts >= MAX_ATTEMPTS) {
+                await supabase
+                    .from('buckets')
+                    .update({ status: 'pending_review' })
+                    .eq('id', bucketId)
+            }
+
+            return new Response(JSON.stringify({ success: true, action: 'asked_questions', questions }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+
+        // 7. UPDATE BUCKET & CREATE TRANSACTION (If Valid)
         const updateData: Record<string, unknown> = {
-            status: 'submitted',
+            status: shouldCreateTransaction ? 'submitted' : 'pending_review', // Default to pending_review if no logic matched
             image_urls: JSON.stringify(copiedImages.length > 0 ? copiedImages : imageUrls),
             audio_urls: JSON.stringify(copiedAudio.length > 0 ? copiedAudio : audioUrls),
             transcripts: JSON.stringify(transcripts),
@@ -343,8 +431,7 @@ Deno.serve(async (req: Request) => {
             .update(updateData)
             .eq('id', bucketId)
 
-        // 7. CREATE TRANSACTION
-        if (extractedData) {
+        if (shouldCreateTransaction && extractedData) {
             console.log(`[ProcessBucket] 📝 Creating transaction`)
 
             // Build evidence JSON
@@ -374,7 +461,11 @@ Deno.serve(async (req: Request) => {
             if (txnError) {
                 console.error(`[ProcessBucket] Failed to create transaction:`, txnError)
             } else {
-                console.log(`[ProcessBucket] ✅ Transaction created - hours: ${txnData.time}, materials: ${txnData.material}`)
+                console.log(`[ProcessBucket] ✅ Transaction created`)
+
+                // Send Success Message
+                const successMsg = `✅ Ticket logged: ${extractedData.summary}\n• Hours: ${extractedData.hoursWorked}\n• Workers: ${extractedData.workersCount}`
+                await sendTwilioMessage(bucket.from_phone, successMsg, bucket.source)
             }
         }
 
@@ -421,6 +512,7 @@ async function copyMediaToStorage(
     return data.publicUrl
 }
 
+
 function getExtension(contentType: string): string {
     const map: Record<string, string> = {
         'image/jpeg': '.jpg',
@@ -429,4 +521,62 @@ function getExtension(contentType: string): string {
         'audio/ogg': '.ogg',
     }
     return map[contentType] || ''
+}
+
+// ============================================================================
+// Logic Helpers
+// ============================================================================
+
+const FIELD_QUESTIONS: Record<string, string> = {
+    workType: 'What type of work did you do? (electrical, plumbing, hvac, carpentry, etc.)',
+    hoursWorked: 'How many hours did this take?',
+    workersCount: 'How many workers were involved?',
+    materialsUsed: 'What materials did you use?',
+    location: 'Where specifically was this work done? (e.g., "floor 3", "room 5B")',
+}
+
+async function sendTwilioMessage(to: string, body: string, source: 'sms' | 'whatsapp'): Promise<void> {
+    const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')
+    const authToken = Deno.env.get('TWILIO_AUTH_TOKEN')
+    const fromWhatsApp = Deno.env.get('TWILIO_FROM_WHATSAPP')
+    const fromSms = Deno.env.get('TWILIO_FROM_NUMBER')
+
+    if (!accountSid || !authToken) {
+        console.error('[Twilio] Missing credentials')
+        return
+    }
+
+    const from = source === 'whatsapp' ? fromWhatsApp : fromSms
+    const toNum = source === 'whatsapp' ? `whatsapp:${to}` : to
+
+    if (!from) {
+        console.error(`[Twilio] Missing FROM number for ${source}`)
+        return
+    }
+
+    const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
+
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Basic ' + btoa(`${accountSid}:${authToken}`),
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: new URLSearchParams({
+                To: toNum,
+                From: from,
+                Body: body
+            })
+        })
+
+        if (!resp.ok) {
+            const err = await resp.json()
+            console.error('[Twilio] Error sending message:', err)
+        } else {
+            console.log(`[Twilio] Sent message to ${to}`)
+        }
+    } catch (e) {
+        console.error('[Twilio] Fetch failed:', e)
+    }
 }

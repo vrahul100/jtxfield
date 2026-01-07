@@ -10,7 +10,7 @@ async function createSuperUser() {
 
     try {
         const email = process.env.SUPER_USER_EMAIL || 'admin@jtxfield.com';
-        const password = process.env.SUPER_USER_PASSWORD || 'admin123';
+        const password = process.env.SUPER_USER_PASSWORD || 'AduJitsu12#';
 
         const user = await createUser(sql, {
             email,

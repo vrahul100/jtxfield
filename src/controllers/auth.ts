@@ -4,6 +4,7 @@ import { Sql } from 'postgres';
 import { authenticateUser } from '../services/auth.js';
 import { createSession, deleteSession, setSessionCookie, clearSessionCookie, getSession } from '../middleware/auth.js';
 import { getUserById } from '../services/auth.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * POST /api/auth/login
@@ -16,24 +17,8 @@ export async function login(c: Context, sql: Sql) {
         console.log(`[Auth] BodyUsed: ${c.req.raw.bodyUsed}`);
 
         // Deep inspection of Environment and Request
-        console.log(`[Auth] c.env keys: ${Object.keys(c.env)}`);
-
-        // Check if body is pre-parsed in raw request (common in Vercel)
-        // Check if body is pre-parsed in raw request (common in Vercel)
-        let body;
-        const incoming = (c.env as any).incoming;
-
-        // Vercel (by default) parses the body and attaches it to the Node request.
-        if (incoming && incoming.body && typeof incoming.body === 'object') {
-            console.log('[Auth] Found pre-parsed body in c.env.incoming');
-            body = incoming.body;
-        } else {
-            console.log('[Auth] No pre-parsed body. Parsing stream...');
-            // Race condition to detect hang
-            const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('JSON Read Timeout')), 4000));
-            const parsePromise = c.req.json();
-            body = await Promise.race([parsePromise, timeout]) as any;
-        }
+        // Vercel/Node adapter fix: use helper to handle pre-parsed body
+        const body = await getRequestBody(c);
 
         const { email, password } = body;
 

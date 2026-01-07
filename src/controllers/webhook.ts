@@ -6,6 +6,7 @@ import { getMediaValidator } from '../validators/MediaValidator.js'
 import { transcribeAudio } from '../services/transcribe.js'
 import { copyTwilioMedia } from '../services/mediaStorage.js'
 import { normalizeTwilioPayload } from '../utils/normalize.js'
+import { getRequestBody } from '../utils/request.js';
 import { t, getLang } from '../services/i18n.js'
 import {
   getLastConfirmedProject,
@@ -84,14 +85,8 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     }
   }
 
-  let body: any
-  const contentType = c.req.header('Content-Type') || ''
-
-  if (contentType.includes('application/json')) {
-    body = await c.req.json()
-  } else {
-    body = await c.req.parseBody()
-  }
+  // VERCEL ADAPTER FIX: Use helper to handle pre-parsed body
+  const body = await getRequestBody(c);
 
   // REAL VALIDATION NOW that we have body
   if (process.env.NODE_ENV === 'production') {
@@ -111,8 +106,19 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
       );
 
       if (!isValid) {
-        console.error('❌ Invalid Twilio Signature');
-        return c.text('Forbidden', 403);
+        // Fallback: Vercel might report http, but Twilio sees https. 
+        // If validation fails on http, try forcing https.
+        if (publicUrl.startsWith('http:')) {
+          const secureUrl = publicUrl.replace('http:', 'https:');
+          const isValidSecure = twilio.validateRequest(authToken, signature, secureUrl, body);
+          if (!isValidSecure) {
+            console.error('❌ Invalid Twilio Signature (both HTTP and HTTPS)');
+            return c.text('Forbidden', 403);
+          }
+        } else {
+          console.error('❌ Invalid Twilio Signature');
+          return c.text('Forbidden', 403);
+        }
       }
     } else {
       console.warn('⚠️ Skipping Twilio validation: Missing token or signature');
@@ -161,7 +167,18 @@ You're now activated. Start sending your work updates via text, photos, or voice
   }
 
   const member = members[0] as Member;
-  console.log(`[MEMBER] ${member.full_name}`);
+  console.log(`[MEMBER] ${member.full_name} (ID: ${member.id}, Co: ${member.company_id})`);
+
+  // 3b. CHECK IF MEMBER IS ASSIGNED TO A COMPANY
+  // "New User" from JOIN flow has null company_id until admin assigns them.
+  if (!member.company_id) {
+    console.log(`[MEMBER] Pending assignment (no company_id) -> holding tank`);
+    await handleUnknownUser(sql, normalized, body);
+    const pendingMsg = `⏳ You are registered but waiting for team assignment.
+    
+Your message has been saved. An admin will add you to your project soon!`;
+    return c.text(`<Response><Message>${pendingMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
 
   // 4. CHECK FOR PROJECT SELECTION RESPONSE (numbered reply to correction)
   const trimmedText = normalized.text.trim();
@@ -215,7 +232,48 @@ You're now activated. Start sending your work updates via text, photos, or voice
 
   console.log(`[WEBHOOK] Bucket #${bucket.id} marked for processing`);
 
-  // 9. RETURN IMMEDIATE ACKNOWLEDGMENT
+  // 9. TRIGGER EDGE FUNCTION VIA PG_NET (Async)
+  // We do this to ensure it runs even if the DB trigger is missing/broken
+  try {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+    if (supabaseUrl && serviceKey) {
+      const functionUrl = `${supabaseUrl}/functions/v1/process-bucket`;
+      const payload = JSON.stringify({ bucketId: bucket.id });
+      const headers = JSON.stringify({
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${serviceKey}`
+      });
+
+      // Use pg_net to make async HTTP call from within Postgres
+      // This returns immediately and doesn't block the webhook
+      await sql`
+        SELECT net.http_post(
+          url := ${functionUrl},
+          body := ${payload}::jsonb,
+          headers := ${headers}::jsonb
+        )
+      `;
+      console.log(`[WEBHOOK] Triggered process-bucket via pg_net`);
+    } else {
+      console.warn('[WEBHOOK] Missing Supabase credentials for async trigger');
+    }
+  } catch (err) {
+    console.error('[WEBHOOK] Failed to trigger async processing:', err);
+    // Don't fail the request, just log it
+  }
+
+  // 10. SEND IMMEDIATE RECEIPT (So user isn't ghosted)
+  // Only for new buckets or if we are appending to one that was just created
+  try {
+    const statusMsg = "🤖 Received! Processing your work...";
+    await sendTwilioMessage(normalized.sender, statusMsg, normalized.source as any);
+  } catch (e) {
+    console.error('[WEBHOOK] Failed to send receipt:', e);
+  }
+
+  // 11. RETURN IMMEDIATE ACKNOWLEDGMENT
   return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
 }
 

@@ -5,6 +5,7 @@ import {
     bulkAssignToProject,
     addProjectAlias
 } from '../services/bucketService.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * GET /api/inbox/:nodeId
@@ -40,7 +41,7 @@ export async function getInbox(c: Context, sql: Sql) {
  */
 export async function bulkAssign(c: Context, sql: Sql) {
     try {
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { nodeId, suspectedName, projectId } = body;
 
         if (!nodeId || !suspectedName || !projectId) {
@@ -79,7 +80,7 @@ export async function bulkAssign(c: Context, sql: Sql) {
  */
 export async function addAlias(c: Context, sql: Sql) {
     try {
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { projectId, alias } = body;
 
         if (!projectId || !alias) {

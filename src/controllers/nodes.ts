@@ -1,5 +1,6 @@
 import { Context } from 'hono';
 import { Sql } from 'postgres';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * GET /api/nodes
@@ -33,7 +34,7 @@ export async function getNodes(c: Context, sql: Sql) {
  */
 export async function createNode(c: Context, sql: Sql) {
     try {
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { name, defaultHourlyRate } = body;
 
         if (!name) {
@@ -66,7 +67,7 @@ export async function createNode(c: Context, sql: Sql) {
 export async function updateNode(c: Context, sql: Sql) {
     try {
         const nodeId = parseInt(c.req.param('id'));
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
 
         // Convert undefined to null for postgres.js compatibility
         const name = body.name ?? null;

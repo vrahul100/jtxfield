@@ -35,7 +35,7 @@ async function seedDatabase() {
         try {
             const su = await createUser(sql, {
                 email: 'admin@jtxfield.com',
-                password: 'admin123',
+                password: 'buBitsu12#',
                 role: 'SU',
                 fullName: 'Admin User',
             });
@@ -54,7 +54,7 @@ async function seedDatabase() {
         try {
             const om1 = await createUser(sql, {
                 email: 'manager1@downtown.com',
-                password: 'manager123',
+                password: 'jujItsu123$',
                 role: 'OM',
                 nodeId: nodeId1,
                 fullName: 'John Manager',
@@ -71,7 +71,7 @@ async function seedDatabase() {
         try {
             const om2 = await createUser(sql, {
                 email: 'manager2@westside.com',
-                password: 'manager123',
+                password: 'rurItsu123$',
                 role: 'OM',
                 nodeId: nodeId2,
                 fullName: 'Sarah Williams',
@@ -129,13 +129,13 @@ async function seedDatabase() {
         console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
         console.log('\n🔐 Super User (Full Access):');
         console.log('   Email: admin@jtxfield.com');
-        console.log('   Password: admin123');
+        console.log('   Password: buBitsu12#');
         console.log('\n👔 Office Manager #1 (Downtown Construction):');
         console.log('   Email: manager1@downtown.com');
-        console.log('   Password: manager123');
+        console.log('   Password: jujItsu123$');
         console.log('\n👔 Office Manager #2 (Westside Builders):');
         console.log('   Email: manager2@westside.com');
-        console.log('   Password: manager123');
+        console.log('   Password: rurItsu123$');
         console.log('\n💬 Test Workers:');
         console.log('   +15551234567 - Mike Foreman');
         console.log('   +15551234568 - Carlos Rodriguez');

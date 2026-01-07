@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import { Sql } from 'postgres';
 import { User } from '../services/auth.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * GET /api/worklog
@@ -177,7 +178,7 @@ export async function updateBucket(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const bucketId = parseInt(c.req.param('id'));
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { rawText, projectId } = body;
 
         // Get bucket

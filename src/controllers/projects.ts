@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import { Sql } from 'postgres';
 import { User } from '../services/auth.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * GET /api/projects
@@ -69,7 +70,7 @@ export async function getProjects(c: Context, sql: Sql) {
 export async function createProject(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { name, nodeId } = body;
 
         if (!name) {
@@ -108,7 +109,7 @@ export async function updateProject(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const projectId = parseInt(c.req.param('id'));
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { name, isActive, aliases, nodeId } = body;
 
         // Convert undefined to null for postgres

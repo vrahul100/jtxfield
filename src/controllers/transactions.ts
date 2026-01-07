@@ -2,6 +2,7 @@ import { Hono } from 'hono';
 import { Context } from 'hono';
 import { Sql } from 'postgres';
 import { User } from '../services/auth.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * GET /api/transactions
@@ -103,7 +104,8 @@ export async function getTransactions(c: Context, sql: Sql) {
  */
 export async function updateTransaction(c: Context, sql: Sql) {
     const id = Number(c.req.param('id'));
-    const { labor, material, projectId, time } = await c.req.json();
+    const body = await getRequestBody(c);
+    const { labor, material, projectId, time } = body;
 
     try {
         const updateFields: string[] = [];

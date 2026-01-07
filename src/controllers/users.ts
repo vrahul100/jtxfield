@@ -1,6 +1,7 @@
 import { Context } from 'hono';
 import { Sql } from 'postgres';
 import { createUser, getUsers, updateUser, updateUserPassword } from '../services/auth.js';
+import { getRequestBody } from '../utils/request.js';
 
 /**
  * GET /api/users
@@ -41,7 +42,7 @@ export async function getUsersList(c: Context, sql: Sql) {
  */
 export async function createNewUser(c: Context, sql: Sql) {
     try {
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { email, password, role, nodeId, fullName } = body;
 
         if (!email || !password || !role) {
@@ -91,7 +92,7 @@ export async function createNewUser(c: Context, sql: Sql) {
 export async function updateUserInfo(c: Context, sql: Sql) {
     try {
         const userId = parseInt(c.req.param('id'));
-        const body = await c.req.json();
+        const body = await getRequestBody(c);
         const { email, fullName, nodeId, isActive, password } = body;
 
         // Update basic info
