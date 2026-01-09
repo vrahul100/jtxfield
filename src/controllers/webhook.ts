@@ -240,22 +240,23 @@ Your message has been saved. An admin will add you to your project soon!`;
 
     if (supabaseUrl && serviceKey) {
       const functionUrl = `${supabaseUrl}/functions/v1/process-bucket`;
-      const bodyJson = JSON.stringify({ bucketId: bucket.id });
-      const headersJson = JSON.stringify({
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${serviceKey}`
+
+      // Fire-and-forget: trigger Edge Function without waiting
+      // Using fetch with no await so it doesn't block the response
+      fetch(functionUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify({ bucketId: bucket.id }),
+      }).then(() => {
+        console.log(`[WEBHOOK] Edge function triggered for bucket #${bucket.id}`);
+      }).catch((e) => {
+        console.error(`[WEBHOOK] Edge function trigger failed:`, e);
       });
 
-      // Use pg_net to make async HTTP call from within Postgres
-      // This returns immediately and doesn't block the webhook
-      await sql`
-        SELECT net.http_post(
-          url := ${functionUrl}::text,
-          body := ${bodyJson}::jsonb,
-          headers := ${headersJson}::jsonb
-        )
-      `;
-      console.log(`[WEBHOOK] Triggered process-bucket via pg_net`);
+      console.log(`[WEBHOOK] Triggered process-bucket (async)`);
     } else {
       console.warn('[WEBHOOK] Missing Supabase credentials for async trigger');
     }

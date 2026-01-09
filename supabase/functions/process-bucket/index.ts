@@ -35,41 +35,42 @@ Be concise but specific.`
 
 const EXTRACTION_PROMPT = `You are a construction foreman. Extract work log data from a CONVERSATION.
 
-**TRANSCRIPT:** (What the USER explicitly said/wrote)
+**TRANSCRIPT:** (Full conversation - initial message + any Q&A corrections)
 {TRANSCRIPT}
 
-**IMAGE ANALYSIS:** (What the photos show - FOR REFERENCE ONLY)
+**IMAGE ANALYSIS:** (What the photos show)
 {IMAGE_ANALYSIS}
 
 ---
 
-## CRITICAL: USER'S WORDS ARE THE SOURCE OF TRUTH
+## CONVERSATION FORMAT
+The transcript may contain a multi-turn conversation:
+- Initial message: "elec work for 3 hours" 
+---
+Q: Bot asked for clarification
+A: User's correction: "oh yes. rebar work"
 
-The USER's explicit statement determines the workType, hours, and details.
-The image analysis is ONLY for flagging potential inconsistencies - it does NOT override what the user said.
+## CRITICAL: USE THE USER'S FINAL/CORRECTED STATEMENT
 
-Example:
-- User says: "electrical work for 4 hours"
-- Image shows: rebar
-- You should extract: workType="electrical", hoursWorked=4
-- But also set: isConsistent=false (user said electrical but image shows rebar)
+If user initially said "electrical" but then corrected to "rebar", use "rebar".
+Phrases like "oh yes", "yes", "right", "correct", "actually", "sorry" followed by a work type = CORRECTION.
+
+**After a correction, the statement IS CONSISTENT if it now matches the image.**
 
 ---
 
-**TASK:** Extract these fields FROM THE USER'S WORDS:
-1. workType: Extract from USER'S WORDS (not image). "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "general"
-2. hoursWorked: From USER'S WORDS only. Return null if not stated.
-3. summary: Brief summary of what USER SAID they did
+**TASK:** Extract FROM THE USER'S FINAL STATEMENT:
+1. workType: The FINAL work type user stated. "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "general"
+2. hoursWorked: Hours from user's statement. Null if not stated.
+3. summary: Brief summary of FINAL corrected work
 4. materials: Materials from text or image
 5. location: Specific location if mentioned
-6. isConsistent: false if user's statement CONTRADICTS what image shows
-7. inconsistencyReason: If inconsistent, explain (e.g., "User said electrical but image shows rebar work")
+6. isConsistent: true if user's FINAL statement matches image. false ONLY if final statement still contradicts.
+7. inconsistencyReason: Only if FINAL statement contradicts image
 
-**CRITICAL RULES:**
-- workType MUST come from user's words, NOT inferred from image
-- DO NOT replace user's stated workType with what you see in image
-- inconsistency flag is for ASKING user to clarify, not for overriding them
-- If the conversation includes a Q&A correction, use the latest user answer
+**EXAMPLES:**
+- User: "electrical work" → Corrects to: "oh yes rebar" → Image: rebar → workType="rebar", isConsistent=TRUE
+- User: "electrical work" → No correction → Image: rebar → workType="electrical", isConsistent=FALSE
 
 Return JSON only:`
 
@@ -116,8 +117,32 @@ Deno.serve(async (req: Request) => {
             })
         }
 
-        // Update status to processing
-        await supabase.from('buckets').update({ status: 'processing' }).eq('id', bucketId)
+        // IDEMPOTENCY CHECK: Skip if already processing or completed
+        const skipStatuses = ['processing', 'submitted', 'flagged', 'pending_review']
+        if (skipStatuses.includes(bucket.status)) {
+            console.log(`[Brain] ⏭️ Skipping bucket #${bucketId} - already ${bucket.status}`)
+            return new Response(JSON.stringify({
+                success: true,
+                action: 'skipped',
+                reason: `Already ${bucket.status}`
+            }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
+
+        // Update status to processing (atomic lock)
+        const { error: lockError } = await supabase
+            .from('buckets')
+            .update({ status: 'processing' })
+            .eq('id', bucketId)
+            .eq('status', bucket.status) // Only update if status hasn't changed
+
+        if (lockError) {
+            console.log(`[Brain] ⏭️ Failed to acquire lock for bucket #${bucketId}`)
+            return new Response(JSON.stringify({ success: true, action: 'lock_failed' }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+            })
+        }
 
         const imageUrls: string[] = bucket.image_urls ? JSON.parse(bucket.image_urls) : []
         const audioUrls: string[] = bucket.audio_urls ? JSON.parse(bucket.audio_urls) : []
@@ -237,7 +262,7 @@ Deno.serve(async (req: Request) => {
             job: extraction.summary,
             time: extraction.hoursWorked,
             labor: bucket.raw_text,
-            material: extraction.materials?.join(', ') || null,
+            material: Array.isArray(extraction.materials) ? extraction.materials.join(', ') : null,
             evidence: imageUrls.length > 0 ? JSON.stringify(imageUrls) : null,
             scope_description: extraction.summary,
             status: 'COMPLETED',
@@ -409,8 +434,19 @@ async function analyzeImage(imageUrl: string, groqApiKey: string): Promise<strin
 // Fetch image and convert to base64 data URL
 async function resolveImageToBase64(url: string): Promise<string | null> {
     try {
-        // Follow redirects and fetch the image
-        const resp = await fetch(url, { redirect: 'follow' })
+        // Twilio media URLs require Basic Auth
+        const twilioSid = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
+        const twilioAuth = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
+
+        const headers: Record<string, string> = {}
+        if (twilioSid && twilioAuth && url.includes('twilio.com')) {
+            const auth = btoa(`${twilioSid}:${twilioAuth}`)
+            headers['Authorization'] = `Basic ${auth}`
+        }
+
+        console.log(`[Image] Fetching: ${url.slice(0, 80)}...`)
+        const resp = await fetch(url, { redirect: 'follow', headers })
+
         if (!resp.ok) {
             console.error(`[Image] Fetch failed: ${resp.status}`)
             return null
@@ -420,6 +456,7 @@ async function resolveImageToBase64(url: string): Promise<string | null> {
         const arrayBuffer = await resp.arrayBuffer()
         const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
 
+        console.log(`[Image] Resolved successfully (${arrayBuffer.byteLength} bytes)`)
         return `data:${contentType};base64,${base64}`
     } catch (e) {
         console.error('[Image] Resolution failed:', e)
