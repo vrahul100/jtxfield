@@ -8,7 +8,9 @@ import {
     ChevronRight,
     ChevronDown,
     Circle,
-    ChevronLeft
+    ChevronLeft,
+    Check,
+    X
 } from 'lucide-react';
 
 interface ConversationMessage {
@@ -178,6 +180,44 @@ export function Tickets() {
         }
 
         await fetchBuckets();
+    };
+
+    const handleSubmit = async (id: number) => {
+        if (!confirm('Are you sure you want to submit this ticket? This will create a transaction.')) return;
+        try {
+            const response = await fetch(`/api/worklog/${id}/approve`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (response.ok) {
+                fetchBuckets();
+            } else {
+                console.error('Failed to submit ticket');
+                alert('Failed to submit ticket');
+            }
+        } catch (error) {
+            console.error('Error submitting ticket:', error);
+            alert('Error submitting ticket');
+        }
+    };
+
+    const handleReject = async (id: number) => {
+        if (!confirm('Are you sure you want to reject this ticket?')) return;
+        try {
+            const response = await fetch(`/api/worklog/${id}/reject`, {
+                method: 'POST',
+                credentials: 'include'
+            });
+            if (response.ok) {
+                fetchBuckets();
+            } else {
+                console.error('Failed to reject ticket');
+                alert('Failed to reject ticket');
+            }
+        } catch (error) {
+            console.error('Error rejecting ticket:', error);
+            alert('Error rejecting ticket');
+        }
     };
 
     const getEditFields = (): EditField[] => {
@@ -386,13 +426,33 @@ export function Tickets() {
                                                     )}
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-medium" onClick={(e) => e.stopPropagation()}>
-                                                    <button
-                                                        onClick={() => handleEdit(bucket)}
-                                                        className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
-                                                    >
-                                                        <Pencil className="w-4 h-4" />
-                                                        <span>Edit</span>
-                                                    </button>
+                                                    <div className="flex items-center gap-3">
+                                                        {bucket.status === 'pending_review' && (
+                                                            <>
+                                                                <button
+                                                                    onClick={() => handleSubmit(bucket.id)}
+                                                                    className="flex items-center gap-1 text-green-600 hover:text-green-800"
+                                                                    title="Approve & Submit"
+                                                                >
+                                                                    <Check className="w-4 h-4" />
+                                                                </button>
+                                                                <button
+                                                                    onClick={() => handleReject(bucket.id)}
+                                                                    className="flex items-center gap-1 text-red-600 hover:text-red-800"
+                                                                    title="Reject"
+                                                                >
+                                                                    <X className="w-4 h-4" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        <button
+                                                            onClick={() => handleEdit(bucket)}
+                                                            className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
+                                                            title="Edit"
+                                                        >
+                                                            <Pencil className="w-4 h-4" />
+                                                        </button>
+                                                    </div>
                                                 </td>
                                             </tr>
                                             {isExpanded && (
