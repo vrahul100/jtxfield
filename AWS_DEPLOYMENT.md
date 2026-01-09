@@ -1,4 +1,4 @@
-# JField - AWS Deployment Guide (Future)
+# jField - AWS Deployment Guide (Future)
 
 > ⚠️ **This is for future reference.** The current MVP uses Supabase + Vercel. When you're ready to scale to AWS, use this guide.
 

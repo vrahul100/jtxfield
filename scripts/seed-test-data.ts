@@ -3,7 +3,12 @@ import dotenv from 'dotenv';
 import { createUser } from '../src/services/auth.js';
 
 dotenv.config();
-const sql = postgres(process.env.DATABASE_URL!);
+const sql = postgres(process.env.DATABASE_URL!, {
+    ssl: 'require',
+    connection: {
+        application_name: 'jtxfield-seed',
+    },
+});
 
 async function seedDatabase() {
     console.log('🌱 Seeding database with test data...\n');

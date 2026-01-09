@@ -1,6 +1,6 @@
-# JField - Complete Supabase Setup Guide
+# jField - Complete Supabase Setup Guide
 
-This guide covers setting up a fresh JField instance on Supabase from scratch.
+This guide covers setting up a fresh jField instance on Supabase from scratch.
 
 ## Prerequisites
 

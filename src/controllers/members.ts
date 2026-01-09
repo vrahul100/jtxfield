@@ -28,7 +28,7 @@ function normalizePhoneNumber(phone: string): string {
  */
 async function sendConfirmationMessage(phoneNumber: string, memberName?: string): Promise<void> {
     const name = memberName ? ` ${memberName}` : '';
-    const message = `👋 Hello${name}! You've been added to the Jentyx JField system. 
+    const message = `👋 Hello${name}! You've been added to the Jentyx jField system. 
 
 Please reply with YES to activate your account and start logging work.`;
 
@@ -41,7 +41,7 @@ Please reply with YES to activate your account and start logging work.`;
 async function sendInvitationMessage(phoneNumber: string, memberName?: string, nodeName?: string): Promise<void> {
     const name = memberName ? ` ${memberName}` : '';
     const company = nodeName || 'our team';
-    const message = `👋 Hello${name}! You've been invited to join ${company} on Jentyx JField.
+    const message = `👋 Hello${name}! You've been invited to join ${company} on Jentyx jField.
 
 Reply YES to accept and start logging your work.`;
 

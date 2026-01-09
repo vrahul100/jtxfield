@@ -136,7 +136,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     if (confirmResult.success) {
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
       const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `✅ Welcome to Jentyx JField${name}!${teamMsg}
+      const welcomeMsg = `✅ Welcome to Jentyx jField${name}!${teamMsg}
 
 You're now activated. Start sending your work updates via text, photos, or voice notes.`;
       return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
@@ -240,8 +240,8 @@ Your message has been saved. An admin will add you to your project soon!`;
 
     if (supabaseUrl && serviceKey) {
       const functionUrl = `${supabaseUrl}/functions/v1/process-bucket`;
-      const payload = JSON.stringify({ bucketId: bucket.id });
-      const headers = JSON.stringify({
+      const bodyJson = JSON.stringify({ bucketId: bucket.id });
+      const headersJson = JSON.stringify({
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${serviceKey}`
       });
@@ -250,9 +250,9 @@ Your message has been saved. An admin will add you to your project soon!`;
       // This returns immediately and doesn't block the webhook
       await sql`
         SELECT net.http_post(
-          url := ${functionUrl},
-          body := ${payload}::jsonb,
-          headers := ${headers}::jsonb
+          url := ${functionUrl}::text,
+          body := ${bodyJson}::jsonb,
+          headers := ${headersJson}::jsonb
         )
       `;
       console.log(`[WEBHOOK] Triggered process-bucket via pg_net`);
@@ -384,10 +384,10 @@ async function handleProjectCorrection(
 
   // Find the most recent bucket for this member
   const recentBuckets = await sql`
-    SELECT * FROM buckets
+SELECT * FROM buckets
     WHERE member_id = ${member.id}
       AND created_at > NOW() - INTERVAL '30 minutes'
-      AND status IN ('closed', 'processing', 'completed')
+      AND status IN('closed', 'processing', 'completed')
     ORDER BY created_at DESC
     LIMIT 1
   `;
@@ -400,11 +400,11 @@ async function handleProjectCorrection(
 
   // Mark this specific bucket as awaiting correction
   await sql`
-    UPDATE buckets SET 
-      status = 'awaiting_correction',
-      updated_at = NOW()
+    UPDATE buckets SET
+status = 'awaiting_correction',
+  updated_at = NOW()
     WHERE id = ${bucketToFix.id}
-  `;
+`;
   console.log(`[CORRECTION] Marked bucket #${bucketToFix.id} as awaiting_correction`);
 
   // Get available projects
@@ -420,8 +420,8 @@ async function handleProjectCorrection(
   }
 
   // Send project list
-  const projectList = projects.map((p: any, i: number) => `${i + 1}. ${p.name}`).join('\n');
-  const msg = `🔄 Which project should I fix this to?\n\n${projectList}\n\nReply with the number.`;
+  const projectList = projects.map((p: any, i: number) => `${i + 1}. ${p.name} `).join('\n');
+  const msg = `🔄 Which project should I fix this to ?\n\n${projectList} \n\nReply with the number.`;
 
   await sendTwilioMessage(normalized.sender, msg, normalized.source);
 
@@ -460,8 +460,8 @@ async function handleProjectSelectionResponse(
 
     const projectIndex = selection - 1;
     if (projectIndex < 0 || projectIndex >= projects.length) {
-      const msg = `Invalid selection. Reply with a number between 1 and ${projects.length}.`;
-      return c.text(`<Response><Message>${msg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      const msg = `Invalid selection.Reply with a number between 1 and ${projects.length}.`;
+      return c.text(`< Response > <Message>${msg} </Message></Response > `, 200, { 'Content-Type': 'text/xml' });
     }
 
     const selectedProject = projects[projectIndex] as { id: number; name: string };
@@ -469,19 +469,19 @@ async function handleProjectSelectionResponse(
 
     // Update bucket with selected project and submit
     await sql`
-      UPDATE buckets SET 
-        project_id = ${selectedProject.id},
-        status = 'submitted',
-        validation_attempts = 0,
-        updated_at = NOW()
+      UPDATE buckets SET
+project_id = ${selectedProject.id},
+status = 'submitted',
+  validation_attempts = 0,
+  updated_at = NOW()
       WHERE id = ${bucket.id}
-    `;
+`;
 
     // Update last confirmed project
     await updateLastConfirmedProject(sql, member.id, selectedProject.id);
 
-    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\nLogged to: ${selectedProject.name}`;
-    return c.text(`<Response><Message>${confirmationMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\nLogged to: ${selectedProject.name} `;
+    return c.text(`< Response > <Message>${confirmationMsg} </Message></Response > `, 200, { 'Content-Type': 'text/xml' });
   }
 
   // Otherwise check for awaiting_correction (legacy flow)
@@ -514,7 +514,7 @@ async function handleProjectSelectionResponse(
   if (projectIndex < 0 || projectIndex >= projects.length) {
     await sendTwilioMessage(
       normalized.sender,
-      `Invalid selection. Please reply with a number between 1 and ${projects.length}.`,
+      `Invalid selection.Please reply with a number between 1 and ${projects.length}.`,
       normalized.source
     );
     return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
@@ -525,30 +525,30 @@ async function handleProjectSelectionResponse(
 
   // 1. Update the bucket (restore to submitted status)
   await sql`
-    UPDATE buckets SET 
-      project_id = ${newProject.id},
-      status = 'submitted',
-      updated_at = NOW()
+    UPDATE buckets SET
+project_id = ${newProject.id},
+status = 'submitted',
+  updated_at = NOW()
     WHERE id = ${bucketToFix.id}
-  `;
+`;
 
   // 2. Update any associated transaction
   await sql`
-    UPDATE txns SET 
-      project_id = ${newProject.id}
+    UPDATE txns SET
+project_id = ${newProject.id}
     WHERE bucket_id = ${bucketToFix.id}
-  `;
+`;
 
   // 3. Update member's last confirmed project
   await sql`
-    UPDATE members SET 
-      last_confirmed_project_id = ${newProject.id},
-      project_confirmed_at = NOW()
+    UPDATE members SET
+last_confirmed_project_id = ${newProject.id},
+project_confirmed_at = NOW()
     WHERE id = ${member.id}
-  `;
+`;
 
   // Send confirmation
-  const confirmMsg = `✅ Fixed! Changed project to: ${newProject.name}`;
+  const confirmMsg = `✅ Fixed! Changed project to: ${newProject.name} `;
   await sendTwilioMessage(normalized.sender, confirmMsg, normalized.source);
 
   console.log(`[CORRECTION] ✅ Retroactively fixed bucket #${bucketToFix.id} and any txns`);
