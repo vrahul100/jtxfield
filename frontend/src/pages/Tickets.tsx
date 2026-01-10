@@ -427,7 +427,8 @@ export function Tickets() {
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs font-medium" onClick={(e) => e.stopPropagation()}>
                                                     <div className="flex items-center gap-3">
-                                                        {bucket.status === 'pending_review' && (
+                                                        {/* Show submit/reject for any ticket not already submitted */}
+                                                        {['pending_review', 'processing', 'open', 'flagged'].includes(bucket.status) && (
                                                             <>
                                                                 <button
                                                                     onClick={() => handleSubmit(bucket.id)}
