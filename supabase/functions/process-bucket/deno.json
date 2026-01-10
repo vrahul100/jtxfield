@@ -1,0 +1,6 @@
+{
+    "imports": {
+        "xstate": "https://esm.sh/xstate@5.19.4",
+        "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2"
+    }
+}

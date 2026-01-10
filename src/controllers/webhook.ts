@@ -232,38 +232,10 @@ Your message has been saved. An admin will add you to your project soon!`;
 
   console.log(`[WEBHOOK] Bucket #${bucket.id} marked for processing`);
 
-  // 9. TRIGGER EDGE FUNCTION VIA PG_NET (Async)
-  // We do this to ensure it runs even if the DB trigger is missing/broken
-  try {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
-
-    if (supabaseUrl && serviceKey) {
-      const functionUrl = `${supabaseUrl}/functions/v1/process-bucket`;
-
-      // Fire-and-forget: trigger Edge Function without waiting
-      // Using fetch with no await so it doesn't block the response
-      fetch(functionUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${serviceKey}`,
-        },
-        body: JSON.stringify({ bucketId: bucket.id }),
-      }).then(() => {
-        console.log(`[WEBHOOK] Edge function triggered for bucket #${bucket.id}`);
-      }).catch((e) => {
-        console.error(`[WEBHOOK] Edge function trigger failed:`, e);
-      });
-
-      console.log(`[WEBHOOK] Triggered process-bucket (async)`);
-    } else {
-      console.warn('[WEBHOOK] Missing Supabase credentials for async trigger');
-    }
-  } catch (err) {
-    console.error('[WEBHOOK] Failed to trigger async processing:', err);
-    // Don't fail the request, just log it
-  }
+  // 9. EDGE FUNCTION IS TRIGGERED BY DATABASE TRIGGER
+  // The process_bucket_trigger on the buckets table handles Edge Function invocation
+  // This ensures single-source triggering and prevents duplicate processing
+  console.log(`[WEBHOOK] DB trigger will handle Edge Function for bucket #${bucket.id}`);
 
   // 10. SEND IMMEDIATE RECEIPT (So user isn't ghosted)
   // Only for new buckets or if we are appending to one that was just created
