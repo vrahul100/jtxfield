@@ -14,6 +14,7 @@ export interface ExtractionResult {
     isConsistent: boolean
     inconsistencyReason: string | null
     responseLanguage: 'en' | 'es'  // LLM detects user's language
+    isWorkRelated: boolean  // False if message is spam/mischief/unrelated
 }
 
 // Validation result from deterministic checks

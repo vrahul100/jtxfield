@@ -201,6 +201,7 @@ export async function extractDataNode(state: BrainState): Promise<Partial<BrainS
             isConsistent: newExtraction.isConsistent ?? previousExtraction?.isConsistent ?? true,
             inconsistencyReason: newExtraction.inconsistencyReason || previousExtraction?.inconsistencyReason || null,
             responseLanguage: newExtraction.responseLanguage || previousExtraction?.responseLanguage || 'en',
+            isWorkRelated: newExtraction.isWorkRelated ?? previousExtraction?.isWorkRelated ?? true,  // Default to true, don't reject too much
         }
 
         console.log(`[Node: ExtractData] Merged extraction:`, {
@@ -208,6 +209,7 @@ export async function extractDataNode(state: BrainState): Promise<Partial<BrainS
             hours: mergedExtraction.hoursWorked,
             projectHint: mergedExtraction.projectHint,
             consistent: mergedExtraction.isConsistent,
+            isWorkRelated: mergedExtraction.isWorkRelated,
         })
 
         return { extraction: mergedExtraction }
@@ -526,6 +528,25 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         projectId: msgs.askProject,
     }
 
+    // CASE 0: Spam/unrelated message - don't log, just respond with fallback
+    const isSpamMessage = extraction?.isWorkRelated === false && state.attempts === 0
+    if (isSpamMessage) {
+        const spamResponse = lang === 'es'
+            ? `👋 ¡Hola! Estoy aquí para registrar tu trabajo. Mándame una foto o dime qué hiciste hoy.`
+            : `👋 Hey! I'm here to log your work. Send me a photo or tell me what you worked on today.`
+
+        console.log(`[Node: Respond] Spam/unrelated message detected, sending fallback`)
+        await sendWhatsAppMessage(bucket.from_phone, spamResponse, bucket.source)
+
+        // Mark bucket as spam/ignored - don't count as validation attempt
+        await supabase.from('buckets').update({
+            status: 'ignored',
+            ai_response: spamResponse,
+        }).eq('id', state.bucketId)
+
+        return { status: 'flagged', action: 'flagged', response: spamResponse }
+    }
+
     // CASE 1: Inconsistency detected
     if (validation.inconsistencyReason) {
         if (attempts < 2) {
@@ -729,6 +750,20 @@ If LAST BOT MESSAGE asked a specific question (like "How many hours?"), ONLY ext
 3. Compare FINAL workType against image - set isConsistent accordingly
 4. **responseLanguage**: Set to "es" if user writes in Spanish, "en" otherwise
 
+## SPAM/IRRELEVANT MESSAGE DETECTION:
+Set isWorkRelated = FALSE if message is:
+- Random jokes, emojis only, gibberish, test messages
+- Comments like "hello", "what's up", "lol", "haha", just greetings
+- Completely unrelated to work (personal chat, memes, etc.)
+
+Set isWorkRelated = TRUE if message:
+- Mentions ANY work activity, materials, hours, or construction terms
+- Contains a photo showing work/construction site
+- Is a follow-up to a work conversation (answering bot's questions like hours/project)
+- Even brief responses like "5" (hours) or "Y" (yes to project)
+
+**BE GENEROUS - when in doubt, set isWorkRelated = TRUE**
+
 ## WORK TYPES:
 "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "general"
 
@@ -744,6 +779,7 @@ If LAST BOT MESSAGE asked a specific question (like "How many hours?"), ONLY ext
 7. isConsistent: TRUE if FINAL work type matches image
 8. inconsistencyReason: Only if FINAL type doesn't match image (write in user's language!)
 9. responseLanguage: "es" if Spanish, "en" otherwise
+10. isWorkRelated: FALSE only if message is spam/mischief/completely unrelated
 
 Return JSON only.`
 }
