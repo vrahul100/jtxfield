@@ -492,26 +492,30 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     const ticketId = state.bucketId
 
     // LLM-based bilingual messages (include ticket # for context)
+    // Make messages friendly and conversational!
+    const workType = extraction?.workType || 'work'
+    const projectName = state.bucket?.project_id ? '' : '' // Will be looked up when needed
+
     const msgs = lang === 'es' ? {
         clarify: '¿Puedes aclarar?',
         flagged: `📋 Ticket #${ticketId} marcado para revisión. He guardado los datos.`,
         savedBlanks: `📋 Ticket #${ticketId} guardado con datos incompletos. Lo arreglaremos después.`,
-        success: (wt: string, h: number) => `✅ Ticket #${ticketId} registrado: ${wt} por ${h}h. ¡Listo!`,
-        askWorkType: `🔧 Ticket #${ticketId}: ¿Qué tipo de trabajo hiciste? (eléctrico, plomería, carpintería, etc.)`,
-        askHours: `⏱️ Ticket #${ticketId}: ¿Cuántas horas trabajaste?`,
+        success: (wt: string, h: number, proj: string) => `✅ Ticket #${ticketId}: ${wt} por ${h}h en ${proj}. ¡Registrado!`,
+        askWorkType: `🔧 Ticket #${ticketId}: ¿Qué tipo de trabajo hiciste?`,
+        askHours: `⏱️ Ticket #${ticketId}: Veo ${workType}. ¿Cuántas horas trabajaste? (agrega detalles si quieres)`,
         askSummary: `📝 Ticket #${ticketId}: ¿Puedes describir brevemente lo que hiciste?`,
         askProject: `📍 Ticket #${ticketId}: ¿En qué proyecto trabajaste?`,
-        askProjectConfirmation: (projectName: string) => `📍 Ticket #${ticketId}: ¿"${projectName}"? (S/N)`,
+        askProjectConfirmation: (pName: string) => `📍 Ticket #${ticketId}: ¿Sigues en "${pName}"? (S/N)`,
     } : {
         clarify: 'Can you clarify?',
         flagged: `📋 Ticket #${ticketId} flagged for boss to check. I've saved the data.`,
         savedBlanks: `📋 Ticket #${ticketId} saved with blanks. We can fix it later.`,
-        success: (wt: string, h: number) => `✅ Ticket #${ticketId} logged: ${wt} for ${h}h. Done!`,
-        askWorkType: `🔧 Ticket #${ticketId}: What type of work did you do? (electrical, plumbing, carpentry, etc.)`,
-        askHours: `⏱️ Ticket #${ticketId}: How many hours did you work?`,
+        success: (wt: string, h: number, proj: string) => `✅ Ticket #${ticketId}: ${wt} for ${h}h at ${proj}. Logged!`,
+        askWorkType: `🔧 Ticket #${ticketId}: What type of work did you do?`,
+        askHours: `⏱️ Ticket #${ticketId}: I see ${workType}. How many hours? (add details if you want)`,
         askSummary: `📝 Ticket #${ticketId}: Can you briefly describe what you did?`,
         askProject: `📍 Ticket #${ticketId}: Which project were you working on?`,
-        askProjectConfirmation: (projectName: string) => `📍 Ticket #${ticketId}: "${projectName}"? (Y/N)`,
+        askProjectConfirmation: (pName: string) => `📍 Ticket #${ticketId}: Still at "${pName}"? (Y/N)`,
     }
 
     // Map field names to questions
@@ -642,7 +646,14 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
         await supabase.from('buckets').update({ status: 'submitted' }).eq('id', state.bucketId)
 
-        const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0)
+        // Look up project name for success message
+        let projectNameForMsg = 'project'
+        if (bucket.project_id) {
+            const { data: proj } = await supabase.from('projects').select('name').eq('id', bucket.project_id).single()
+            projectNameForMsg = proj?.name || 'project'
+        }
+
+        const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0, projectNameForMsg)
         await sendWhatsAppMessage(bucket.from_phone, confirmMsg, bucket.source)
 
         return { status: 'submitted', action: 'success', response: confirmMsg }
