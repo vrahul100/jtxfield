@@ -182,8 +182,13 @@ export function validateNode(state: BrainState): Partial<BrainState> {
         }
     }
 
-    // Check consistency
-    if (!extraction.isConsistent && extraction.inconsistencyReason) {
+    // Check consistency (but ignore if it's a system error, not user error)
+    const isSystemError = extraction.inconsistencyReason?.toLowerCase().includes('could not be loaded') ||
+        extraction.inconsistencyReason?.toLowerCase().includes('image analysis') ||
+        extraction.inconsistencyReason?.toLowerCase().includes('unavailable') ||
+        extraction.inconsistencyReason?.toLowerCase().includes('failed')
+
+    if (!extraction.isConsistent && extraction.inconsistencyReason && !isSystemError) {
         console.log(`[Node: Validate] Inconsistency: ${extraction.inconsistencyReason}`)
         return {
             validation: {
@@ -193,6 +198,8 @@ export function validateNode(state: BrainState): Partial<BrainState> {
                 inconsistencyReason: extraction.inconsistencyReason,
             }
         }
+    } else if (isSystemError) {
+        console.log(`[Node: Validate] Ignoring system error in consistency check: ${extraction.inconsistencyReason}`)
     }
 
     // Check required fields
@@ -241,10 +248,41 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     const extraction = state.extraction
     const attempts = state.attempts
 
+    // Get language from LLM extraction (defaults to English)
+    const lang = extraction?.responseLanguage || 'en'
+    const ticketId = state.bucketId
+
+    // LLM-based bilingual messages (include ticket # for context)
+    const msgs = lang === 'es' ? {
+        clarify: '¿Puedes aclarar?',
+        flagged: `📋 Ticket #${ticketId} marcado para revisión. He guardado los datos.`,
+        savedBlanks: `📋 Ticket #${ticketId} guardado con datos incompletos. Lo arreglaremos después.`,
+        success: (wt: string, h: number) => `✅ Ticket #${ticketId} registrado: ${wt} por ${h}h. ¡Listo!`,
+        askWorkType: `🔧 Ticket #${ticketId}: ¿Qué tipo de trabajo hiciste? (eléctrico, plomería, carpintería, etc.)`,
+        askHours: `⏱️ Ticket #${ticketId}: ¿Cuántas horas trabajaste?`,
+        askSummary: `📝 Ticket #${ticketId}: ¿Puedes describir brevemente lo que hiciste?`,
+    } : {
+        clarify: 'Can you clarify?',
+        flagged: `📋 Ticket #${ticketId} flagged for boss to check. I've saved the data.`,
+        savedBlanks: `📋 Ticket #${ticketId} saved with blanks. We can fix it later.`,
+        success: (wt: string, h: number) => `✅ Ticket #${ticketId} logged: ${wt} for ${h}h. Done!`,
+        askWorkType: `🔧 Ticket #${ticketId}: What type of work did you do? (electrical, plumbing, carpentry, etc.)`,
+        askHours: `⏱️ Ticket #${ticketId}: How many hours did you work?`,
+        askSummary: `📝 Ticket #${ticketId}: Can you briefly describe what you did?`,
+    }
+
+    // Map field names to questions
+    const fieldQuestions: Record<string, string> = {
+        workType: msgs.askWorkType,
+        hoursWorked: msgs.askHours,
+        summary: msgs.askSummary,
+    }
+
     // CASE 1: Inconsistency detected
     if (validation.inconsistencyReason) {
         if (attempts < 2) {
-            const question = `⚠️ ${validation.inconsistencyReason}\nCan you clarify?`
+            // Use the inconsistencyReason from LLM (already in user's language)
+            const question = `⚠️ Ticket #${ticketId}: ${validation.inconsistencyReason}\n${msgs.clarify}`
             await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
             await supabase.from('buckets').update({
                 status: 'open',
@@ -254,11 +292,10 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
             return { status: 'open', action: 'ask_clarification', response: question }
         } else {
-            const msg = '📋 Flagged for boss to check. I\'ve saved the data.'
-            await sendWhatsAppMessage(bucket.from_phone, msg, bucket.source)
+            await sendWhatsAppMessage(bucket.from_phone, msgs.flagged, bucket.source)
             await supabase.from('buckets').update({ status: 'flagged' }).eq('id', state.bucketId)
 
-            return { status: 'flagged', action: 'flagged', response: msg }
+            return { status: 'flagged', action: 'flagged', response: msgs.flagged }
         }
     }
 
@@ -266,7 +303,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     if (validation.missingFields.length > 0) {
         if (attempts < 3) {
             const field = validation.missingFields[0]
-            const question = FIELD_QUESTIONS[field] || `What is the ${field}?`
+            const question = fieldQuestions[field] || `What is the ${field}?`
             await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
             await supabase.from('buckets').update({
                 status: 'open',
@@ -276,11 +313,10 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
             return { status: 'open', action: 'ask_missing', response: question }
         } else {
-            const msg = '📋 Saved with blanks. We can fix it later.'
-            await sendWhatsAppMessage(bucket.from_phone, msg, bucket.source)
+            await sendWhatsAppMessage(bucket.from_phone, msgs.savedBlanks, bucket.source)
             await supabase.from('buckets').update({ status: 'pending_review' }).eq('id', state.bucketId)
 
-            return { status: 'pending_review', action: 'flagged', response: msg }
+            return { status: 'pending_review', action: 'flagged', response: msgs.savedBlanks }
         }
     }
 
@@ -303,7 +339,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         await supabase.from('txns').insert(txn)
         await supabase.from('buckets').update({ status: 'submitted' }).eq('id', state.bucketId)
 
-        const confirmMsg = `✅ Logged: ${extraction.workType} for ${extraction.hoursWorked}h. Done!`
+        const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0)
         await sendWhatsAppMessage(bucket.from_phone, confirmMsg, bucket.source)
 
         return { status: 'submitted', action: 'success', response: confirmMsg }
@@ -317,9 +353,9 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 // ============================================================================
 
 function buildExtractionPrompt(transcript: string, imageAnalysis: string): string {
-    return `You are a construction foreman. Extract work log data from user input.
+    return `You are a construction foreman. Extract work log data and respond in the SAME LANGUAGE as the user.
 
-**USER INPUT:** (What the user typed or said)
+**USER INPUT:** (May be in English, Spanish, or any language)
 ${transcript || '[NO TEXT - user only sent an image]'}
 
 **IMAGE ANALYSIS:** (What the photos show)
@@ -327,30 +363,45 @@ ${imageAnalysis || 'No images'}
 
 ---
 
-## CRITICAL RULES - READ CAREFULLY:
+## HANDLING CORRECTIONS (CRITICAL!)
 
-1. **NEVER HALLUCINATE OR MAKE UP DATA!** If the user did NOT explicitly state something, return null.
-2. For hoursWorked: ONLY return a number if the user explicitly mentioned hours/time. Otherwise return null.
-3. For workType: Use image analysis ONLY if user didn't state it. If user stated something different, set isConsistent=false.
-4. For summary: If user input is empty, describe what you see in the image.
+The input may contain a MULTI-TURN conversation with corrections:
+- User: "masonry work"
+- Bot: "You said masonry but photo shows rebar. Can you clarify?"
+- User: "sorry, I meant rebar" OR "perdón, quise decir rebar"
+→ Use "rebar" as the FINAL workType (the correction!)
+→ isConsistent = TRUE (now matches)
 
-## EXAMPLES:
-- User sends image only (no text) → hoursWorked: null (NOT 3 or any made up number!)
-- User says "electrical work" but image shows rebar → isConsistent: false
-- User says "worked on site" (no hours) → hoursWorked: null
+**CORRECTION PHRASES to detect:**
+English: "sorry", "I meant", "my bad", "actually", "no", "yes", "correct"
+Spanish: "perdón", "lo siento", "quise decir", "en realidad", "sí", "correcto"
+
+If user corrects themselves, USE THE CORRECTED work type.
 
 ---
 
-**TASK:** Extract:
-1. workType: Type of work from user text OR image if no text. "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "general"
-2. hoursWorked: ONLY if user explicitly stated hours. Otherwise NULL.
-3. summary: Brief description from user text or image
-4. materials: Materials mentioned or visible (as array)
-5. location: Location if mentioned, else null
-6. isConsistent: true if user text matches image (or if no text)
-7. inconsistencyReason: Only if text contradicts image
+## RULES:
+1. **NEVER HALLUCINATE!** If hours not stated, hoursWorked = null
+2. Extract workType from USER's FINAL statement (after any corrections)
+3. Compare FINAL workType against image - set isConsistent accordingly
+4. **responseLanguage**: Set to "es" if user writes in Spanish, "en" otherwise
 
-Return JSON only. DO NOT INVENT DATA!`
+## WORK TYPES:
+"electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "general"
+
+---
+
+**EXTRACT (JSON only):**
+1. workType: The FINAL/CORRECTED work type from user
+2. hoursWorked: ONLY if user explicitly stated. Otherwise NULL.
+3. summary: Brief description
+4. materials: Materials visible/mentioned (array)
+5. location: If stated, else null
+6. isConsistent: TRUE if FINAL work type matches image
+7. inconsistencyReason: Only if FINAL type doesn't match image (write in user's language!)
+8. responseLanguage: "es" if Spanish, "en" otherwise
+
+Return JSON only.`
 }
 
 async function transcribeAudio(url: string, groqApiKey: string): Promise<string | null> {
@@ -401,7 +452,16 @@ async function analyzeImage(url: string, groqApiKey: string): Promise<string> {
 
         const contentType = imageResp.headers.get('content-type') || 'image/jpeg'
         const arrayBuffer = await imageResp.arrayBuffer()
-        const base64 = btoa(String.fromCharCode(...new Uint8Array(arrayBuffer)))
+
+        // Convert to base64 in chunks to avoid stack overflow on large images
+        const uint8Array = new Uint8Array(arrayBuffer)
+        const chunkSize = 8192
+        let binaryString = ''
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.slice(i, i + chunkSize)
+            binaryString += String.fromCharCode.apply(null, chunk as unknown as number[])
+        }
+        const base64 = btoa(binaryString)
         const dataUrl = `data:${contentType};base64,${base64}`
 
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
