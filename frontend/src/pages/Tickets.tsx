@@ -435,14 +435,14 @@ export function Tickets() {
                                                                     className="flex items-center gap-1 text-green-600 hover:text-green-800"
                                                                     title="Approve & Submit"
                                                                 >
-                                                                    <Check className="w-4 h-4" />
+                                                                    <Check className="w-6 h-6" strokeWidth={3} />
                                                                 </button>
                                                                 <button
                                                                     onClick={() => handleReject(bucket.id)}
                                                                     className="flex items-center gap-1 text-red-600 hover:text-red-800"
                                                                     title="Reject"
                                                                 >
-                                                                    <X className="w-4 h-4" />
+                                                                    <X className="w-6 h-6" strokeWidth={3} />
                                                                 </button>
                                                             </>
                                                         )}
@@ -451,7 +451,7 @@ export function Tickets() {
                                                             className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
                                                             title="Edit"
                                                         >
-                                                            <Pencil className="w-4 h-4" />
+                                                            <Pencil className="w-6 h-6" strokeWidth={3} />
                                                         </button>
                                                     </div>
                                                 </td>
