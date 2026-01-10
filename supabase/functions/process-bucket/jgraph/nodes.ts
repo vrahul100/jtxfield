@@ -46,7 +46,42 @@ export async function loadContextNode(state: BrainState): Promise<Partial<BrainS
     const audioUrls: string[] = bucket.audio_urls ? JSON.parse(bucket.audio_urls) : []
     const transcripts: string[] = bucket.transcripts ? JSON.parse(bucket.transcripts) : []
 
+    // Load previous extraction if exists (for multi-turn conversations)
+    let previousExtraction: ExtractionResult | null = null
+    if (bucket.extraction_json) {
+        try {
+            previousExtraction = JSON.parse(bucket.extraction_json) as ExtractionResult
+            console.log(`[Node: LoadContext] Loaded previous extraction: workType=${previousExtraction.workType}, hours=${previousExtraction.hoursWorked}`)
+        } catch (e) {
+            console.log(`[Node: LoadContext] Failed to parse previous extraction`)
+        }
+    }
+
     console.log(`[Node: LoadContext] Loaded: ${imageUrls.length} images, ${audioUrls.length} audio`)
+
+    // Infer projectConfirmed from bucket.project_id
+    // If project_id is set and NOT the Inbox, the project was already confirmed
+    let projectConfirmed = false
+    if (bucket.project_id) {
+        // Check if this project is the Inbox (we need to query for it)
+        const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+        const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+        const supabase = createClient(supabaseUrl, supabaseKey)
+
+        const { data: inboxProject } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('node_id', bucket.node_id)
+            .eq('is_inbox', true)
+            .single()
+
+        if (inboxProject && bucket.project_id !== inboxProject.id) {
+            projectConfirmed = true
+            console.log(`[Node: LoadContext] Project ${bucket.project_id} is confirmed (not Inbox ${inboxProject.id})`)
+        } else {
+            console.log(`[Node: LoadContext] Project ${bucket.project_id} is Inbox, not confirmed yet`)
+        }
+    }
 
     return {
         bucket: bucket as Bucket,
@@ -56,6 +91,8 @@ export async function loadContextNode(state: BrainState): Promise<Partial<BrainS
         audioUrls,
         transcripts,
         attempts: bucket.validation_attempts || 0,
+        extraction: previousExtraction,  // Start with previous extraction
+        projectConfirmed,  // Persist across turns
     }
 }
 
@@ -123,7 +160,9 @@ export async function extractDataNode(state: BrainState): Promise<Partial<BrainS
         ...state.transcripts.map(t => `[Voice]: ${t}`)
     ].filter(Boolean).join('\n')
 
-    const prompt = buildExtractionPrompt(allText, state.imageAnalysis)
+    // Pass last bot message as context
+    const lastBotMessage = state.bucket?.ai_response
+    const prompt = buildExtractionPrompt(allText, state.imageAnalysis, lastBotMessage || undefined)
 
     try {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -148,19 +187,186 @@ export async function extractDataNode(state: BrainState): Promise<Partial<BrainS
 
         const data = await response.json()
         const content = data.choices?.[0]?.message?.content
-        const extraction = JSON.parse(content) as ExtractionResult
+        const newExtraction = JSON.parse(content) as ExtractionResult
 
-        console.log(`[Node: ExtractData] Extracted:`, {
-            workType: extraction.workType,
-            hours: extraction.hoursWorked,
-            consistent: extraction.isConsistent,
+        // Merge with previous extraction - KEEP previous values if new ones are null
+        const previousExtraction = state.extraction
+        const mergedExtraction: ExtractionResult = {
+            workType: newExtraction.workType || previousExtraction?.workType || null,
+            hoursWorked: newExtraction.hoursWorked ?? previousExtraction?.hoursWorked ?? null,
+            summary: newExtraction.summary || previousExtraction?.summary || '',
+            materials: newExtraction.materials?.length > 0 ? newExtraction.materials : (previousExtraction?.materials || []),
+            location: newExtraction.location || previousExtraction?.location || null,
+            projectHint: newExtraction.projectHint || previousExtraction?.projectHint || null,
+            isConsistent: newExtraction.isConsistent ?? previousExtraction?.isConsistent ?? true,
+            inconsistencyReason: newExtraction.inconsistencyReason || previousExtraction?.inconsistencyReason || null,
+            responseLanguage: newExtraction.responseLanguage || previousExtraction?.responseLanguage || 'en',
+        }
+
+        console.log(`[Node: ExtractData] Merged extraction:`, {
+            workType: mergedExtraction.workType,
+            hours: mergedExtraction.hoursWorked,
+            projectHint: mergedExtraction.projectHint,
+            consistent: mergedExtraction.isConsistent,
         })
 
-        return { extraction }
+        return { extraction: mergedExtraction }
     } catch (e) {
         console.error(`[Node: ExtractData] Error:`, e)
         return { status: 'pending_review', action: 'error' }
     }
+}
+
+// ============================================================================
+// NODE: Resolve Project
+// ============================================================================
+
+export async function resolveProjectNode(state: BrainState): Promise<Partial<BrainState>> {
+    console.log(`[Node: ResolveProject] checking if project needs resolution. projectConfirmed=${state.projectConfirmed}`)
+
+    // Skip if project was already explicitly confirmed by user in this conversation
+    // NOTE: We check projectConfirmed, NOT bucket.project_id, because bucket defaults to Inbox
+    if (state.projectConfirmed) {
+        console.log(`[Node: ResolveProject] Project already confirmed, skipping`)
+        return {}
+    }
+
+    const extraction = state.extraction
+    if (!extraction || !extraction.projectHint) {
+        console.log(`[Node: ResolveProject] No projectHint in extraction, skipping`)
+        return {}
+    }
+
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    const supabase = createClient(supabaseUrl, supabaseKey)
+    // Convert to string in case LLM returns a number
+    const hint = String(extraction.projectHint).trim()
+
+    let resolvedProjectId: number | null = null
+
+    // CASE A: User confirmed "YES" to "Still working on X?"
+    // We check if member has a last_confirmed_project_id
+    if (['confirmed', 'yes', 'si', 'confirmado', 'sí', 'yeah', 'yep', 'yup', 'y'].includes(hint.toLowerCase())) {
+        if (state.member?.last_confirmed_project_id) {
+            console.log(`[Node: ResolveProject] User confirmed previous project ID: ${state.member.last_confirmed_project_id}`)
+            resolvedProjectId = state.member.last_confirmed_project_id
+        }
+    }
+    // CASE A.5: User said "NO" to "Still working on X?" - need to show project list
+    else if (['no', 'nope', 'nah', 'not', 'n'].includes(hint.toLowerCase())) {
+        console.log(`[Node: ResolveProject] User rejected project confirmation - will show project list`)
+        // Clear the hint so validateNode will add 'projectId' to missingFields on next round
+        // Also clear member's last_confirmed so we ask for full selection
+        await supabase.from('members').update({
+            last_confirmed_project_id: null,
+            project_confirmed_at: null
+        }).eq('id', state.member!.id)
+
+        // Return updated state - projectConfirmed stays false, validate will ask for projectId
+        return {
+            extraction: { ...extraction, projectHint: null },
+            member: { ...state.member!, last_confirmed_project_id: null, project_confirmed_at: null } as Member
+        }
+    }
+    // CASE B: User replied with a number (from the project list we sent)
+    else if (/^\d+$/.test(hint)) {
+        const selection = parseInt(hint, 10)
+        console.log(`[Node: ResolveProject] User selected project #${selection}`)
+
+        // Fetch the same project list we sent (same query order, excluding Inbox)
+        const { data: projects } = await supabase
+            .from('projects')
+            .select('id, name')
+            .eq('node_id', state.bucket!.node_id)
+            .eq('is_active', true)
+            .eq('is_inbox', false)  // Exclude Inbox project
+            .order('name')
+            .limit(10)
+
+        console.log(`[Node: ResolveProject] Available projects:`, projects?.map(p => `${p.id}:${p.name}`).join(', '))
+
+        if (projects && selection >= 1 && selection <= projects.length) {
+            resolvedProjectId = projects[selection - 1].id
+            console.log(`[Node: ResolveProject] Selected index ${selection - 1}: ${projects[selection - 1].name} (id: ${resolvedProjectId})`)
+        } else {
+            console.log(`[Node: ResolveProject] Invalid selection ${selection}, max was ${projects?.length}`)
+        }
+    }
+    // CASE C: User named a project explicitly
+    else {
+        // Search for project by name or alias
+        console.log(`[Node: ResolveProject] Searching for project matching: "${hint}"`)
+
+        // 1. Try exact match on name
+        const { data: exactMatch } = await supabase
+            .from('projects')
+            .select('id')
+            .eq('node_id', state.bucket!.node_id)
+            .ilike('name', hint)
+            .single()
+
+        if (exactMatch) {
+            resolvedProjectId = exactMatch.id
+        } else {
+            // 2. Try fuzzy / alias match (simple ilike on name for now, can expand to aliases JSON later)
+            const { data: fuzzyMatch } = await supabase
+                .from('projects')
+                .select('id')
+                .eq('node_id', state.bucket!.node_id)
+                .ilike('name', `%${hint}%`)
+                .limit(1)
+
+            if (fuzzyMatch && fuzzyMatch.length > 0) {
+                resolvedProjectId = fuzzyMatch[0].id
+            }
+        }
+    }
+
+    if (resolvedProjectId) {
+        console.log(`[Node: ResolveProject] Resolved to Project ID: ${resolvedProjectId}`)
+
+        // Update Bucket
+        const { error: bucketError } = await supabase.from('buckets').update({
+            project_id: resolvedProjectId,
+            intent: 'log_work' // Assume it's work logging if they gave a project
+        }).eq('id', state.bucketId)
+
+        if (bucketError) {
+            console.error(`[Node: ResolveProject] Bucket update error:`, bucketError)
+        } else {
+            console.log(`[Node: ResolveProject] Bucket updated with project_id: ${resolvedProjectId}`)
+        }
+
+        // Update Member (cache this project as last confirmed)
+        const { error: memberError } = await supabase.from('members').update({
+            last_confirmed_project_id: resolvedProjectId,
+            project_confirmed_at: new Date().toISOString()
+        }).eq('id', state.member!.id)
+
+        if (memberError) {
+            console.error(`[Node: ResolveProject] Member update error:`, memberError)
+        } else {
+            console.log(`[Node: ResolveProject] Member updated with last_confirmed_project_id: ${resolvedProjectId}`)
+        }
+
+        // Update Local State - include projectConfirmed flag
+        const updatedBucket = { ...state.bucket!, project_id: resolvedProjectId } as Bucket
+        console.log(`[Node: ResolveProject] Returning updated bucket with project_id: ${updatedBucket.project_id}`)
+
+        return {
+            bucket: updatedBucket,
+            member: {
+                ...state.member!,
+                last_confirmed_project_id: resolvedProjectId,
+                project_confirmed_at: new Date().toISOString()
+            } as Member,
+            projectConfirmed: true
+        }
+    }
+
+    console.log(`[Node: ResolveProject] Could not resolve project hint: "${hint}"`)
+    return {}
 }
 
 // ============================================================================
@@ -219,6 +425,39 @@ export function validateNode(state: BrainState): Partial<BrainState> {
         invalidFields.push('hoursWorked')
     }
 
+    // Check project - use projectConfirmed flag (NOT bucket.project_id which may be pre-set)
+    // If projectConfirmed is false and no projectHint was extracted, we need to ask
+    const member = state.member
+    const hasProjectConfirmed = state.projectConfirmed === true
+    const hasProjectHint = extraction.projectHint != null && extraction.projectHint !== ''
+
+    if (!hasProjectConfirmed && !hasProjectHint) {
+        // Check if member has a recent confirmed project (within 2 hours)
+        let needsProjectConfirmation = false
+        let needsProjectSelection = true
+
+        if (member?.last_confirmed_project_id && member?.project_confirmed_at) {
+            const confirmedAt = new Date(member.project_confirmed_at)
+            const now = new Date()
+            const hoursDiff = (now.getTime() - confirmedAt.getTime()) / (1000 * 60 * 60)
+
+            if (hoursDiff <= 2) {
+                // Within 2 hours - ask for confirmation, not selection
+                needsProjectConfirmation = true
+                needsProjectSelection = false
+                console.log(`[Node: Validate] Last project was ${hoursDiff.toFixed(1)}h ago - will ask for confirmation`)
+            } else {
+                console.log(`[Node: Validate] Last project was ${hoursDiff.toFixed(1)}h ago - need to ask which project`)
+            }
+        }
+
+        if (needsProjectSelection) {
+            missingFields.push('projectId')
+        } else if (needsProjectConfirmation) {
+            missingFields.push('projectConfirmation')
+        }
+    }
+
     const isValid = missingFields.length === 0 && invalidFields.length === 0
     console.log(`[Node: Validate] Valid: ${isValid}, Missing: ${missingFields.join(', ')}`)
 
@@ -261,6 +500,8 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         askWorkType: `🔧 Ticket #${ticketId}: ¿Qué tipo de trabajo hiciste? (eléctrico, plomería, carpintería, etc.)`,
         askHours: `⏱️ Ticket #${ticketId}: ¿Cuántas horas trabajaste?`,
         askSummary: `📝 Ticket #${ticketId}: ¿Puedes describir brevemente lo que hiciste?`,
+        askProject: `📍 Ticket #${ticketId}: ¿En qué proyecto trabajaste?`,
+        askProjectConfirmation: (projectName: string) => `📍 Ticket #${ticketId}: ¿"${projectName}"? (S/N)`,
     } : {
         clarify: 'Can you clarify?',
         flagged: `📋 Ticket #${ticketId} flagged for boss to check. I've saved the data.`,
@@ -269,6 +510,8 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         askWorkType: `🔧 Ticket #${ticketId}: What type of work did you do? (electrical, plumbing, carpentry, etc.)`,
         askHours: `⏱️ Ticket #${ticketId}: How many hours did you work?`,
         askSummary: `📝 Ticket #${ticketId}: Can you briefly describe what you did?`,
+        askProject: `📍 Ticket #${ticketId}: Which project were you working on?`,
+        askProjectConfirmation: (projectName: string) => `📍 Ticket #${ticketId}: "${projectName}"? (Y/N)`,
     }
 
     // Map field names to questions
@@ -276,6 +519,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         workType: msgs.askWorkType,
         hoursWorked: msgs.askHours,
         summary: msgs.askSummary,
+        projectId: msgs.askProject,
     }
 
     // CASE 1: Inconsistency detected
@@ -302,8 +546,59 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     // CASE 2: Missing fields
     if (validation.missingFields.length > 0) {
         if (attempts < 3) {
-            const field = validation.missingFields[0]
-            const question = fieldQuestions[field] || `What is the ${field}?`
+            // IMPORTANT: Reorder fields so work details come FIRST, project LAST
+            // Priority: workType -> hoursWorked -> summary -> projectId/projectConfirmation
+            const workFields = validation.missingFields.filter(f => !f.startsWith('project'))
+            const projectFields = validation.missingFields.filter(f => f.startsWith('project'))
+            const orderedFields = [...workFields, ...projectFields]
+            const field = orderedFields[0]
+
+            let question: string
+
+            // Save current extraction to bucket for next turn
+            if (extraction) {
+                await supabase.from('buckets').update({
+                    extraction_json: JSON.stringify(extraction)
+                }).eq('id', state.bucketId)
+            }
+
+            // Special handling for project confirmation (within 2-hour window)
+            if (field === 'projectConfirmation' && state.member?.last_confirmed_project_id) {
+                // Fetch the project name
+                const { data: project } = await supabase
+                    .from('projects')
+                    .select('name')
+                    .eq('id', state.member.last_confirmed_project_id)
+                    .single()
+
+                const projectName = project?.name || 'your last project'
+                question = msgs.askProjectConfirmation(projectName)
+            }
+            // Special handling for projectId - send numbered list
+            else if (field === 'projectId') {
+                // Fetch projects for this node (excluding Inbox - same query as resolveProjectNode!)
+                const { data: projects } = await supabase
+                    .from('projects')
+                    .select('id, name')
+                    .eq('node_id', bucket.node_id)
+                    .eq('is_active', true)
+                    .eq('is_inbox', false)  // Exclude Inbox project
+                    .order('name')
+                    .limit(10)
+
+                if (projects && projects.length > 0) {
+                    const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
+                    question = lang === 'es'
+                        ? `📍 Ticket #${ticketId}: ¿En qué proyecto trabajaste?\n\n${projectList}\n\nResponde con el número.`
+                        : `📍 Ticket #${ticketId}: Which project were you working on?\n\n${projectList}\n\nReply with the number.`
+                } else {
+                    question = fieldQuestions[field] || `What is the ${field}?`
+                }
+            }
+            else {
+                question = fieldQuestions[field] || `What is the ${field}?`
+            }
+
             await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
             await supabase.from('buckets').update({
                 status: 'open',
@@ -322,6 +617,9 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
     // CASE 3: Success - create transaction
     if (extraction) {
+        // Log project state before creating transaction
+        console.log(`[Node: Respond] Creating transaction with project_id: ${bucket.project_id}, projectConfirmed: ${state.projectConfirmed}`)
+
         const txn = {
             bucket_id: state.bucketId,
             company_id: bucket.node_id,
@@ -336,7 +634,12 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             status: 'COMPLETED',
         }
 
-        await supabase.from('txns').insert(txn)
+        console.log(`[Node: Respond] Transaction payload:`, JSON.stringify(txn))
+        const { error: txnError } = await supabase.from('txns').insert(txn)
+        if (txnError) {
+            console.error(`[Node: Respond] Transaction insert error:`, txnError)
+        }
+
         await supabase.from('buckets').update({ status: 'submitted' }).eq('id', state.bucketId)
 
         const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0)
@@ -352,8 +655,11 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 // HELPER FUNCTIONS
 // ============================================================================
 
-function buildExtractionPrompt(transcript: string, imageAnalysis: string): string {
+function buildExtractionPrompt(transcript: string, imageAnalysis: string, lastBotMessage?: string): string {
     return `You are a construction foreman. Extract work log data and respond in the SAME LANGUAGE as the user.
+
+**CONTEXT - LAST MESSAGE FROM BOT:**
+${lastBotMessage || '[None - new conversation]'}
 
 **USER INPUT:** (May be in English, Spanish, or any language)
 ${transcript || '[NO TEXT - user only sent an image]'}
@@ -380,6 +686,32 @@ If user corrects themselves, USE THE CORRECTED work type.
 
 ---
 
+## HANDLING PROJECT SELECTION (CRITICAL!):
+If LAST BOT MESSAGE contains a numbered list of projects like "1. ProjectA\n2. ProjectB" and user replies with just a NUMBER (1, 2, 3, etc.):
+→ Extract projectHint: THE NUMBER (e.g. "1", "2", "3")
+→ DO NOT extract/change workType, hoursWorked, or summary - leave them NULL
+
+If LAST BOT MESSAGE asked "Still working on [Project Name]?" and user says "Yes" / "Si" / "Correct":
+→ Extract projectHint: "CONFIRMED"
+
+If LAST BOT MESSAGE asked "Still working on [Project Name]?" and user says "No" / "Nope" / different project:
+→ Extract projectHint: "NO" (user wants a different project)
+
+If user names a project (e.g. "at Plaza", "for site 5"):
+→ Extract projectHint: "Plaza" or "site 5" (the name mentioned)
+
+---
+
+## FOLLOW-UP TURN RULES (CRITICAL!):
+If LAST BOT MESSAGE asked a specific question (like "How many hours?"), ONLY extract the relevant field:
+- "How many hours?" → ONLY extract hoursWorked, leave others NULL
+- "What type of work?" → ONLY extract workType, leave others NULL  
+- "Which project?" with numbered list → ONLY extract projectHint (the number), leave others NULL
+
+**DO NOT HALLUCINATE** values for fields that weren't asked about!
+
+---
+
 ## RULES:
 1. **NEVER HALLUCINATE!** If hours not stated, hoursWorked = null
 2. Extract workType from USER's FINAL statement (after any corrections)
@@ -397,9 +729,10 @@ If user corrects themselves, USE THE CORRECTED work type.
 3. summary: Brief description
 4. materials: Materials visible/mentioned (array)
 5. location: If stated, else null
-6. isConsistent: TRUE if FINAL work type matches image
-7. inconsistencyReason: Only if FINAL type doesn't match image (write in user's language!)
-8. responseLanguage: "es" if Spanish, "en" otherwise
+6. projectHint: Project name OR "CONFIRMED" if agreeing to bot's project question. Otherwise NULL.
+7. isConsistent: TRUE if FINAL work type matches image
+8. inconsistencyReason: Only if FINAL type doesn't match image (write in user's language!)
+9. responseLanguage: "es" if Spanish, "en" otherwise
 
 Return JSON only.`
 }

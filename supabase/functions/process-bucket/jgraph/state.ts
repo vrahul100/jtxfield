@@ -10,6 +10,7 @@ export interface ExtractionResult {
     summary: string
     materials: string[]
     location: string | null
+    projectHint: string | null  // Project name/hint from user's text
     isConsistent: boolean
     inconsistencyReason: string | null
     responseLanguage: 'en' | 'es'  // LLM detects user's language
@@ -49,6 +50,7 @@ export interface BrainState {
 
     // Tracking
     attempts: number
+    projectConfirmed: boolean  // True if user explicitly confirmed/provided project
 
     // Output
     status: 'processing' | 'open' | 'submitted' | 'flagged' | 'pending_review'
@@ -75,6 +77,7 @@ export function createInitialState(bucketId: number): BrainState {
             inconsistencyReason: null,
         },
         attempts: 0,
+        projectConfirmed: false,
         status: 'processing',
         response: null,
         action: null,

@@ -6,6 +6,7 @@ import {
     loadContextNode,
     preprocessMediaNode,
     extractDataNode,
+    resolveProjectNode,
     validateNode,
     respondNode
 } from './nodes.ts'
@@ -35,6 +36,12 @@ const brainMachine = setup({
             console.log('[XState] extractDataActor starting')
             const result = await extractDataNode(input)
             console.log('[XState] extractDataActor done')
+            return result
+        }),
+        resolveProjectActor: fromPromise(async ({ input }: { input: BrainState }) => {
+            console.log('[XState] resolveProjectActor starting')
+            const result = await resolveProjectNode(input)
+            console.log('[XState] resolveProjectActor done')
             return result
         }),
         validateActor: fromPromise(async ({ input }: { input: BrainState }) => {
@@ -100,7 +107,7 @@ const brainMachine = setup({
                 src: 'extractDataActor',
                 input: ({ context }) => context,
                 onDone: {
-                    target: 'validate',
+                    target: 'resolveProject',
                     actions: assign(({ event }) => {
                         console.log('[XState] extractData done')
                         return event.output
@@ -111,6 +118,19 @@ const brainMachine = setup({
                     actions: assign(({ event }) => {
                         console.error('[XState] extractData error:', event.error)
                         return { action: 'error', status: 'pending_review' }
+                    }),
+                },
+            },
+        },
+        resolveProject: {
+            invoke: {
+                src: 'resolveProjectActor',
+                input: ({ context }) => context,
+                onDone: {
+                    target: 'validate',
+                    actions: assign(({ event }) => {
+                        console.log('[XState] resolveProject done')
+                        return event.output
                     }),
                 },
             },

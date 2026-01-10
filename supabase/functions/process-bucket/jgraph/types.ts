@@ -13,6 +13,7 @@ export interface Bucket {
     audio_urls: string | null
     transcripts: string | null
     ai_response: string | null
+    extraction_json: string | null  // Stores extraction between turns
     validation_attempts: number
     created_at: string
     updated_at: string
@@ -24,6 +25,8 @@ export interface Member {
     full_name: string | null
     phone_number: string
     status: string
+    last_confirmed_project_id: number | null
+    project_confirmed_at: string | null
 }
 
 export interface Transaction {
