@@ -180,16 +180,29 @@ Your message has been saved. An admin will add you to your project soon!`;
     return c.text(`<Response><Message>${pendingMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 
-  // 4. CHECK FOR PROJECT SELECTION RESPONSE (numbered reply to correction)
+  // 4. CHECK IF THERE'S AN ACTIVE CONVERSATION (bucket with pending question)
+  // If so, skip ALL command interceptions and let the message flow to Edge Function
   const trimmedText = normalized.text.trim();
-  if (/^\d+$/.test(trimmedText)) {
-    const result = await handleProjectSelectionResponse(c, sql, member, parseInt(trimmedText, 10), normalized);
-    if (result) return result;
-  }
+  const activeBucketWithQuestion = await sql`
+    SELECT id FROM buckets 
+    WHERE member_id = ${member.id} 
+    AND status IN ('open', 'processing', 'pending_review', 'flagged')
+    AND ai_response IS NOT NULL
+    LIMIT 1
+  `;
 
-  // 5. CHECK FOR PROJECT CORRECTION REQUEST ("N")
-  if (trimmedText.toUpperCase() === 'N') {
-    return handleProjectCorrection(c, sql, member, normalized);
+  // Only intercept commands if NO active conversation
+  if (activeBucketWithQuestion.length === 0) {
+    // 4a. CHECK FOR PROJECT SELECTION RESPONSE (numbered reply to correction)
+    if (/^\d+$/.test(trimmedText)) {
+      const result = await handleProjectSelectionResponse(c, sql, member, parseInt(trimmedText, 10), normalized);
+      if (result) return result;
+    }
+
+    // 4b. CHECK FOR PROJECT CORRECTION REQUEST ("N")
+    if (trimmedText.toUpperCase() === 'N') {
+      return handleProjectCorrection(c, sql, member, normalized);
+    }
   }
 
   // 6. EXTRACT MEDIA URLS (Worker will copy to storage async)

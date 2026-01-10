@@ -402,7 +402,6 @@ export async function appendToBucket(
             audio_urls = ${JSON.stringify([...existingAudio, ...data.audioUrls])},
             transcripts = ${JSON.stringify([...existingTranscripts, ...data.transcripts])},
             message_sids = ${JSON.stringify([...existingSids, ...(data.messageSid ? [data.messageSid] : [])])},
-            ai_response = NULL,
             updated_at = NOW()
         WHERE id = ${bucket.id}
         RETURNING *

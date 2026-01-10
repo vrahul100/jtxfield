@@ -234,7 +234,38 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
     }
 
     const extraction = state.extraction
-    if (!extraction || !extraction.projectHint) {
+    if (!extraction) return {}
+
+    // Check for raw text "n" or "no" if hint is missing
+    let hint = extraction.projectHint ? String(extraction.projectHint).trim() : null
+
+    // Fallback: If no hint, check raw text for "n" / "no" OR a number
+    // This catches cases where LLM fails to extract "NO" or "1" from simple short replies
+    if (!hint && state.rawText) {
+        // raw_text may be a full conversation: "original\n---\nQ: which project?\nA: 1"
+        // Extract only the LAST answer (after the last "A: ")
+        let raw = state.rawText
+        if (raw.includes('\nA:')) {
+            const parts = raw.split('\nA:')
+            raw = parts[parts.length - 1].trim()
+        } else {
+            raw = raw.trim()
+        }
+        raw = raw.toLowerCase()
+        console.log(`[Node: ResolveProject] Extracted last answer: "${raw}"`)
+
+        if (['n', 'no', 'nope', 'nah'].includes(raw)) {
+            console.log(`[Node: ResolveProject] No LLM hint, but raw text is "${raw}" - treating as NO`)
+            hint = 'NO'
+        } else if (/^(\d+)[\.)]?$/.test(raw)) {
+            const match = raw.match(/^(\d+)/)
+            const num = match ? match[1] : raw
+            console.log(`[Node: ResolveProject] No LLM hint, but raw text is number "${raw}" -> "${num}" - using as hint`)
+            hint = num
+        }
+    }
+
+    if (!hint) {
         console.log(`[Node: ResolveProject] No projectHint in extraction, skipping`)
         return {}
     }
@@ -242,37 +273,63 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
-    // Convert to string in case LLM returns a number
-    const hint = String(extraction.projectHint).trim()
 
     let resolvedProjectId: number | null = null
+
+    const lastMsg = (state.bucket?.ai_response || '').toLowerCase()
+
+    // Check if last message was asking about project confirmation or selection
+    // e.g. "Still at City Mall?", "Which project?", "Sigues en...", "En qué proyecto..."
+    const isConfirmationQuestion =
+        lastMsg.includes('still at') ||
+        lastMsg.includes('sigues en') ||
+        lastMsg.includes('confirm')
+
+    const hasHours = state.extraction?.hoursWorked !== undefined && state.extraction?.hoursWorked !== null
+
+    const isSelectionQuestion =
+        lastMsg.includes('which project') ||
+        lastMsg.includes('qué proyecto') ||
+        lastMsg.includes('choose') ||
+        /\d+\.\s/.test(lastMsg) || // Contains a numbered list "1. "
+        (hasHours && !state.projectConfirmed) // Heuristic: If we have hours but no project, a number is likely a project selection
 
     // CASE A: User confirmed "YES" to "Still working on X?"
     // We check if member has a last_confirmed_project_id
     if (['confirmed', 'yes', 'si', 'confirmado', 'sí', 'yeah', 'yep', 'yup', 'y'].includes(hint.toLowerCase())) {
-        if (state.member?.last_confirmed_project_id) {
+        if (state.member?.last_confirmed_project_id && isConfirmationQuestion) {
             console.log(`[Node: ResolveProject] User confirmed previous project ID: ${state.member.last_confirmed_project_id}`)
             resolvedProjectId = state.member.last_confirmed_project_id
+        } else {
+            console.log(`[Node: ResolveProject] User said YES/CONFIRM, but not in response to confirmation question. Ignoring.`)
         }
     }
     // CASE A.5: User said "NO" to "Still working on X?" - need to show project list
     else if (['no', 'nope', 'nah', 'not', 'n'].includes(hint.toLowerCase())) {
-        console.log(`[Node: ResolveProject] User rejected project confirmation - will show project list`)
-        // Clear the hint so validateNode will add 'projectId' to missingFields on next round
-        // Also clear member's last_confirmed so we ask for full selection
-        await supabase.from('members').update({
-            last_confirmed_project_id: null,
-            project_confirmed_at: null
-        }).eq('id', state.member!.id)
+        if (isConfirmationQuestion) {
+            console.log(`[Node: ResolveProject] User rejected project confirmation (Hint: ${hint}) - will show project list`)
+            // Clear the hint so validateNode will add 'projectId' to missingFields on next round
+            // Also clear member's last_confirmed so we ask for full selection
+            await supabase.from('members').update({
+                last_confirmed_project_id: null,
+                project_confirmed_at: null
+            }).eq('id', state.member!.id)
 
-        // Return updated state - projectConfirmed stays false, validate will ask for projectId
-        return {
-            extraction: { ...extraction, projectHint: null },
-            member: { ...state.member!, last_confirmed_project_id: null, project_confirmed_at: null } as Member
+            const updatedMember = { ...state.member!, last_confirmed_project_id: null, project_confirmed_at: null } as Member
+            console.log(`[Node: ResolveProject] Returning updated member state (last_confirmed=null)`)
+
+            // Return updated state - projectConfirmed stays false, validate will ask for projectId
+            return {
+                extraction: { ...extraction, projectHint: null },
+                member: updatedMember
+            }
+        } else {
+            console.log(`[Node: ResolveProject] User said NO/N, but not in response to confirmation question. Ignoring.`)
         }
     }
     // CASE B: User replied with a number (from the project list we sent)
-    else if (/^\d+$/.test(hint)) {
+    // Relaxed regex allows "1", "1.", "1)"
+    else if (/^(\d+)[\.)]?$/.test(hint) && isSelectionQuestion) {
         const selection = parseInt(hint, 10)
         console.log(`[Node: ResolveProject] User selected project #${selection}`)
 
@@ -549,7 +606,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
     // CASE 1: Inconsistency detected
     if (validation.inconsistencyReason) {
-        if (attempts < 2) {
+        if (attempts < 3) {
             // Use the inconsistencyReason from LLM (already in user's language)
             const question = `⚠️ Ticket #${ticketId}: ${validation.inconsistencyReason}\n${msgs.clarify}`
             await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
@@ -570,7 +627,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
     // CASE 2: Missing fields
     if (validation.missingFields.length > 0) {
-        if (attempts < 3) {
+        if (attempts < 5) {
             // IMPORTANT: Reorder fields so work details come FIRST, project LAST
             // Priority: workType -> hoursWorked -> summary -> projectId/projectConfirmation
             const workFields = validation.missingFields.filter(f => !f.startsWith('project'))
@@ -723,11 +780,9 @@ If LAST BOT MESSAGE contains a numbered list of projects like "1. ProjectA\n2. P
 → Extract projectHint: THE NUMBER (e.g. "1", "2", "3")
 → DO NOT extract/change workType, hoursWorked, or summary - leave them NULL
 
-If LAST BOT MESSAGE asked "Still working on [Project Name]?" and user says "Yes" / "Si" / "Correct":
-→ Extract projectHint: "CONFIRMED"
-
-If LAST BOT MESSAGE asked "Still working on [Project Name]?" and user says "No" / "Nope" / different project:
-→ Extract projectHint: "NO" (user wants a different project)
+If LAST BOT MESSAGE asked about a project with "(Y/N)" or "(S/N)" and user says:
+- "Y", "y", "Yes", "Si", "Sí", "Correct" → Extract projectHint: "CONFIRMED"
+- "N", "n", "No", "Nope", "Nah" → Extract projectHint: "NO"
 
 If user names a project (e.g. "at Plaza", "for site 5"):
 → Extract projectHint: "Plaza" or "site 5" (the name mentioned)
