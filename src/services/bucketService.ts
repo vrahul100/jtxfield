@@ -309,7 +309,7 @@ export async function findOpenBucket(
     const buckets = await sql`
         SELECT * FROM buckets 
         WHERE member_id = ${memberId}
-          AND status = 'open'
+          AND (status = 'open' OR status = 'processing')
           AND created_at > NOW() - INTERVAL '${sql.unsafe(String(BUCKET_TIME_WINDOW_MINUTES))} minutes'
         ORDER BY created_at DESC
         LIMIT 1

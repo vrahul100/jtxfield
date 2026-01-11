@@ -182,7 +182,35 @@ export async function extractDataNode(state: BrainState): Promise<Partial<BrainS
         if (!response.ok) {
             const err = await response.text()
             console.error(`[Node: ExtractData] API Error: ${err}`)
-            return { status: 'pending_review', action: 'error' }
+
+            // Parse error to detect rate limit
+            let errorMessage = '⚠️ Sorry, I had trouble processing your message. Please try again in a few minutes.'
+            let isRateLimit = false
+            try {
+                const errorJson = JSON.parse(err)
+                if (errorJson.error?.code === 'rate_limit_exceeded') {
+                    isRateLimit = true
+                    errorMessage = '⚠️ System is temporarily busy. Your work has been saved - please try again in a few minutes, or I\'ll process it automatically when ready.'
+                }
+            } catch (e) { /* Not JSON, use default message */ }
+
+            // Notify user about the error
+            if (state.bucket?.from_phone && state.bucket?.source) {
+                await sendWhatsAppMessage(state.bucket.from_phone, errorMessage, state.bucket.source)
+            }
+
+            // Mark bucket as needing retry (not as permanent error)
+            const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+            const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+            const supabase = createClient(supabaseUrl, supabaseKey)
+
+            await supabase.from('buckets').update({
+                status: isRateLimit ? 'open' : 'pending_review',  // Rate limit = retry, other errors = review
+                ai_response: errorMessage,
+                validation_attempts: (state.attempts || 0) + 1
+            }).eq('id', state.bucketId)
+
+            return { status: isRateLimit ? 'open' : 'pending_review', action: 'error', response: errorMessage }
         }
 
         const data = await response.json()
