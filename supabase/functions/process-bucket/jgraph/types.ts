@@ -25,6 +25,7 @@ export interface Member {
     full_name: string | null
     phone_number: string
     status: string
+    language_preference: string | null  // 'en', 'es', etc.
     last_confirmed_project_id: number | null
     project_confirmed_at: string | null
 }

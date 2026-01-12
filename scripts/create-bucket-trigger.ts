@@ -52,10 +52,19 @@ async function migrate() {
         await sql.unsafe(`
             DROP TRIGGER IF EXISTS process_bucket_trigger ON buckets;
             
+            -- Trigger on UPDATE (when status changes TO pending_processing)
             CREATE TRIGGER process_bucket_trigger
             AFTER UPDATE ON buckets
             FOR EACH ROW
             WHEN (NEW.status = 'pending_processing' AND OLD.status IS DISTINCT FROM 'pending_processing')
+            EXECUTE FUNCTION notify_bucket_processing();
+            
+            -- Also trigger on INSERT if bucket is created with pending_processing status
+            DROP TRIGGER IF EXISTS process_bucket_insert_trigger ON buckets;
+            CREATE TRIGGER process_bucket_insert_trigger
+            AFTER INSERT ON buckets
+            FOR EACH ROW
+            WHEN (NEW.status = 'pending_processing')
             EXECUTE FUNCTION notify_bucket_processing();
         `);
 

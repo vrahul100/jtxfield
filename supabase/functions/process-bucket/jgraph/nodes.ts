@@ -476,12 +476,15 @@ export function validateNode(state: BrainState): Partial<BrainState> {
     }
 
     // Check consistency (but ignore if it's a system error, not user error)
+    // Also skip if user already provided a clarification (attempts > 0) - trust the worker
     const isSystemError = extraction.inconsistencyReason?.toLowerCase().includes('could not be loaded') ||
         extraction.inconsistencyReason?.toLowerCase().includes('image analysis') ||
         extraction.inconsistencyReason?.toLowerCase().includes('unavailable') ||
         extraction.inconsistencyReason?.toLowerCase().includes('failed')
 
-    if (!extraction.isConsistent && extraction.inconsistencyReason && !isSystemError) {
+    const userAlreadyClarified = state.attempts > 0
+
+    if (!extraction.isConsistent && extraction.inconsistencyReason && !isSystemError && !userAlreadyClarified) {
         console.log(`[Node: Validate] Inconsistency: ${extraction.inconsistencyReason}`)
         return {
             validation: {
@@ -491,6 +494,8 @@ export function validateNode(state: BrainState): Partial<BrainState> {
                 inconsistencyReason: extraction.inconsistencyReason,
             }
         }
+    } else if (userAlreadyClarified && !extraction.isConsistent) {
+        console.log(`[Node: Validate] User already clarified (attempts=${state.attempts}) - trusting their answer, ignoring inconsistency`)
     } else if (isSystemError) {
         console.log(`[Node: Validate] Ignoring system error in consistency check: ${extraction.inconsistencyReason}`)
     }
@@ -574,8 +579,8 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     const extraction = state.extraction
     const attempts = state.attempts
 
-    // Get language from LLM extraction (defaults to English)
-    const lang = extraction?.responseLanguage || 'en'
+    // Get language: prefer member's stored preference, then LLM detection, then default to English
+    const lang = state.member?.language_preference || extraction?.responseLanguage || 'en'
     const ticketId = state.bucketId
 
     // LLM-based bilingual messages (include ticket # for context)
@@ -633,9 +638,11 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     }
 
     // CASE 1: Inconsistency detected
+    // Policy: Ask ONCE, then trust the user (they are the final authority on their work)
+    // If user insists after one question, accept their answer and continue (flag for review)
     if (validation.inconsistencyReason) {
-        if (attempts < 3) {
-            // Use the inconsistencyReason from LLM (already in user's language)
+        if (attempts === 0) {
+            // First time seeing inconsistency - ask for clarification ONCE
             const question = `⚠️ *Ticket #${ticketId}*\n ${validation.inconsistencyReason}\n${msgs.clarify}`
             await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
             await supabase.from('buckets').update({
@@ -646,10 +653,18 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
             return { status: 'open', action: 'ask_clarification', response: question }
         } else {
-            await sendWhatsAppMessage(bucket.from_phone, msgs.flagged, bucket.source)
-            await supabase.from('buckets').update({ status: 'flagged' }).eq('id', state.bucketId)
+            // User already answered once - TRUST THEM and proceed
+            // Clear the inconsistency so validation passes, but note it for review
+            console.log(`[Node: Respond] User insists after clarification - trusting their answer, clearing inconsistency`)
 
-            return { status: 'flagged', action: 'flagged', response: msgs.flagged }
+            // Update extraction to mark as consistent (user override)
+            if (extraction) {
+                extraction.isConsistent = true
+                extraction.inconsistencyReason = null
+            }
+
+            // Note: We'll continue to CASE 2/3 below with cleared inconsistency
+            // If there are other missing fields, ask those. Otherwise, file the work.
         }
     }
 
@@ -831,7 +846,8 @@ If LAST BOT MESSAGE asked a specific question (like "How many hours?"), ONLY ext
 1. **NEVER HALLUCINATE!** If hours not stated, hoursWorked = null
 2. Extract workType from USER's FINAL statement (after any corrections)
 3. Compare FINAL workType against image - set isConsistent accordingly
-4. **responseLanguage**: Set to "es" if user writes in Spanish, "en" otherwise
+4. **responseLanguage**: DEFAULT TO "en" (English). Only set to "es" if the user's CURRENT message is clearly written in Spanish (e.g., contains Spanish words like "trabajo", "horas", "perdón", etc.). If user sends only an image or writes in English, responseLanguage = "en"
+5. **inconsistencyReason**: MUST be written in the language specified by responseLanguage - if "en", write in English; if "es", write in Spanish
 
 ## SPAM/IRRELEVANT MESSAGE DETECTION:
 Set isWorkRelated = FALSE if message is:
@@ -860,8 +876,8 @@ Set isWorkRelated = TRUE if message:
 5. location: If stated, else null
 6. projectHint: Project name OR "CONFIRMED" if agreeing to bot's project question. Otherwise NULL.
 7. isConsistent: TRUE if FINAL work type matches image
-8. inconsistencyReason: Only if FINAL type doesn't match image (write in user's language!)
-9. responseLanguage: "es" if Spanish, "en" otherwise
+8. inconsistencyReason: Only if FINAL type doesn't match image (write in responseLanguage!)
+9. responseLanguage: DEFAULT "en". Only "es" if current user message is clearly Spanish
 10. isWorkRelated: FALSE only if message is spam/mischief/completely unrelated
 
 Return JSON only.`

@@ -306,10 +306,11 @@ export async function findOpenBucket(
     projectId: number | null // kept for API compatibility but not used for matching
 ): Promise<Bucket | null> {
     // Find any open bucket for this member created within the time window
+    // Include 'pending_processing' to prevent duplicate buckets when multiple media arrives rapidly
     const buckets = await sql`
         SELECT * FROM buckets 
         WHERE member_id = ${memberId}
-          AND (status = 'open' OR status = 'processing')
+          AND status IN ('open', 'processing', 'pending_processing')
           AND created_at > NOW() - INTERVAL '${sql.unsafe(String(BUCKET_TIME_WINDOW_MINUTES))} minutes'
         ORDER BY created_at DESC
         LIMIT 1
@@ -355,7 +356,7 @@ export async function createBucket(
             ${JSON.stringify(data.transcripts)},
             ${JSON.stringify(data.messageSid ? [data.messageSid] : [])},
             ${data.suspectedProjectName || null},
-            'open'
+            'pending_processing'
         )
         RETURNING *
     `;
