@@ -475,16 +475,17 @@ export function validateNode(state: BrainState): Partial<BrainState> {
         }
     }
 
-    // Check consistency (but ignore if it's a system error, not user error)
-    // Also skip if user already provided a clarification (attempts > 0) - trust the worker
+    // Check consistency (but ignore in several cases - trust the worker)
+    // Skip if: system error, user already clarified, OR multiple images (different work aspects)
     const isSystemError = extraction.inconsistencyReason?.toLowerCase().includes('could not be loaded') ||
         extraction.inconsistencyReason?.toLowerCase().includes('image analysis') ||
         extraction.inconsistencyReason?.toLowerCase().includes('unavailable') ||
         extraction.inconsistencyReason?.toLowerCase().includes('failed')
 
     const userAlreadyClarified = state.attempts > 0
+    const hasMultipleImages = state.imageUrls.length >= 2
 
-    if (!extraction.isConsistent && extraction.inconsistencyReason && !isSystemError && !userAlreadyClarified) {
+    if (!extraction.isConsistent && extraction.inconsistencyReason && !isSystemError && !userAlreadyClarified && !hasMultipleImages) {
         console.log(`[Node: Validate] Inconsistency: ${extraction.inconsistencyReason}`)
         return {
             validation: {
@@ -494,6 +495,8 @@ export function validateNode(state: BrainState): Partial<BrainState> {
                 inconsistencyReason: extraction.inconsistencyReason,
             }
         }
+    } else if (hasMultipleImages && !extraction.isConsistent) {
+        console.log(`[Node: Validate] Multiple images (${state.imageUrls.length}) - skipping consistency check, trusting user`)
     } else if (userAlreadyClarified && !extraction.isConsistent) {
         console.log(`[Node: Validate] User already clarified (attempts=${state.attempts}) - trusting their answer, ignoring inconsistency`)
     } else if (isSystemError) {
