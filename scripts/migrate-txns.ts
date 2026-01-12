@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Migrate txns table schema
+ * Runs migration: drizzle/0005_simplify_txns.sql
+ * Usage: npx tsx scripts/migrate-txns.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';

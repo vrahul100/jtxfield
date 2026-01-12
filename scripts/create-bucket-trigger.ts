@@ -1,3 +1,13 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Create Supabase database trigger for bucket processing
+ * Sets up pg_net extension and trigger to call Edge Function
+ * when bucket status changes to 'pending_processing'
+ * Requires: SUPABASE_SERVICE_KEY in .env
+ * Usage: npx tsx scripts/create-bucket-trigger.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 

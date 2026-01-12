@@ -1,3 +1,12 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Create a Super User (SU) account for admin access
+ * Uses SUPER_USER_EMAIL and SUPER_USER_PASSWORD from .env
+ * or defaults to admin@jtxfield.com / AduJitsu12#
+ * Usage: npx tsx scripts/create-super-user.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { createUser } from '../src/services/auth.js';

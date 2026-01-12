@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Add summary column to buckets table
+ * Stores the AI-generated summary of the work entry
+ * Usage: npx tsx scripts/add-summary-column.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 

@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Sync schema to Supabase by running all migrations
+ * Runs SQL migrations in order and adds missing columns
+ * Usage: npx tsx scripts/sync-supabase-schema.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';

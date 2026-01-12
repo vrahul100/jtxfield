@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Add clarity_score column to buckets table
+ * Runs migration: drizzle/0007_add_clarity_score.sql
+ * Usage: npx tsx scripts/add-clarity-score.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';

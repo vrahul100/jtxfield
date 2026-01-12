@@ -176,7 +176,6 @@ export function Tickets() {
             headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({
-                rawText: values.message,
                 projectId: values.projectId ? Number(values.projectId) : null,
             }),
         });
@@ -253,13 +252,6 @@ export function Tickets() {
         if (!editingBucket) return [];
 
         return [
-            {
-                name: 'message',
-                label: 'Message',
-                type: 'textarea',
-                value: editingBucket.raw_text,
-                rows: 4,
-            },
             {
                 name: 'projectId',
                 label: 'Project',
@@ -526,23 +518,84 @@ export function Tickets() {
                                             {isExpanded && (
                                                 <tr className="bg-amber-50">
                                                     <td colSpan={10} className="px-6 py-4">
-                                                        <div className="text-xs text-gray-900 mb-4">
-
-
-                                                            {/* AI Summary */}
-                                                            {bucket.summary && (
-                                                                <div className="mt-3 p-3 bg-blue-50 rounded-lg border border-gray-500 mb-2">
-                                                                    <div className="flex items-center gap-2 mb-1">
-                                                                        <span className="text-black font-semibold uppercase text-xs">✨ AI Summary:</span>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                                            {/* Column 1: AI Summary + Attachments */}
+                                                            <div className="space-y-4">
+                                                                {/* AI Summary */}
+                                                                {bucket.summary && (
+                                                                    <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                                                        <div className="flex items-center gap-2 mb-1">
+                                                                            <span className="text-black font-semibold uppercase text-xs">✨ AI Summary</span>
+                                                                        </div>
+                                                                        <p className="text-gray-700 italic text-sm">{bucket.summary}</p>
                                                                     </div>
-                                                                    <p className="text-gray-700 italic">{bucket.summary}</p>
-                                                                </div>
-                                                            )}
+                                                                )}
 
-                                                            {/* WhatsApp-style Conversation */}
-                                                            <div className="mt-4">
-                                                                <span className='ttx-title'>Conversation:</span>
-                                                                <div className="mt-2 space-y-2 max-w-2xl bg-gray-100 rounded-lg p-3" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23d4d4d4\' fill-opacity=\'0.2\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }}>
+                                                                {/* Transcripts */}
+                                                                {bucket.transcripts && (() => {
+                                                                    try {
+                                                                        const transcripts = JSON.parse(bucket.transcripts);
+                                                                        if (Array.isArray(transcripts) && transcripts.length > 0) {
+                                                                            return (
+                                                                                <div className="p-3 bg-purple-50 rounded-lg border border-purple-200">
+                                                                                    <span className="text-black font-semibold uppercase text-xs">🎤 Voice Transcripts</span>
+                                                                                    {transcripts.map((t: string, i: number) => (
+                                                                                        <p key={i} className="text-xs italic mt-2 text-gray-700">"{t}"</p>
+                                                                                    ))}
+                                                                                </div>
+                                                                            );
+                                                                        }
+                                                                    } catch { return null; }
+                                                                    return null;
+                                                                })()}
+
+                                                                {/* Attachments */}
+                                                                {(bucket.image_urls || bucket.audio_urls) && (
+                                                                    <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
+                                                                        <span className="text-black font-semibold uppercase text-xs">📎 Attachments</span>
+                                                                        <div className="flex flex-wrap gap-3 mt-2">
+                                                                            {/* Images */}
+                                                                            {bucket.image_urls && (() => {
+                                                                                try {
+                                                                                    const urls = JSON.parse(bucket.image_urls);
+                                                                                    if (Array.isArray(urls)) {
+                                                                                        return urls.map((url: string, i: number) => (
+                                                                                            <a key={`img-${i}`} href={url} target="_blank" rel="noopener noreferrer">
+                                                                                                <img src={url} alt={`Attachment ${i + 1}`} className="w-20 h-20 object-cover rounded border hover:opacity-80 shadow-sm" />
+                                                                                            </a>
+                                                                                        ));
+                                                                                    }
+                                                                                } catch { return null; }
+                                                                                return null;
+                                                                            })()}
+                                                                            {/* Audio */}
+                                                                            {bucket.audio_urls && (() => {
+                                                                                try {
+                                                                                    const urls = JSON.parse(bucket.audio_urls);
+                                                                                    if (Array.isArray(urls)) {
+                                                                                        return urls.map((url: string, i: number) => (
+                                                                                            <div key={`audio-${i}`} className="flex items-center gap-2 bg-white px-3 py-2 rounded border shadow-sm">
+                                                                                                <Music className="w-4 h-4 text-indigo-600" />
+                                                                                                <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">Voice Note {i + 1}</a>
+                                                                                            </div>
+                                                                                        ));
+                                                                                    }
+                                                                                } catch { return null; }
+                                                                                return null;
+                                                                            })()}
+                                                                        </div>
+                                                                    </div>
+                                                                )}
+
+                                                                <div className="text-xs text-gray-500">
+                                                                    Created: {formatDate(bucket.created_at)}
+                                                                </div>
+                                                            </div>
+
+                                                            {/* Column 2: WhatsApp-style Conversation */}
+                                                            <div>
+                                                                <span className="text-black font-semibold uppercase text-xs mb-2 block">💬 Conversation</span>
+                                                                <div className="space-y-2 bg-[#E5DDD5] rounded-lg p-3 min-h-[200px]" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23c9c2b8\' fill-opacity=\'0.3\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }}>
                                                                     {bucket.conversation_history && Array.isArray(bucket.conversation_history) ? (
                                                                         bucket.conversation_history.map((msg, i) => (
                                                                             <div
@@ -550,9 +603,9 @@ export function Tickets() {
                                                                                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                                                             >
                                                                                 <div
-                                                                                    className={`max-w-[80%] px-3 py-2 rounded-lg text-xs shadow-sm ${msg.role === 'user'
-                                                                                            ? 'bg-[#DCF8C6] text-gray-900 rounded-br-none'
-                                                                                            : 'bg-white text-gray-900 rounded-bl-none'
+                                                                                    className={`max-w-[85%] px-3 py-2 rounded-lg text-xs shadow ${msg.role === 'user'
+                                                                                        ? 'bg-[#DCF8C6] text-gray-900 rounded-tr-none'
+                                                                                        : 'bg-white text-gray-900 rounded-tl-none'
                                                                                         }`}
                                                                                 >
                                                                                     <p className="whitespace-pre-wrap">{msg.content}</p>
@@ -565,77 +618,56 @@ export function Tickets() {
                                                                             </div>
                                                                         ))
                                                                     ) : (
-                                                                        /* Fallback to raw_text if no conversation history */
-                                                                        <div className="flex justify-end">
-                                                                            <div className="max-w-[80%] px-3 py-2 rounded-lg rounded-br-none text-xs shadow-sm bg-[#DCF8C6] text-gray-900">
-                                                                                <p className="whitespace-pre-wrap">{bucket.raw_text || '(No message)'}</p>
-                                                                            </div>
-                                                                        </div>
+                                                                        /* Parse Q: and A: from raw_text */
+                                                                        (() => {
+                                                                            const text = bucket.raw_text || '';
+                                                                            // Split by Q: or A: while keeping the delimiter
+                                                                            const parts = text.split(/(Q:|A:)/g).filter(Boolean);
+                                                                            const messages: { role: 'question' | 'answer'; content: string }[] = [];
+
+                                                                            for (let i = 0; i < parts.length; i++) {
+                                                                                const part = parts[i].trim();
+                                                                                if (part === 'Q:' && parts[i + 1]) {
+                                                                                    messages.push({ role: 'question', content: parts[i + 1].trim().replace(/^---+/gm, '').trim() });
+                                                                                    i++;
+                                                                                } else if (part === 'A:' && parts[i + 1]) {
+                                                                                    messages.push({ role: 'answer', content: parts[i + 1].trim().replace(/^---+/gm, '').trim() });
+                                                                                    i++;
+                                                                                } else if (part !== 'Q:' && part !== 'A:' && part && !part.match(/^---+$/)) {
+                                                                                    // If no Q:/A: prefix, treat as user answer
+                                                                                    messages.push({ role: 'answer', content: part });
+                                                                                }
+                                                                            }
+
+                                                                            if (messages.length === 0) {
+                                                                                return (
+                                                                                    <div className="flex justify-end">
+                                                                                        <div className="max-w-[85%] px-3 py-2 rounded-lg rounded-tr-none text-xs shadow bg-[#DCF8C6] text-gray-900">
+                                                                                            <p className="whitespace-pre-wrap">{text || '(No message)'}</p>
+                                                                                        </div>
+                                                                                    </div>
+                                                                                );
+                                                                            }
+
+                                                                            return messages.map((msg, i) => (
+                                                                                <div
+                                                                                    key={i}
+                                                                                    className={`flex ${msg.role === 'answer' ? 'justify-end' : 'justify-start'}`}
+                                                                                >
+                                                                                    <div
+                                                                                        className={`max-w-[85%] px-3 py-2 rounded-lg text-xs shadow ${msg.role === 'answer'
+                                                                                            ? 'bg-[#DCF8C6] text-gray-900 rounded-tr-none'
+                                                                                            : 'bg-white text-gray-900 rounded-tl-none'
+                                                                                            }`}
+                                                                                    >
+                                                                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                                                                    </div>
+                                                                                </div>
+                                                                            ));
+                                                                        })()
                                                                     )}
                                                                 </div>
                                                             </div>
-                                                        </div>
-
-                                                        {/* Transcripts */}
-                                                        {bucket.transcripts && (() => {
-                                                            try {
-                                                                const transcripts = JSON.parse(bucket.transcripts);
-                                                                if (Array.isArray(transcripts) && transcripts.length > 0) {
-                                                                    return (
-                                                                        <div className="mb-4">
-                                                                            <span className='ttx-title'>Transcripts:</span>
-                                                                            {transcripts.map((t: string, i: number) => (
-                                                                                <p key={i} className="text-xs italic mt-1">"{t}"</p>
-                                                                            ))}
-                                                                        </div>
-                                                                    );
-                                                                }
-                                                            } catch { return null; }
-                                                            return null;
-                                                        })()}
-
-                                                        {/* Media */}
-                                                        {(bucket.image_urls || bucket.audio_urls) && (
-                                                            <div>
-                                                                <strong>Attachments:</strong>
-                                                                <div className="flex flex-wrap gap-4 mt-2">
-                                                                    {/* Images */}
-                                                                    {bucket.image_urls && (() => {
-                                                                        try {
-                                                                            const urls = JSON.parse(bucket.image_urls);
-                                                                            if (Array.isArray(urls)) {
-                                                                                return urls.map((url: string, i: number) => (
-                                                                                    <a key={`img-${i}`} href={url} target="_blank" rel="noopener noreferrer">
-                                                                                        <img src={url} alt={`Attachment ${i + 1}`} className="w-24 h-24 object-cover rounded border hover:opacity-80" />
-                                                                                    </a>
-                                                                                ));
-                                                                            }
-                                                                        } catch { return null; }
-                                                                        return null;
-                                                                    })()}
-                                                                    {/* Audio */}
-                                                                    {bucket.audio_urls && (() => {
-                                                                        try {
-                                                                            const urls = JSON.parse(bucket.audio_urls);
-                                                                            if (Array.isArray(urls)) {
-                                                                                return urls.map((url: string, i: number) => (
-                                                                                    <div key={`audio-${i}`} className="flex items-center gap-2 bg-white px-3 py-2 rounded border">
-                                                                                        <Music className="w-4 h-4 text-indigo-600" />
-                                                                                        <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-xs">Voice Note {i + 1}</a>
-                                                                                    </div>
-                                                                                ));
-                                                                            }
-                                                                        } catch { return null; }
-                                                                        return null;
-                                                                    })()}
-                                                                </div>
-                                                            </div>
-                                                        )}
-
-
-
-                                                        <div className="text-xs text-gray-500 mt-4">
-                                                            Created: {formatDate(bucket.created_at)}
                                                         </div>
                                                     </td>
                                                 </tr>

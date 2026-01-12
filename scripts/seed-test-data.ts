@@ -1,3 +1,12 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Seed database with test data
+ * Creates: nodes, super user, office managers, projects, workers, inbox projects
+ * Prints test credentials at the end
+ * Usage: npx tsx scripts/seed-test-data.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { createUser } from '../src/services/auth.js';

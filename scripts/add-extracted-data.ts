@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Add extracted_data JSONB column to buckets table
+ * Runs migration: drizzle/0006_add_extracted_data.sql
+ * Usage: npx tsx scripts/add-extracted-data.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { readFileSync } from 'fs';

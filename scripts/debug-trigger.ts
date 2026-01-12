@@ -1,3 +1,12 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Debug Supabase trigger setup for bucket processing
+ * Checks: trigger exists, function exists, pg_net extension, HTTP responses
+ * Also creates a test bucket to verify trigger fires correctly
+ * Usage: npx tsx scripts/debug-trigger.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 

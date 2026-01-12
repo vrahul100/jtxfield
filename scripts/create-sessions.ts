@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Create sessions table for user authentication
+ * Creates table with user_id FK and expiry tracking
+ * Usage: npx tsx scripts/create-sessions.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'url';

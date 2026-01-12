@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Add conversation_history JSONB column to buckets table
+ * Stores the Q&A thread between the bot and the worker
+ * Usage: npx tsx scripts/add-conversation-history.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 

@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Reset entire database by dropping all tables
+ * ⚠️ DESTRUCTIVE: Drops all tables including migration history
+ * Usage: npx tsx scripts/reset-db.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 

@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Verify database schema
+ * Lists all tables and shows members table columns
+ * Usage: npx tsx scripts/verify-schema.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 
@@ -25,9 +33,9 @@ const columns = await sql`
 `;
 
 columns.forEach(c => {
-    const type = c.data_type + (c.character_maximum_length ? `(${c.character_maximum_length})` : '');
-    const def = c.column_default ? ` DEFAULT ${c.column_default}` : '';
-    console.log(`  • ${c.column_name}: ${type}${def}`);
+  const type = c.data_type + (c.character_maximum_length ? `(${c.character_maximum_length})` : '');
+  const def = c.column_default ? ` DEFAULT ${c.column_default}` : '';
+  console.log(`  • ${c.column_name}: ${type}${def}`);
 });
 
 await sql.end();

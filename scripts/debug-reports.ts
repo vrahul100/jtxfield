@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Debug reports data and query logic
+ * Shows transaction counts, date ranges, and tests report queries
+ * Usage: npx tsx scripts/debug-reports.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 

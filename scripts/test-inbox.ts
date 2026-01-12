@@ -1,3 +1,11 @@
+#!/usr/bin/env npx tsx
+
+/**
+ * Test inbox system implementation
+ * Verifies: inbox projects, schema updates, alias management, bucket tagging
+ * Usage: npx tsx scripts/test-inbox.ts
+ */
+
 import postgres from 'postgres';
 import dotenv from 'dotenv';
 
