@@ -585,24 +585,24 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
     const msgs = lang === 'es' ? {
         clarify: '¿Puedes aclarar?',
-        flagged: `📋 Ticket #${ticketId} marcado para revisión. He guardado los datos.`,
-        savedBlanks: `📋 Ticket #${ticketId} guardado con datos incompletos. Lo arreglaremos después.`,
-        success: (wt: string, h: number, proj: string) => `✅ Ticket #${ticketId}: ${wt} por ${h}h en ${proj}. ¡Registrado!`,
-        askWorkType: `🔧 Ticket #${ticketId}: ¿Qué tipo de trabajo hiciste?`,
-        askHours: `⏱️ Ticket #${ticketId}: Veo ${workType}. ¿Cuántas horas trabajaste? (agrega detalles si quieres)`,
-        askSummary: `📝 Ticket #${ticketId}: ¿Puedes describir brevemente lo que hiciste?`,
-        askProject: `📍 Ticket #${ticketId}: ¿En qué proyecto trabajaste?`,
-        askProjectConfirmation: (pName: string) => `📍 Ticket #${ticketId}: ¿Sigues en "${pName}"? (S/N)`,
+        flagged: `📋 *Ticket #${ticketId}*\n marcado para revisión. He guardado los datos.`,
+        savedBlanks: `📋 *Ticket #${ticketId}*\n guardado con datos incompletos. Lo arreglaremos después.`,
+        success: (wt: string, h: number, proj: string) => `✅ *Ticket #${ticketId}*\n ${wt} por ${h}h en ${proj}. ¡Registrado!`,
+        askWorkType: `🔧 *Ticket #${ticketId}*\n ¿Qué tipo de trabajo hiciste?`,
+        askHours: `⏱️ *Ticket #${ticketId}*\n Veo ${workType}. ¿Cuántas horas trabajaste? (agrega detalles si quieres)`,
+        askSummary: `📝 *Ticket #${ticketId}*\n ¿Puedes describir brevemente lo que hiciste?`,
+        askProject: `📍 *Ticket #${ticketId}*\n ¿En qué proyecto trabajaste?`,
+        askProjectConfirmation: (pName: string) => `📍 *Ticket #${ticketId}*\n ¿Sigues en "${pName}"? (S/N)`,
     } : {
         clarify: 'Can you clarify?',
-        flagged: `📋 Ticket #${ticketId} flagged for boss to check. I've saved the data.`,
-        savedBlanks: `📋 Ticket #${ticketId} saved with blanks. We can fix it later.`,
-        success: (wt: string, h: number, proj: string) => `✅ Ticket #${ticketId}: ${wt} for ${h}h at ${proj}. Logged!`,
-        askWorkType: `🔧 Ticket #${ticketId}: What type of work did you do?`,
-        askHours: `⏱️ Ticket #${ticketId}: I see ${workType}. How many hours? (add details if you want)`,
-        askSummary: `📝 Ticket #${ticketId}: Can you briefly describe what you did?`,
-        askProject: `📍 Ticket #${ticketId}: Which project were you working on?`,
-        askProjectConfirmation: (pName: string) => `📍 Ticket #${ticketId}: Still at "${pName}"? (Y/N)`,
+        flagged: `📋 *Ticket #${ticketId}*\n flagged for boss to check. I've saved the data.`,
+        savedBlanks: `📋 *Ticket #${ticketId}*\n saved with blanks. We can fix it later.`,
+        success: (wt: string, h: number, proj: string) => `✅ *Ticket #${ticketId}*\n ${wt} for ${h}h at ${proj}. Logged!`,
+        askWorkType: `🔧 *Ticket #${ticketId}*\n What type of work did you do?`,
+        askHours: `⏱️ *Ticket #${ticketId}*\n I see ${workType}. How many hours? (add details if you want)`,
+        askSummary: `📝 *Ticket #${ticketId}*\n Can you briefly describe what you did?`,
+        askProject: `📍 *Ticket #${ticketId}*\n Which project were you working on?`,
+        askProjectConfirmation: (pName: string) => `📍 *Ticket #${ticketId}*\n Still at "${pName}"? (Y/N)`,
     }
 
     // Map field names to questions
@@ -636,7 +636,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     if (validation.inconsistencyReason) {
         if (attempts < 3) {
             // Use the inconsistencyReason from LLM (already in user's language)
-            const question = `⚠️ Ticket #${ticketId}: ${validation.inconsistencyReason}\n${msgs.clarify}`
+            const question = `⚠️ *Ticket #${ticketId}*\n ${validation.inconsistencyReason}\n${msgs.clarify}`
             await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
             await supabase.from('buckets').update({
                 status: 'open',
@@ -699,8 +699,8 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
                 if (projects && projects.length > 0) {
                     const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
                     question = lang === 'es'
-                        ? `📍 Ticket #${ticketId}: ¿En qué proyecto trabajaste?\n\n${projectList}\n\nResponde con el número.`
-                        : `📍 Ticket #${ticketId}: Which project were you working on?\n\n${projectList}\n\nReply with the number.`
+                        ? `📍 *Ticket #${ticketId}*\n ¿En qué proyecto trabajaste?\n\n${projectList}\n\nResponde con el número.`
+                        : `📍 *Ticket #${ticketId}*\n Which project were you working on?\n\n${projectList}\n\nReply with the number.`
                 } else {
                     question = fieldQuestions[field] || `What is the ${field}?`
                 }

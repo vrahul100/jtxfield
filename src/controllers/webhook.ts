@@ -9,32 +9,16 @@ import { normalizeTwilioPayload } from '../utils/normalize.js'
 import { getRequestBody } from '../utils/request.js';
 import { t, getLang } from '../services/i18n.js'
 import {
-  getLastConfirmedProject,
   findOpenBucket,
   createBucket,
   appendToBucket,
-  validateBucket,
-  closeBucket,
   addToHoldingTank,
-  updateLastConfirmedProject,
-  queueBucketForProcessing,
   ensureInboxProject,
-  findProjectByAlias,
   Member,
   Bucket
 } from '../services/bucketService.js'
-import { sendTwilioMessage } from '../services/twilio.js'
 import { handleJoinRequest } from './joinHandler.js'
 import { confirmMemberByPhone } from './members.js'
-import {
-  classifyIntent,
-  getConversationHistory,
-  appendConversation,
-  generateResponse,
-  cancelBucket,
-  submitBucket,
-  ConversationMessage
-} from '../services/conversationEngine.js'
 
 const validator = getMediaValidator();
 
@@ -136,9 +120,16 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     if (confirmResult.success) {
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
       const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `✅ Welcome to Jentyx jField${name}!${teamMsg}
+      const welcomeMsg = `🎉 Welcome to Jentyx jField${name}!${teamMsg}
 
-You're now activated. Start sending your work updates via text, photos, or voice notes.`;
+*You're now activated and ready to go!*
+
+Just send:
+• 📸 Photos of your work
+• 🎤 Voice notes describing what you did
+• ⏱️ How many hours it took
+
+I'll track everything automatically!`;
       return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
     // If not a pending member, continue with normal flow
@@ -335,187 +326,4 @@ async function processMedia(normalized: any, body: any): Promise<{
   };
 }
 
-/**
- * Handle project correction when user types "N"
- */
-async function handleProjectCorrection(
-  c: Context,
-  sql: Sql,
-  member: Member,
-  normalized: any
-): Promise<Response> {
-  console.log(`[CORRECTION] User ${member.phone_number} wants to change project`);
-
-  // Find the most recent bucket for this member
-  const recentBuckets = await sql`
-SELECT * FROM buckets
-    WHERE member_id = ${member.id}
-      AND created_at > NOW() - INTERVAL '30 minutes'
-      AND status IN('closed', 'processing', 'completed')
-    ORDER BY created_at DESC
-    LIMIT 1
-  `;
-
-  if (recentBuckets.length === 0) {
-    return c.text('<Response><Message>No recent activity to correct.</Message></Response>', 200, { 'Content-Type': 'text/xml' });
-  }
-
-  const bucketToFix = recentBuckets[0];
-
-  // Mark this specific bucket as awaiting correction
-  await sql`
-    UPDATE buckets SET
-status = 'awaiting_correction',
-  updated_at = NOW()
-    WHERE id = ${bucketToFix.id}
-`;
-  console.log(`[CORRECTION] Marked bucket #${bucketToFix.id} as awaiting_correction`);
-
-  // Get available projects
-  const projects = await sql`
-    SELECT id, name FROM projects 
-    WHERE node_id = ${member.company_id} AND is_active = true
-    ORDER BY name
-    LIMIT 10
-  `;
-
-  if (projects.length === 0) {
-    return c.text('<Response><Message>No projects found. Please contact your admin.</Message></Response>', 200, { 'Content-Type': 'text/xml' });
-  }
-
-  // Send project list
-  const projectList = projects.map((p: any, i: number) => `${i + 1}. ${p.name} `).join('\n');
-  const msg = `🔄 Which project should I fix this to ?\n\n${projectList} \n\nReply with the number.`;
-
-  await sendTwilioMessage(normalized.sender, msg, normalized.source);
-
-  return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
-}
-
-/**
- * Handle numbered response for project selection (retroactive fix)
- */
-async function handleProjectSelectionResponse(
-  c: Context,
-  sql: Sql,
-  member: Member,
-  selection: number,
-  normalized: any
-): Promise<Response | null> {
-  // First check for open bucket awaiting project selection (validation_attempts = -1)
-  const pendingProjectBuckets = await sql`
-    SELECT b.* FROM buckets b
-    WHERE b.member_id = ${member.id}
-      AND b.status = 'open'
-      AND b.validation_attempts = -1
-    ORDER BY b.updated_at DESC
-    LIMIT 1
-  `;
-
-  if (pendingProjectBuckets.length > 0) {
-    const bucket = pendingProjectBuckets[0];
-
-    // Get projects for selection (same query as when asking)
-    const projects = await sql`
-      SELECT id, name FROM projects 
-      WHERE node_id = ${member.company_id} AND is_inbox = false AND is_active = true
-      ORDER BY name LIMIT 5
-    `;
-
-    const projectIndex = selection - 1;
-    if (projectIndex < 0 || projectIndex >= projects.length) {
-      const msg = `Invalid selection.Reply with a number between 1 and ${projects.length}.`;
-      return c.text(`< Response > <Message>${msg} </Message></Response > `, 200, { 'Content-Type': 'text/xml' });
-    }
-
-    const selectedProject = projects[projectIndex] as { id: number; name: string };
-    console.log(`[PROJECT] User selected: ${selectedProject.name} for bucket #${bucket.id}`);
-
-    // Update bucket with selected project and submit
-    await sql`
-      UPDATE buckets SET
-project_id = ${selectedProject.id},
-status = 'submitted',
-  validation_attempts = 0,
-  updated_at = NOW()
-      WHERE id = ${bucket.id}
-`;
-
-    // Update last confirmed project
-    await updateLastConfirmedProject(sql, member.id, selectedProject.id);
-
-    const confirmationMsg = `✅ Ticket #${bucket.id} submitted!\n\nLogged to: ${selectedProject.name} `;
-    return c.text(`< Response > <Message>${confirmationMsg} </Message></Response > `, 200, { 'Content-Type': 'text/xml' });
-  }
-
-  // Otherwise check for awaiting_correction (legacy flow)
-  const awaitingBuckets = await sql`
-    SELECT b.*, p.name as project_name FROM buckets b
-    LEFT JOIN projects p ON b.project_id = p.id
-    WHERE b.member_id = ${member.id}
-      AND b.status = 'awaiting_correction'
-    ORDER BY b.updated_at DESC
-    LIMIT 1
-  `;
-
-  if (awaitingBuckets.length === 0) {
-    // No bucket awaiting correction - this is just a regular numbered message
-    return null;
-  }
-
-  const bucketToFix = awaitingBuckets[0];
-  console.log(`[CORRECTION] Found bucket #${bucketToFix.id} awaiting correction`);
-
-  // Get projects for selection
-  const projects = await sql`
-    SELECT id, name FROM projects 
-    WHERE node_id = ${member.company_id} AND is_active = true
-    ORDER BY name
-    LIMIT 10
-  `;
-
-  const projectIndex = selection - 1;
-  if (projectIndex < 0 || projectIndex >= projects.length) {
-    await sendTwilioMessage(
-      normalized.sender,
-      `Invalid selection.Please reply with a number between 1 and ${projects.length}.`,
-      normalized.source
-    );
-    return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
-  }
-
-  const newProject = projects[projectIndex] as { id: number; name: string };
-  console.log(`[CORRECTION] Fixing bucket #${bucketToFix.id} from "${bucketToFix.project_name}" to "${newProject.name}"`);
-
-  // 1. Update the bucket (restore to submitted status)
-  await sql`
-    UPDATE buckets SET
-project_id = ${newProject.id},
-status = 'submitted',
-  updated_at = NOW()
-    WHERE id = ${bucketToFix.id}
-`;
-
-  // 2. Update any associated transaction
-  await sql`
-    UPDATE txns SET
-project_id = ${newProject.id}
-    WHERE bucket_id = ${bucketToFix.id}
-`;
-
-  // 3. Update member's last confirmed project
-  await sql`
-    UPDATE members SET
-last_confirmed_project_id = ${newProject.id},
-project_confirmed_at = NOW()
-    WHERE id = ${member.id}
-`;
-
-  // Send confirmation
-  const confirmMsg = `✅ Fixed! Changed project to: ${newProject.name} `;
-  await sendTwilioMessage(normalized.sender, confirmMsg, normalized.source);
-
-  console.log(`[CORRECTION] ✅ Retroactively fixed bucket #${bucketToFix.id} and any txns`);
-
-  return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
-}
+// NOTE: Project correction/selection functions removed - Edge Function's resolveProjectNode handles all project flows

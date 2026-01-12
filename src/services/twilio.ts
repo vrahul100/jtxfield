@@ -88,9 +88,9 @@ export function formatReplyMessage(
 
     // Use AI-generated reply if available, otherwise default
     if (aiResult?.reply_message) {
-        return `${aiResult.reply_message}\n\n📋 Ticket #${ticketId}`;
+        return `${aiResult.reply_message}\n\n📋 *Ticket #${ticketId}*\n`;
     }
 
     // Default English response
-    return `${emoji} Ticket #${ticketId} logged.\n💰 Value: $${revenue.toFixed(2)}`;
+    return `${emoji} *Ticket #${ticketId}*\n logged.\n💰 Value: $${revenue.toFixed(2)}`;
 }

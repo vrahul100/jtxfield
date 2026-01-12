@@ -7,7 +7,7 @@ import { sendTwilioMessage } from './twilio.js';
 export function generateVCard(): string {
     return `BEGIN:VCARD
 VERSION:3.0
-FN:Jentyx Field 
+FN:Jentyx jField 
 TEL;TYPE=CELL:+12029536899
 ORG:Jentyx
 TITLE:Your AI Work Assistant
@@ -24,7 +24,7 @@ export async function sendVCard(toNumber: string, message: string): Promise<void
     const fullMessage = `${message}
 
 📞 Save this number: +1 (202) 953-6899
-👤 Contact name: Jentyx Field
+👤 Contact name: Jentyx jField
 
 (Add to your contacts so you recognize future messages!)`;
 
