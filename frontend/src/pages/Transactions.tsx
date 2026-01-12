@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EditModal, EditField } from '../components/EditModal';
-import { Pencil, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react';
+import { SquareChevronRight, SquareChevronDown, SquareChevronLeft, AlertTriangle, PencilIcon } from 'lucide-react';
 
 interface Transaction {
     id: number;
@@ -17,6 +17,7 @@ interface Transaction {
     scope_description: string | null;
     status: string;
     ai_summary: string | null;
+    potential_change: boolean | null;
     created_at: string;
     member_name: string | null;
     member_phone: string | null;
@@ -41,6 +42,7 @@ export function Transactions() {
     const [search, setSearch] = useState('');
     const [projectFilter, setProjectFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
+    const [changeFilter, setChangeFilter] = useState('all');
 
     useEffect(() => {
         fetchProjects();
@@ -49,11 +51,11 @@ export function Transactions() {
 
     useEffect(() => {
         setPage(1); // Reset to page 1 when filters change
-    }, [statusFilter, projectFilter, search]);
+    }, [statusFilter, projectFilter, search, changeFilter]);
 
     useEffect(() => {
         fetchTransactions();
-    }, [statusFilter, projectFilter, search, page]);
+    }, [statusFilter, projectFilter, search, changeFilter, page]);
 
     const fetchProjects = async () => {
         try {
@@ -73,6 +75,7 @@ export function Transactions() {
             const params = new URLSearchParams();
             if (statusFilter !== 'all') params.append('status', statusFilter);
             if (projectFilter !== 'all') params.append('projectId', projectFilter);
+            if (changeFilter !== 'all') params.append('potentialChange', changeFilter);
             params.append('page', page.toString());
             params.append('limit', '10');
             if (search.trim()) params.append('search', search.trim());
@@ -233,6 +236,20 @@ export function Transactions() {
                                 ))}
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                ⚠️ Change
+                            </label>
+                            <select
+                                value={changeFilter}
+                                onChange={(e) => setChangeFilter(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="all">All</option>
+                                <option value="true">Flagged</option>
+                                <option value="false">Not Flagged</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -244,6 +261,8 @@ export function Transactions() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
+                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" title="This time is linked to a potential scope change">⚠️ Change?</th>
+
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time (hrs)</th>
@@ -259,19 +278,31 @@ export function Transactions() {
                                 return (
                                     <React.Fragment key={txn.id}>
                                         <tr
-                                            className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-yellow-50' : ''}`}
+                                            className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-amber-50' : ''}`}
                                             onClick={() => toggleExpand(txn.id)}
                                         >
                                             <td className="px-6 py-4 whitespace-nowrap">
                                                 <button
-                                                    className="p-1 hover:bg-gray-200 rounded"
+                                                    className="w-6 h-6 p-1 hover:bg-gray-200 rounded "
                                                 >
-                                                    {isExpanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+                                                    {isExpanded ? <SquareChevronDown className="w-6 h-6" strokeWidth={3} /> : <SquareChevronRight className="w-6 h-6" strokeWidth={3} />}
                                                 </button>
                                             </td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.id}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(txn.created_at)}</td>
                                             <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.bucket_id}</td>
+                                            <td className="px-4 py-4 text-center">
+                                                {txn.potential_change ? (
+                                                    <span
+                                                        className="text-orange-600"
+                                                        title="⚠️ This time is linked to a potential scope change"
+                                                    >
+                                                        <AlertTriangle className="w-6 h-6 inline" fill="currentColor" strokeWidth={3} />
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-gray-200">-</span>
+                                                )}
+                                            </td>
                                             <td className="px-6 py-4 text-sm">
                                                 <div>{txn.member_name || 'Unknown'}</div>
                                                 {txn.member_phone && (
@@ -293,12 +324,13 @@ export function Transactions() {
                                                     {txn.status}
                                                 </span>
                                             </td>
+
                                             <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
                                                 <button
                                                     onClick={() => handleEdit(txn)}
                                                     className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
                                                 >
-                                                    <Pencil className="w-4 h-4" />
+                                                    <PencilIcon className="w-6 h-6" strokeWidth={3} />
                                                     Edit
                                                 </button>
                                             </td>
@@ -306,8 +338,8 @@ export function Transactions() {
 
                                         {/* Expanded Row */}
                                         {isExpanded && (
-                                            <tr className="bg-yellow-50">
-                                                <td colSpan={11} className="px-6 py-4">
+                                            <tr className="bg-amber-50">
+                                                <td colSpan={12} className="px-6 py-4">
                                                     <div className="grid grid-cols-2 gap-4 text-sm">
                                                         {txn.ai_summary && (
                                                             <div className="col-span-2 p-3 bg-blue-50 rounded-lg border border-gray-500 mb-2">
@@ -386,7 +418,7 @@ export function Transactions() {
                                 disabled={page === 1}
                                 className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
-                                <ChevronLeft className="w-4 h-4" />
+                                <SquareChevronLeft className="w-6 h-6" strokeWidth={3} />
                                 Previous
                             </button>
                             <span className="px-3 py-1 text-sm">Page {page} of {totalPages}</span>
@@ -396,7 +428,7 @@ export function Transactions() {
                                 className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                                 Next
-                                <ChevronRight className="w-4 h-4" />
+                                <SquareChevronRight className="w-6 h-6" strokeWidth={3} />
                             </button>
                         </div>
                     </div>

@@ -1,6 +1,6 @@
-# jField - Complete Supabase Setup Guide
+# Jentyx - Complete Supabase Setup Guide
 
-This guide covers setting up a fresh jField instance on Supabase from scratch.
+This guide covers setting up a fresh Jentyx instance on Supabase from scratch.
 
 ## Prerequisites
 

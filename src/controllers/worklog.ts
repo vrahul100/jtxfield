@@ -17,6 +17,7 @@ export async function getWorklog(c: Context, sql: Sql) {
         const status = c.req.query('status');
         const projectId = c.req.query('projectId');
         const memberId = c.req.query('memberId');
+        const potentialChange = c.req.query('potentialChange');
         const sortBy = c.req.query('sortBy') || 'created_at';
         const order = c.req.query('order') || 'desc';
         const search = c.req.query('search') || '';
@@ -42,6 +43,11 @@ export async function getWorklog(c: Context, sql: Sql) {
         }
         if (memberId) {
             conditions.push(`b.member_id = ${parseInt(memberId)}`);
+        }
+        if (potentialChange === 'true') {
+            conditions.push(`b.potential_change = true`);
+        } else if (potentialChange === 'false') {
+            conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
         }
 
         // Search across ID, member name, phone, project name, and raw text
@@ -93,6 +99,7 @@ export async function getWorklog(c: Context, sql: Sql) {
                 b.status,
                 b.clarity_score,
                 b.extracted_data,
+                b.potential_change,
                 b.created_at,
                 b.updated_at,
                 b.node_id,
@@ -172,14 +179,14 @@ export async function approveBucket(c: Context, sql: Sql) {
 
 /**
  * PUT /api/worklog/:id
- * Update a bucket's raw_text and/or project_id
+ * Update a bucket's raw_text, project_id, and/or potential_change
  */
 export async function updateBucket(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const bucketId = parseInt(c.req.param('id'));
         const body = await getRequestBody(c);
-        const { rawText, projectId } = body;
+        const { rawText, projectId, potential_change } = body;
 
         // Get bucket
         const buckets = await sql`SELECT * FROM buckets WHERE id = ${bucketId}`;
@@ -194,32 +201,33 @@ export async function updateBucket(c: Context, sql: Sql) {
             return c.json({ error: 'Forbidden' }, 403);
         }
 
-        // Build update query based on what's provided
-        if (rawText !== undefined && projectId !== undefined) {
-            await sql`
-                UPDATE buckets 
-                SET raw_text = ${rawText},
-                    project_id = ${projectId},
-                    updated_at = NOW()
-                WHERE id = ${bucketId}
-            `;
-        } else if (rawText !== undefined) {
-            await sql`
-                UPDATE buckets 
-                SET raw_text = ${rawText},
-                    updated_at = NOW()
-                WHERE id = ${bucketId}
-            `;
-        } else if (projectId !== undefined) {
-            await sql`
-                UPDATE buckets 
-                SET project_id = ${projectId},
-                    updated_at = NOW()
-                WHERE id = ${bucketId}
-            `;
-        } else {
-            return c.json({ error: 'rawText or projectId is required' }, 400);
+        // Build dynamic update based on what's provided
+        const updates: string[] = [];
+        const values: any[] = [];
+        let paramIndex = 1;
+
+        if (rawText !== undefined) {
+            updates.push(`raw_text = $${paramIndex++}`);
+            values.push(rawText);
         }
+        if (projectId !== undefined) {
+            updates.push(`project_id = $${paramIndex++}`);
+            values.push(projectId);
+        }
+        if (potential_change !== undefined) {
+            updates.push(`potential_change = $${paramIndex++}`);
+            values.push(potential_change);
+        }
+
+        if (updates.length === 0) {
+            return c.json({ error: 'rawText, projectId, or potential_change is required' }, 400);
+        }
+
+        updates.push('updated_at = NOW()');
+        values.push(bucketId);
+
+        const query = `UPDATE buckets SET ${updates.join(', ')} WHERE id = $${paramIndex}`;
+        await sql.unsafe(query, values);
 
         console.log(`[Tickets] Bucket #${bucketId} updated by user ${user.id}`);
 

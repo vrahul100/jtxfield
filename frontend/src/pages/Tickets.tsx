@@ -1,16 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EditModal, EditField } from '../components/EditModal';
+
+import { PencilIcon } from 'lucide-react';
+
 import {
-    Pencil,
-    Music,
     Paperclip,
-    ChevronRight,
-    ChevronDown,
+    SquareChevronDown,
     Circle,
-    ChevronLeft,
     Check,
-    X
+    X,
+    AlertTriangle,
+    SquareChevronLeft,
+    SquareChevronRight,
+    Music
 } from 'lucide-react';
 
 interface ConversationMessage {
@@ -37,6 +40,7 @@ interface Bucket {
     conversation_history: ConversationMessage[] | null;
     clarity_score: number | null;
     notes: string | null;
+    potential_change: boolean | null;
     created_at: string;
     updated_at?: string;
 }
@@ -58,6 +62,7 @@ export function Tickets() {
     const [sortBy, setSortBy] = useState('created_at');
     const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
     const [search, setSearch] = useState('');
+    const [changeFilter, setChangeFilter] = useState('all');
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
@@ -68,11 +73,11 @@ export function Tickets() {
 
     useEffect(() => {
         setPage(1); // Reset to page 1 when filters change
-    }, [statusFilter, projectFilter, sortBy, sortOrder, search]);
+    }, [statusFilter, projectFilter, sortBy, sortOrder, search, changeFilter]);
 
     useEffect(() => {
         fetchBuckets();
-    }, [statusFilter, projectFilter, sortBy, sortOrder, search, page]);
+    }, [statusFilter, projectFilter, sortBy, sortOrder, search, changeFilter, page]);
 
     const fetchProjects = async () => {
         try {
@@ -93,6 +98,7 @@ export function Tickets() {
             const params = new URLSearchParams();
             if (statusFilter !== 'all') params.append('status', statusFilter);
             if (projectFilter !== 'all') params.append('projectId', projectFilter);
+            if (changeFilter !== 'all') params.append('potentialChange', changeFilter);
             params.append('sortBy', sortBy);
             params.append('order', sortOrder);
             params.append('page', page.toString());
@@ -220,6 +226,29 @@ export function Tickets() {
         }
     };
 
+    const handleTogglePotentialChange = async (id: number, currentValue: boolean | null) => {
+        try {
+            const response = await fetch(`/api/worklog/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                    potential_change: !currentValue,
+                }),
+            });
+            if (response.ok) {
+                // Update local state immediately for better UX
+                setBuckets(prev => prev.map(b =>
+                    b.id === id ? { ...b, potential_change: !currentValue } : b
+                ));
+            } else {
+                console.error('Failed to toggle potential change');
+            }
+        } catch (error) {
+            console.error('Error toggling potential change:', error);
+        }
+    };
+
     const getEditFields = (): EditField[] => {
         if (!editingBucket) return [];
 
@@ -255,7 +284,7 @@ export function Tickets() {
         <Layout>
             <div>
                 <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Tickets</h1>
+                    <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
                     <button onClick={fetchBuckets} className="btn-primary">
                         Refresh
                     </button>
@@ -329,6 +358,20 @@ export function Tickets() {
                                 <option value="asc">Oldest First</option>
                             </select>
                         </div>
+                        <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">
+                                ⚠️ Change
+                            </label>
+                            <select
+                                value={changeFilter}
+                                onChange={(e) => setChangeFilter(e.target.value)}
+                                className="input-field"
+                            >
+                                <option value="all">All</option>
+                                <option value="true">Flagged</option>
+                                <option value="false">Not Flagged</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
 
@@ -348,9 +391,12 @@ export function Tickets() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Status
                                     </th>
+                                    <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider" title="Mark work that may indicate a scope change">
+                                        ⚠️ Change?
+                                    </th>
 
                                     <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
-                                        Confidence Score
+                                        AI Confidence
                                     </th>
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Member
@@ -371,14 +417,14 @@ export function Tickets() {
                                     const isExpanded = expandedBucketIds.includes(bucket.id);
                                     return (
                                         <React.Fragment key={bucket.id}>
-                                            <tr className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-yellow-50' : ''}`} onClick={() => toggleExpand(bucket.id)}>
-                                                <td className="px-2 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
+                                            <tr className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-amber-50' : ''}`} onClick={() => toggleExpand(bucket.id)}>
+                                                <td className="px-6 py-4 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                                                     <button
                                                         onClick={() => toggleExpand(bucket.id)}
-                                                        className="w-6 h-6 flex items-center justify-center text-gray-500 hover:text-gray-700 border rounded"
+                                                        className="w-6 h-6 p-1 hover:bg-gray-200 rounded "
                                                         title={isExpanded ? 'Collapse' : 'Expand'}
                                                     >
-                                                        {isExpanded ? <ChevronDown /> : <ChevronRight />}
+                                                        {isExpanded ? <SquareChevronDown strokeWidth={3} className="w-6 h-6" /> : <SquareChevronRight strokeWidth={3} className="w-6 h-6" />}
                                                     </button>
                                                 </td>
                                                 <td className="px-6 py-4 whitespace-nowrap text-xs">
@@ -391,6 +437,15 @@ export function Tickets() {
                                                     <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusColor(bucket.status)}`}>
                                                         {bucket.status?.toUpperCase().replace('_', ' ') || 'UNKNOWN'}
                                                     </span>
+                                                </td>
+                                                <td className="px-4 py-4 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <button
+                                                        onClick={() => handleTogglePotentialChange(bucket.id, bucket.potential_change)}
+                                                        className={`p-1 rounded hover:bg-amber-100 transition-colors ${bucket.potential_change ? 'text-orange-600' : 'text-gray-300 hover:text-orange-500'}`}
+                                                        title={bucket.potential_change ? 'Marked as potential scope change - click to clear' : 'Click to mark as potential scope change'}
+                                                    >
+                                                        <AlertTriangle className="w-6 h-6" fill={bucket.potential_change ? 'currentColor' : 'none'} strokeWidth={3} />
+                                                    </button>
                                                 </td>
 
                                                 <td className="px-4 py-4 text-center">
@@ -415,9 +470,21 @@ export function Tickets() {
                                                     <span className="text-xs text-gray-900">{bucket.project_name}</span>
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    <div className="text-xs text-gray-900 line-clamp-2">
-                                                        {bucket.raw_text || '(No text content)'}
-                                                    </div>
+                                                    {bucket.summary ? (
+                                                        <>
+                                                            <div className="text-xs text-gray-900 font-medium flex items-center gap-1">
+                                                                <span>✨</span>
+                                                                <span className="italic">{bucket.summary}</span>
+                                                            </div>
+                                                            <div className="text-xs text-gray-500 line-clamp-1 mt-1">
+                                                                {bucket.raw_text}
+                                                            </div>
+                                                        </>
+                                                    ) : (
+                                                        <div className="text-xs text-gray-900 line-clamp-2">
+                                                            {bucket.raw_text || '(No text content)'}
+                                                        </div>
+                                                    )}
                                                     {(bucket.image_urls || bucket.audio_urls) && (
                                                         <div className="text-xs text-blue-600 mt-1 flex items-center gap-1">
                                                             <Paperclip className="w-3 h-3" />
@@ -451,14 +518,14 @@ export function Tickets() {
                                                             className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
                                                             title="Edit"
                                                         >
-                                                            <Pencil className="w-6 h-6" strokeWidth={3} />
+                                                            <PencilIcon className="w-6 h-6" strokeWidth={3} />
                                                         </button>
                                                     </div>
                                                 </td>
                                             </tr>
                                             {isExpanded && (
-                                                <tr className="bg-yellow-50">
-                                                    <td colSpan={9} className="px-6 py-4">
+                                                <tr className="bg-amber-50">
+                                                    <td colSpan={10} className="px-6 py-4">
                                                         <div className="text-xs text-gray-900 mb-4">
 
 
@@ -471,8 +538,42 @@ export function Tickets() {
                                                                     <p className="text-gray-700 italic">{bucket.summary}</p>
                                                                 </div>
                                                             )}
-                                                            <span className='ttx-title'>Full Message:</span>
-                                                            <p className="whitespace-pre-wrap mt-1 text-xs">{bucket.raw_text}</p>
+
+                                                            {/* WhatsApp-style Conversation */}
+                                                            <div className="mt-4">
+                                                                <span className='ttx-title'>Conversation:</span>
+                                                                <div className="mt-2 space-y-2 max-w-2xl bg-gray-100 rounded-lg p-3" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width=\'60\' height=\'60\' viewBox=\'0 0 60 60\' xmlns=\'http://www.w3.org/2000/svg\'%3E%3Cg fill=\'none\' fill-rule=\'evenodd\'%3E%3Cg fill=\'%23d4d4d4\' fill-opacity=\'0.2\'%3E%3Cpath d=\'M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z\'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E")' }}>
+                                                                    {bucket.conversation_history && Array.isArray(bucket.conversation_history) ? (
+                                                                        bucket.conversation_history.map((msg, i) => (
+                                                                            <div
+                                                                                key={i}
+                                                                                className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+                                                                            >
+                                                                                <div
+                                                                                    className={`max-w-[80%] px-3 py-2 rounded-lg text-xs shadow-sm ${msg.role === 'user'
+                                                                                            ? 'bg-[#DCF8C6] text-gray-900 rounded-br-none'
+                                                                                            : 'bg-white text-gray-900 rounded-bl-none'
+                                                                                        }`}
+                                                                                >
+                                                                                    <p className="whitespace-pre-wrap">{msg.content}</p>
+                                                                                    {msg.timestamp && (
+                                                                                        <p className="text-[10px] text-gray-500 mt-1 text-right">
+                                                                                            {new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                                                                        </p>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        ))
+                                                                    ) : (
+                                                                        /* Fallback to raw_text if no conversation history */
+                                                                        <div className="flex justify-end">
+                                                                            <div className="max-w-[80%] px-3 py-2 rounded-lg rounded-br-none text-xs shadow-sm bg-[#DCF8C6] text-gray-900">
+                                                                                <p className="whitespace-pre-wrap">{bucket.raw_text || '(No message)'}</p>
+                                                                            </div>
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
                                                         </div>
 
                                                         {/* Transcripts */}
@@ -564,7 +665,7 @@ export function Tickets() {
                                 disabled={page === 1}
                                 className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
-                                <ChevronLeft className="w-4 h-4" />
+                                <SquareChevronLeft className="w-6 h-6" strokeWidth={3} />
                                 Previous
                             </button>
                             <span className="px-3 py-1 text-xs">
@@ -576,7 +677,7 @@ export function Tickets() {
                                 className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
                             >
                                 Next
-                                <ChevronRight className="w-4 h-4" />
+                                <SquareChevronRight className="w-6 h-6" strokeWidth={3} />
                             </button>
                         </div>
                     </div>

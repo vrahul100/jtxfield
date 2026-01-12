@@ -15,6 +15,7 @@ export async function getTransactions(c: Context, sql: Sql) {
         const limit = parseInt(c.req.query('limit') || '10');
         const status = c.req.query('status');
         const projectId = c.req.query('projectId');
+        const potentialChange = c.req.query('potentialChange');
         const search = c.req.query('search') || '';
         const offset = (page - 1) * limit;
 
@@ -31,6 +32,11 @@ export async function getTransactions(c: Context, sql: Sql) {
         }
         if (projectId && projectId !== 'all') {
             conditions.push(`t.project_id = ${parseInt(projectId)}`);
+        }
+        if (potentialChange === 'true') {
+            conditions.push(`b.potential_change = true`);
+        } else if (potentialChange === 'false') {
+            conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
         }
 
         if (search.trim()) {
@@ -62,6 +68,7 @@ export async function getTransactions(c: Context, sql: Sql) {
             FROM txns t
             LEFT JOIN members m ON t.user_id = m.id
             LEFT JOIN projects p ON t.project_id = p.id
+            LEFT JOIN buckets b ON t.bucket_id = b.id
             ${whereClause}
         `);
         const total = countResult[0]?.total || 0;
@@ -74,7 +81,8 @@ export async function getTransactions(c: Context, sql: Sql) {
                 m.phone_number as member_phone,
                 p.name as project_name,
                 n.name as node_name,
-                b.summary as ai_summary
+                b.summary as ai_summary,
+                b.potential_change as potential_change
             FROM txns t
             LEFT JOIN members m ON t.user_id = m.id
             LEFT JOIN projects p ON t.project_id = p.id

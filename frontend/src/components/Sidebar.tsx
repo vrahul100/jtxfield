@@ -25,27 +25,24 @@ export function Sidebar() {
                 {/* OM & SU Links */}
                 <NavLink to="/tickets" className={navLinkClass}>
                     <ClipboardList className="w-5 h-5" />
-                    <span className="text-base">Tickets</span>
+                    <span className="text-base">Work Captured</span>
                 </NavLink>
 
                 <NavLink to="/transactions" className={navLinkClass}>
                     <Receipt className="w-5 h-5" />
                     <span className="text-base">Timesheets</span>
                 </NavLink>
-                <NavLink to="/reports" className={navLinkClass}>
-                    <ChartBar className="w-5 h-5" />
-                    <span className="text-base">Reports</span>
-                </NavLink>
-                <NavLink to="/members" className={navLinkClass}>
-                    <Users className="w-5 h-5" />
-                    <span className="text-base">Members</span>
-                </NavLink>
-
                 <NavLink to="/projects" className={navLinkClass}>
                     <FolderKanban className="w-5 h-5" />
                     <span className="text-base">Projects</span>
                 </NavLink>
-
+                <NavLink to="/members" className={navLinkClass}>
+                    <Users className="w-5 h-5" />
+                    <span className="text-base">Members</span>
+                </NavLink>                <NavLink to="/reports" className={navLinkClass}>
+                    <ChartBar className="w-5 h-5" />
+                    <span className="text-base">Reports</span>
+                </NavLink>
 
                 {/* SU Only Links */}
                 {user?.role === 'SU' && (

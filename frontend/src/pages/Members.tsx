@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../hooks/useAuth';
+import { TrashIcon, PencilIcon } from 'lucide-react';
 
 interface Member {
     id: number;
@@ -209,7 +210,7 @@ export function Members() {
             case 'active':
                 return 'bg-green-100 text-green-800';
             case 'pending':
-                return 'bg-yellow-100 text-yellow-800';
+                return 'bg-amber-100 text-yellow-800';
             case 'inactive':
                 return 'bg-gray-100 text-gray-800';
             default:
@@ -513,7 +514,7 @@ export function Members() {
                                                     disabled={actionLoading === member.id}
                                                     className="text-red-600 hover:text-red-900 disabled:opacity-50"
                                                 >
-                                                    Delete
+                                                    <TrashIcon className="w-6 h-6" strokeWidth={3} />
                                                 </button>
                                             )}
                                             <button
@@ -521,7 +522,7 @@ export function Members() {
                                                 disabled={actionLoading === member.id}
                                                 className="text-indigo-600 hover:text-indigo-900 disabled:opacity-50"
                                             >
-                                                Edit
+                                                <PencilIcon className="w-6 h-6" strokeWidth={3} />
                                             </button>
                                         </td>
                                     </tr>

@@ -19,11 +19,11 @@ export function Header() {
                 {/* Logo */}
                 <div className="flex items-center gap-3">
                     <div className="w-10 h-10 bg-gradient-to-br from-indigo-500 to-indigo-700 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-200">
-                        <Building2 className="w-6 h-6 text-white" />
+                        <img src="logo.png" alt="" />
                     </div>
                     <div>
-                        <h1 className="text-xl font-bold text-slate-900 tracking-tight">jField</h1>
-                        <p className="text-sm text-slate-500">Jentyx</p>
+                        <h1 className="text-xl font-bold text-slate-900 tracking-tight">Jentyx</h1>
+                        <p className="text-sm text-slate-500">Work Capture</p>
                     </div>
                 </div>
 

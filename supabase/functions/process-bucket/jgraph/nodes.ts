@@ -595,7 +595,10 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         clarify: '¿Puedes aclarar?',
         flagged: `📋 *Ticket #${ticketId}*\n marcado para revisión. He guardado los datos.`,
         savedBlanks: `📋 *Ticket #${ticketId}*\n guardado con datos incompletos. Lo arreglaremos después.`,
-        success: (wt: string, h: number, proj: string) => `✅ *Ticket #${ticketId}*\n ${wt} por ${h}h en ${proj}. ¡Registrado!`,
+        success: (wt: string, h: number, proj: string, summary?: string) => {
+            const base = `✅ *Ticket #${ticketId}*\n${wt} por ${h}h en ${proj}.`
+            return summary ? `${base}\n\n📝 _"${summary}"_\n\n¡Registrado!` : `${base} ¡Registrado!`
+        },
         askWorkType: `🔧 *Ticket #${ticketId}*\n ¿Qué tipo de trabajo hiciste?`,
         askHours: `⏱️ *Ticket #${ticketId}*\n Veo ${workType}. ¿Cuántas horas trabajaste? (agrega detalles si quieres)`,
         askSummary: `📝 *Ticket #${ticketId}*\n ¿Puedes describir brevemente lo que hiciste?`,
@@ -605,7 +608,10 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         clarify: 'Can you clarify?',
         flagged: `📋 *Ticket #${ticketId}*\n flagged for boss to check. I've saved the data.`,
         savedBlanks: `📋 *Ticket #${ticketId}*\n saved with blanks. We can fix it later.`,
-        success: (wt: string, h: number, proj: string) => `✅ *Ticket #${ticketId}*\n ${wt} for ${h}h at ${proj}. Logged!`,
+        success: (wt: string, h: number, proj: string, summary?: string) => {
+            const base = `✅ *Ticket #${ticketId}*\n${wt} for ${h}h at ${proj}.`
+            return summary ? `${base}\n\n📝 _"${summary}"_\n\nLogged!` : `${base} Logged!`
+        },
         askWorkType: `🔧 *Ticket #${ticketId}*\n What type of work did you do?`,
         askHours: `⏱️ *Ticket #${ticketId}*\n I see ${workType}. How many hours? (add details if you want)`,
         askSummary: `📝 *Ticket #${ticketId}*\n Can you briefly describe what you did?`,
@@ -755,7 +761,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             project_id: bucket.project_id,
             job: extraction.summary,
             time: extraction.hoursWorked,
-            labor: state.rawText,
+            labor: extraction.workType || extraction.summary,  // Use workType, not entire conversation
             material: Array.isArray(extraction.materials) ? extraction.materials.join(', ') : null,
             evidence: state.imageUrls.length > 0 ? JSON.stringify(state.imageUrls) : null,
             scope_description: extraction.summary,
@@ -768,7 +774,10 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             console.error(`[Node: Respond] Transaction insert error:`, txnError)
         }
 
-        await supabase.from('buckets').update({ status: 'submitted' }).eq('id', state.bucketId)
+        await supabase.from('buckets').update({
+            status: 'submitted',
+            summary: extraction.summary || null
+        }).eq('id', state.bucketId)
 
         // Look up project name for success message
         let projectNameForMsg = 'project'
@@ -777,7 +786,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             projectNameForMsg = proj?.name || 'project'
         }
 
-        const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0, projectNameForMsg)
+        const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0, projectNameForMsg, extraction.summary || undefined)
         await sendWhatsAppMessage(bucket.from_phone, confirmMsg, bucket.source)
 
         return { status: 'submitted', action: 'success', response: confirmMsg }

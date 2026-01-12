@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../hooks/useAuth';
-
+import { PencilIcon, TrashIcon } from 'lucide-react';
 interface Project {
     id: number;
     name: string;
@@ -374,13 +374,13 @@ export function Projects() {
                                         onClick={() => handleEdit(project)}
                                         className="px-3 py-1 text-sm text-primary-600 hover:bg-primary-50 rounded"
                                     >
-                                        Edit
+                                        <PencilIcon className="w-6 h-6" strokeWidth={3} />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(project.id)}
                                         className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
                                     >
-                                        Delete
+                                        <TrashIcon className="w-6 h-6" strokeWidth={3} />
                                     </button>
                                 </div>
                             </div>

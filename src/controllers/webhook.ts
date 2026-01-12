@@ -120,7 +120,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     if (confirmResult.success) {
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
       const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `🎉 Welcome to Jentyx jField${name}!${teamMsg}
+      const welcomeMsg = `🎉 Welcome to Jentyx${name}!${teamMsg}
 
 *You're now activated and ready to go!*
 
