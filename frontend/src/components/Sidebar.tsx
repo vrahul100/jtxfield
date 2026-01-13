@@ -20,8 +20,8 @@ export function Sidebar() {
         }`;
 
     return (
-        <aside className="w-64 bg-slate-900 h-screen fixed left-0 top-16 overflow-y-auto">
-            <nav className="p-4 space-y-1">
+        <aside className="w-64 bg-slate-900 h-screen fixed left-0 top-20 overflow-y-auto">
+            <nav className="p-4 pt-6 space-y-1">
                 {/* OM & SU Links */}
                 <NavLink to="/tickets" className={navLinkClass}>
                     <ClipboardList className="w-5 h-5" />

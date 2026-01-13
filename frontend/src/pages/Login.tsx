@@ -30,8 +30,8 @@ export function Login() {
             <div className="card max-w-md w-full p-8">
                 {/* Logo */}
                 <div className="flex justify-center mb-8">
-                    <div className="w-16 h-16 bg-primary-600 rounded-xl flex items-center justify-center">
-                        <span className="text-white font-bold text-3xl">J</span>
+                    <div className="w-48 h-48 bg-primary-600 rounded-xl flex items-center justify-center">
+                        <img src="/logo.png" alt="" />
                     </div>
                 </div>
 
