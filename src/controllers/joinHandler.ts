@@ -34,14 +34,14 @@ export async function handleJoinRequest(
   console.log(`[JOIN] Created new pending member: ${normalized.sender}`);
 
   // Send VCard
-  const welcomeMessage = `🎉 Welcome to Jentyx!
+  const welcomeMessage = `🎉 *Welcome to Jentyx*!
 
 Save this contact, then your admin will assign you to a project.
 
 Just send:
 • Photos of your work
 • Voice notes describing what you did
-• How many hours it took
+• Details of your work like hours, materials used, etc.
 
 I'll track everything automatically!`;
 

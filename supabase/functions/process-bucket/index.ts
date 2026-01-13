@@ -25,7 +25,7 @@ Deno.serve(async (req: Request) => {
             })
         }
 
-        console.log(`[Brain] 🧠 Starting jField for bucket #${bucketId}`)
+        console.log(`[Brain] 🧠 Starting Jentyx for bucket #${bucketId}`)
 
         // IDEMPOTENCY CHECK: Skip if already processing or completed
         const supabaseUrl = Deno.env.get('SUPABASE_URL')!

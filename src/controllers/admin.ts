@@ -3,6 +3,8 @@ import { Sql } from 'postgres';
 import { sendTwilioMessage } from '../services/twilio.js';
 import { getRequestBody } from '../utils/request.js';
 
+// Jentyx logo for WhatsApp messages
+const JENTYX_LOGO_URL = 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/logo/logo.png';
 export function createAdminRoutes(sql: Sql) {
   const app = new Hono();
 
@@ -113,11 +115,11 @@ Project: ${projectName}
 Start sending me:
 📸 Photos of your work
 🎙️ Voice notes describing what you did
-⏱️ How many hours it took
+⏱️ Details of your work like hours, materials used, etc.
 
 I'll track everything automatically. Let's go! 🚀`;
 
-    await sendTwilioMessage(member.phone_number, welcomeMessage, 'whatsapp');
+    await sendTwilioMessage(member.phone_number, welcomeMessage, 'whatsapp', JENTYX_LOGO_URL);
 
     return c.json({
       success: true,

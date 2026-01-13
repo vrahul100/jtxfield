@@ -21,11 +21,16 @@ function getConfig(): TwilioConfig {
 
 /**
  * Send a message via Twilio (SMS or WhatsApp based on source)
+ * @param to - Phone number to send to
+ * @param body - Message text
+ * @param source - 'whatsapp' or 'sms'
+ * @param mediaUrl - Optional URL to an image to include with the message
  */
 export async function sendTwilioMessage(
     to: string,
     body: string,
-    source: MessageSource
+    source: MessageSource,
+    mediaUrl?: string
 ): Promise<{ success: boolean; sid?: string; error?: string }> {
     const config = getConfig();
 
@@ -47,17 +52,24 @@ export async function sendTwilioMessage(
         // Use fetch to call Twilio API directly (avoids heavy SDK)
         const url = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages.json`;
 
+        const params = new URLSearchParams({
+            To: toNumber,
+            From: fromNumber,
+            Body: body,
+        });
+
+        // Add media URL if provided
+        if (mediaUrl) {
+            params.append('MediaUrl', mediaUrl);
+        }
+
         const response = await fetch(url, {
             method: 'POST',
             headers: {
                 'Authorization': 'Basic ' + Buffer.from(`${config.accountSid}:${config.authToken}`).toString('base64'),
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: new URLSearchParams({
-                To: toNumber,
-                From: fromNumber,
-                Body: body,
-            }),
+            body: params,
         });
 
         const data = await response.json() as any;
@@ -67,7 +79,7 @@ export async function sendTwilioMessage(
             return { success: false, error: data.message || 'Twilio API error' };
         }
 
-        console.log(`[Twilio] ✅ Message sent to ${toNumber} | SID: ${data.sid}`);
+        console.log(`[Twilio] ✅ Message sent to ${toNumber} | SID: ${data.sid}${mediaUrl ? ' (with media)' : ''}`);
         return { success: true, sid: data.sid };
     } catch (error) {
         console.error('[Twilio] Send error:', error);

@@ -4,6 +4,9 @@ import { User } from '../services/auth.js';
 import { sendTwilioMessage } from '../services/twilio.js';
 import { getRequestBody } from '../utils/request.js';
 
+// Jentyx logo for WhatsApp messages
+const JENTYX_LOGO_URL = 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/images/logo/logo.png';
+
 /**
  * Normalize phone number to E.164 format
  */
@@ -146,12 +149,13 @@ export async function approveMember(c: Context, sql: Sql) {
             WHERE id = ${memberId}
         `;
 
-        // Send WhatsApp welcome message
+        // Send WhatsApp welcome message with logo
         try {
             await sendTwilioMessage(
                 member.phone_number,
-                `✅ Welcome! You've been added to the system by your Office Manager. Start sending your work updates.`,
-                'whatsapp'
+                `✅ *Welcome!*\n\nYou've been added to the system by your Office Manager.\n\nStart sending your work updates.`,
+                'whatsapp',
+                JENTYX_LOGO_URL
             );
         } catch (err) {
             console.error('[Members] Failed to send welcome message:', err);

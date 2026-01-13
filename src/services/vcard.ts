@@ -1,5 +1,8 @@
 import { sendTwilioMessage } from './twilio.js';
 
+// Jentyx logo for WhatsApp messages
+const JENTYX_LOGO_URL = 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/images/logo/logo.png';
+
 /**
  * Generate a VCard (contact card) for Jentyx
  * Note: Kept for potential future use when we can host VCard files
@@ -18,7 +21,7 @@ END:VCARD`;
 }
 
 /**
- * Send welcome message with contact info
+ * Send welcome message with contact info and logo
  */
 export async function sendVCard(toNumber: string, message: string): Promise<void> {
     const fullMessage = `${message}
@@ -28,5 +31,5 @@ export async function sendVCard(toNumber: string, message: string): Promise<void
 
 (Add to your contacts so you recognize future messages!)`;
 
-    await sendTwilioMessage(toNumber, fullMessage, 'whatsapp');
+    await sendTwilioMessage(toNumber, fullMessage, 'whatsapp', JENTYX_LOGO_URL);
 }

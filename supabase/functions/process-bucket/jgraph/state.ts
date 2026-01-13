@@ -1,4 +1,4 @@
-// jField State Schema for Adaptive Brain
+// Jentyx State Schema for Adaptive Brain
 // This defines the state that flows through the graph
 
 import type { Bucket, Member } from './types.ts'
@@ -85,7 +85,7 @@ export function createInitialState(bucketId: number): BrainState {
     }
 }
 
-// State annotation for jField
+// State annotation for Jentyx
 export const brainStateChannels = {
     bucketId: { value: (a: number, b: number) => b },
     bucket: { value: (a: Bucket | null, b: Bucket | null) => b },

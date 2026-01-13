@@ -120,16 +120,7 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
     if (confirmResult.success) {
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
       const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `🎉 Welcome to Jentyx${name}!${teamMsg}
-
-*You're now activated and ready to go!*
-
-Just send:
-• 📸 Photos of your work
-• 🎤 Voice notes describing what you did
-• ⏱️ How many hours it took
-
-I'll track everything automatically!`;
+      const welcomeMsg = `🎉 *Welcome to Jentyx${name}!${teamMsg}*\n\n*You're now activated and ready to go!*\n\nJust send:\n• 📸 Photos of your work\n• 🎤 Voice notes describing what you did\n• ⏱️ Details of your work like hours, materials used, etc.`;
       return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
     // If not a pending member, continue with normal flow

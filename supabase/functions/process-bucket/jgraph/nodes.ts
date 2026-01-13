@@ -1,4 +1,4 @@
-// jField Node Implementations for Adaptive Brain
+// Jentyx Node Implementations for Adaptive Brain
 // Each node is a pure function that takes state and returns partial state updates
 
 import { createClient } from '@supabase/supabase-js'
