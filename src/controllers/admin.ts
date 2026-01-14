@@ -4,7 +4,7 @@ import { sendTwilioMessage } from '../services/twilio.js';
 import { getRequestBody } from '../utils/request.js';
 
 // Jentyx logo for WhatsApp messages
-const JENTYX_LOGO_URL = 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/logo/logo.png';
+const JENTYX_LOGO_URL = process.env.JENTYX_LOGO_URL || 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/images/logo.png';
 export function createAdminRoutes(sql: Sql) {
   const app = new Hono();
 

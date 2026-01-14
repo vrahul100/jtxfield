@@ -1,7 +1,7 @@
 import { sendTwilioMessage } from './twilio.js';
 
 // Jentyx logo for WhatsApp messages
-const JENTYX_LOGO_URL = 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/images/logo/logo.png';
+const JENTYX_LOGO_URL = process.env.JENTYX_LOGO_URL || 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/images/logo.png';
 
 /**
  * Generate a VCard (contact card) for Jentyx
