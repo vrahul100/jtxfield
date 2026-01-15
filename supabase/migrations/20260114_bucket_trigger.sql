@@ -24,7 +24,7 @@ BEGIN
         body:=jsonb_build_object('bucketId', NEW.id),
         headers:=jsonb_build_object(
             'Content-Type', 'application/json',
-            'Authorization', 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.YOUR_DEV_ANON_KEY_HERE'
+            'Authorization', 'Bearer OUR_DEV_ANON_KEY_HERE'
         )
     );
     
