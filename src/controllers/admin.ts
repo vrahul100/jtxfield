@@ -3,8 +3,7 @@ import { Sql } from 'postgres';
 import { sendTwilioMessage } from '../services/twilio.js';
 import { getRequestBody } from '../utils/request.js';
 
-// Jentyx logo for WhatsApp messages
-const JENTYX_LOGO_URL = process.env.JENTYX_LOGO_URL || 'https://gevdamoroboqxpacbdkk.supabase.co/storage/v1/object/public/media/images/logo.png';
+
 export function createAdminRoutes(sql: Sql) {
   const app = new Hono();
 
@@ -119,7 +118,8 @@ Start sending me:
 
 I'll track everything automatically. Let's go! 🚀`;
 
-    await sendTwilioMessage(member.phone_number, welcomeMessage, 'whatsapp', JENTYX_LOGO_URL);
+    const logoUrl = process.env.JENTYX_LOGO_URL;
+    await sendTwilioMessage(member.phone_number, welcomeMessage, 'whatsapp', logoUrl);
 
     return c.json({
       success: true,

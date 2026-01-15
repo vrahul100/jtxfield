@@ -53,9 +53,13 @@ export interface BrainState {
     attempts: number
     projectConfirmed: boolean  // True if user explicitly confirmed/provided project
 
+    // Modality tracking
+    inputHasAudio: boolean  // True if user sent voice note
+
     // Output
     status: 'processing' | 'open' | 'submitted' | 'flagged' | 'pending_review'
     response: string | null
+    responseAudioUrl: string | null  // TTS audio URL for voice responses
     action: 'success' | 'ask_clarification' | 'ask_missing' | 'flagged' | 'error' | null
 }
 
@@ -79,8 +83,10 @@ export function createInitialState(bucketId: number): BrainState {
         },
         attempts: 0,
         projectConfirmed: false,
+        inputHasAudio: false,
         status: 'processing',
         response: null,
+        responseAudioUrl: null,
         action: null,
     }
 }

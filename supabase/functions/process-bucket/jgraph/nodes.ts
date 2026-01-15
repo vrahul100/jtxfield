@@ -4,6 +4,7 @@
 import { createClient } from '@supabase/supabase-js'
 import type { BrainState, ExtractionResult, ValidationResult } from './state.ts'
 import type { Bucket, Member } from './types.ts'
+import { generateAudioResponse } from './tts.ts'
 
 // Required fields for validation
 const REQUIRED_FIELDS = ['workType', 'hoursWorked', 'summary']
@@ -110,6 +111,11 @@ export async function preprocessMediaNode(state: BrainState): Promise<Partial<Br
     }
 
     const updates: Partial<BrainState> = {}
+
+    // Track if user sent audio (for modality-matching responses)
+    if (state.audioUrls.length > 0) {
+        updates.inputHasAudio = true
+    }
 
     // Transcribe audio if not already done
     if (state.audioUrls.length > 0 && state.transcripts.length === 0) {
@@ -787,9 +793,21 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         }
 
         const confirmMsg = msgs.success(extraction.workType || 'work', extraction.hoursWorked || 0, projectNameForMsg, extraction.summary || undefined)
-        await sendWhatsAppMessage(bucket.from_phone, confirmMsg, bucket.source)
 
-        return { status: 'submitted', action: 'success', response: confirmMsg }
+        // Generate audio response if TTS is enabled AND user sent voice message (modality matching)
+        // TTS is disabled by default - set TTS_ENABLED=true to enable
+        let audioUrl: string | null = null
+        const ttsEnabled = Deno.env.get('TTS_ENABLED') === 'true'
+        if (ttsEnabled && state.inputHasAudio) {
+            console.log(`[Node: Respond] TTS enabled + user sent voice - generating audio response`)
+            audioUrl = await generateAudioResponse(confirmMsg, lang as 'en' | 'es', state.bucketId)
+        } else if (state.inputHasAudio && !ttsEnabled) {
+            console.log(`[Node: Respond] User sent voice but TTS disabled (set TTS_ENABLED=true to enable)`)
+        }
+
+        await sendWhatsAppMessage(bucket.from_phone, confirmMsg, bucket.source, audioUrl || undefined)
+
+        return { status: 'submitted', action: 'success', response: confirmMsg, responseAudioUrl: audioUrl }
     }
 
     return { status: 'pending_review', action: 'error' }
@@ -986,7 +1004,7 @@ async function analyzeImage(url: string, groqApiKey: string): Promise<string> {
     }
 }
 
-async function sendWhatsAppMessage(to: string, body: string, source: string): Promise<void> {
+async function sendWhatsAppMessage(to: string, body: string, source: string, mediaUrl?: string): Promise<void> {
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')!
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN')!
     const fromNumber = source === 'whatsapp'
@@ -994,11 +1012,17 @@ async function sendWhatsAppMessage(to: string, body: string, source: string): Pr
         : Deno.env.get('TWILIO_FROM_NUMBER')!
 
     const url = `https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`
-    const formData = new URLSearchParams({
+    const params = new URLSearchParams({
         To: source === 'whatsapp' ? `whatsapp:${to}` : to,
         From: fromNumber,
         Body: body,
     })
+
+    // Add audio/media attachment if provided
+    if (mediaUrl) {
+        params.append('MediaUrl', mediaUrl)
+        console.log(`[SendMessage] 🔊 Including audio attachment: ${mediaUrl}`)
+    }
 
     await fetch(url, {
         method: 'POST',
@@ -1006,6 +1030,6 @@ async function sendWhatsAppMessage(to: string, body: string, source: string): Pr
             'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
             'Content-Type': 'application/x-www-form-urlencoded',
         },
-        body: formData.toString(),
+        body: params.toString(),
     })
 }

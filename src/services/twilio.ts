@@ -58,9 +58,10 @@ export async function sendTwilioMessage(
             Body: body,
         });
 
-        // Add media URL if provided
+        // Add media URL if provided (Twilio expects MediaUrl as array)
         if (mediaUrl) {
-            params.append('MediaUrl', mediaUrl);
+            console.log(`[Twilio] 🖼️ Including media: ${mediaUrl}`);
+            params.append('MediaUrl', [mediaUrl]);
         }
 
         const response = await fetch(url, {
@@ -73,13 +74,13 @@ export async function sendTwilioMessage(
         });
 
         const data = await response.json() as any;
-
+        console.log(`[Twilio] ✅ Message sent to ${toNumber} | SID: ${data.sid}${mediaUrl ? ' (with media)' : ''}`);
         if (!response.ok) {
             console.error('[Twilio] API Error:', data);
             return { success: false, error: data.message || 'Twilio API error' };
         }
 
-        console.log(`[Twilio] ✅ Message sent to ${toNumber} | SID: ${data.sid}${mediaUrl ? ' (with media)' : ''}`);
+
         return { success: true, sid: data.sid };
     } catch (error) {
         console.error('[Twilio] Send error:', error);
