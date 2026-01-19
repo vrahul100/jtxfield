@@ -60,6 +60,8 @@ export interface BrainState {
     // Tracking
     attempts: number
     projectConfirmed: boolean  // True if user explicitly confirmed/provided project
+    askedAnythingElse: boolean  // True if we asked "anything else?" before project
+    lastQuestionType: 'work_type' | 'hours' | 'anything_else' | 'project_confirm' | 'project_select' | null
     conversationPhase: ConversationPhase  // Current phase in data collection
     fieldAttempts: {  // Track attempts per field for graceful fallback
         workType: number
@@ -97,6 +99,8 @@ export function createInitialState(bucketId: number): BrainState {
         },
         attempts: 0,
         projectConfirmed: false,
+        askedAnythingElse: false,
+        lastQuestionType: null,
         conversationPhase: 'initial',
         fieldAttempts: {
             workType: 0,

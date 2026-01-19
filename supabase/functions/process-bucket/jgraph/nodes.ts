@@ -94,6 +94,7 @@ export async function loadContextNode(state: BrainState): Promise<Partial<BrainS
         attempts: bucket.validation_attempts || 0,
         extraction: previousExtraction,  // Start with previous extraction
         projectConfirmed,  // Persist across turns
+        lastQuestionType: (bucket as any).last_question_type || null,  // Load conversation context
     }
 }
 
@@ -273,12 +274,11 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
     // Check for raw text "n" or "no" if hint is missing
     let hint = extraction.projectHint ? String(extraction.projectHint).trim() : null
     console.log(`[Node: ResolveProject] Initial hint from extraction: "${hint}"`)
+    console.log(`[Node: ResolveProject] Last question type: ${state.lastQuestionType}`)
 
     // Fallback: If no hint, check raw text for confirmation words OR a number
-    // This catches cases where LLM fails to extract properly from complex messages
+    // Interpret response BASED ON WHAT WE LAST ASKED (state.lastQuestionType)
     if (!hint && state.rawText) {
-        // raw_text may be a full conversation: "original\n---\nQ: which project?\nA: 1"
-        // Extract only the LAST answer (after the last "A: ")
         let raw = state.rawText
         if (raw.includes('\nA:')) {
             const parts = raw.split('\nA:')
@@ -287,25 +287,40 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
             raw = raw.trim()
         }
         const rawLower = raw.toLowerCase()
-        console.log(`[Node: ResolveProject] Checking raw text for confirmation: "${rawLower.substring(0, 50)}..."`)
+        console.log(`[Node: ResolveProject] Checking raw text: "${rawLower.substring(0, 50)}..."`)
 
-        // Check for YES/CONFIRM words (can be anywhere, including "yes. also did...")
-        if (rawLower.startsWith('yes') || rawLower.startsWith('y.') || rawLower.startsWith('y ') ||
-            rawLower.startsWith('si') || rawLower.startsWith('sí') || rawLower === 'y') {
-            console.log(`[Node: ResolveProject] No LLM hint, but raw text starts with YES - treating as CONFIRMED`)
-            hint = 'CONFIRMED'
+        const firstWord = rawLower.split(/[\s.,!]/)[0]
+
+        // If last question was "anything else?" - "no" means proceed to project, not reject
+        if (state.lastQuestionType === 'anything_else') {
+            if (['no', 'n', 'nope', 'nah'].includes(firstWord)) {
+                console.log(`[Node: ResolveProject] User said NO to "anything else?" - proceeding to project`)
+                // Return empty - will trigger project question on next round
+                return { askedAnythingElse: true }  // Mark as answered, proceed to project
+            }
+            // If they add more info, let extraction handle it
+            console.log(`[Node: ResolveProject] User added more info to "anything else?" - extraction will handle`)
+            return {}
         }
-        // Check for NO words
-        else if (['n', 'no', 'nope', 'nah'].includes(rawLower.split(/[\s.,!]/)[0])) {
-            console.log(`[Node: ResolveProject] No LLM hint, but raw text starts with NO`)
-            hint = 'NO'
+
+        // If last question was project confirmation (Y/N)
+        if (state.lastQuestionType === 'project_confirm') {
+            if (['yes', 'y', 'si', 'sí', 'yeah', 'yep'].includes(firstWord)) {
+                console.log(`[Node: ResolveProject] User confirmed project`)
+                hint = 'CONFIRMED'
+            } else if (['no', 'n', 'nope', 'nah'].includes(firstWord)) {
+                console.log(`[Node: ResolveProject] User rejected project - will show list`)
+                hint = 'NO'
+            }
         }
-        // Check for number
-        else if (/^(\d+)[\.)]?/.test(rawLower)) {
-            const match = rawLower.match(/^(\d+)/)
-            const num = match ? match[1] : rawLower
-            console.log(`[Node: ResolveProject] No LLM hint, but raw text starts with number "${num}"`)
-            hint = num
+
+        // If last question was project selection (numbered list)
+        if (state.lastQuestionType === 'project_select') {
+            if (/^(\d+)[\.)]?/.test(rawLower)) {
+                const match = rawLower.match(/^(\d+)/)
+                hint = match ? match[1] : rawLower
+                console.log(`[Node: ResolveProject] User selected project number: ${hint}`)
+            }
         }
     }
 
@@ -642,8 +657,8 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     const memberProjectName = state.member?.last_confirmed_project_id ? 'your current project' : null
 
     // ============================================================================
-    // ASSUMPTION-DRIVEN CONVERSATION PATTERN
-    // Core principle: Assume first, confirm second. State actions, don't ask.
+    // CONVERSATION FLOW PATTERN
+    // Step 1: Get work info → Step 2: "Anything else?" → Step 3: Ask project
     // ============================================================================
 
     const msgs = lang === 'es' ? {
@@ -663,13 +678,9 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             return summary ? `${base}\n_"${summary}"_` : base
         },
 
-        // ASSUMPTION-DRIVEN: State what we assume, invite correction
-        assumeHours: (wt: string, defaultHrs: number) =>
-            `Capturado. ${wt}, ${defaultHrs}h hoy. ¿Ajustar?`,
-        assumeProject: (wt: string, h: number, proj: string) =>
-            `${wt} por ${h}h. Asumiendo ${proj}. ¿Correcto?`,
-        assumeAll: (wt: string, h: number, proj: string) =>
-            `${wt} por ${h}h en ${proj}. ¿Correcto?`,
+        // "Anything else?" step - BEFORE project
+        anythingElse: (wt: string, h: number) =>
+            `${wt} por ${h}h. ¿Algo más que agregar?`,
 
         // Only ask when we truly can't assume
         needWorkType: `Capturado. ¿Qué tipo de trabajo?`,
@@ -694,13 +705,9 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             return summary ? `${base}\n_"${summary}"_` : base
         },
 
-        // ASSUMPTION-DRIVEN: State what we assume, invite correction
-        assumeHours: (wt: string, defaultHrs: number) =>
-            `Captured. ${wt}, ${defaultHrs}h today. Adjust?`,
-        assumeProject: (wt: string, h: number, proj: string) =>
-            `${wt} for ${h}h. Assuming ${proj}. Correct?`,
-        assumeAll: (wt: string, h: number, proj: string) =>
-            `${wt} for ${h}h at ${proj}. Correct?`,
+        // "Anything else?" step - BEFORE project
+        anythingElse: (wt: string, h: number) =>
+            `${wt} for ${h}h. Anything else to add?`,
 
         // Only ask when we truly can't assume
         needWorkType: `Captured. What kind of work?`,
@@ -710,38 +717,30 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         fallbackGreeting: `👋 Send me a photo or tell me what you worked on.`,
     }
 
-    // Helper: Build assumption-driven response based on what we have/need
-    function buildResponse(): { message: string, needsConfirmation: boolean } {
+    // Helper: Build response based on new flow
+    // Step 1: Get work info → Step 2: "Anything else?" → Step 3: Ask project
+    function buildResponse(): { message: string, askingAnythingElse: boolean } {
         const wt = extraction?.workType
-        const h = extraction?.hoursWorked
-        const proj = state.projectConfirmed ? 'confirmed' : memberProjectName
+        const h = extraction?.hoursWorked || 0
 
-        // If we have everything, just confirm
-        if (wt && h && state.projectConfirmed) {
-            return { message: '', needsConfirmation: false } // Will use success path
-        }
-
-        // Missing work type - can't assume, must ask
+        // Missing work type - must ask
         if (!wt) {
-            return { message: msgs.needWorkType, needsConfirmation: true }
+            return { message: msgs.needWorkType, askingAnythingElse: false }
         }
 
-        // Have work type, missing hours - assume 2h default
-        if (!h) {
-            return { message: msgs.assumeHours(wt, 2), needsConfirmation: true }
+        // Have work type + hours, haven't asked "anything else?" yet, not confirmed project
+        // → Ask "anything else?" before project
+        if (wt && h > 0 && !state.askedAnythingElse && !state.projectConfirmed) {
+            return { message: msgs.anythingElse(wt, h), askingAnythingElse: true }
         }
 
-        // Have work + hours, need project
-        if (!state.projectConfirmed && proj) {
-            return { message: msgs.assumeProject(wt, h, proj), needsConfirmation: true }
-        }
-
-        // Have work + hours, no project context at all
+        // Already asked anything else, or project confirmed - ask for project if needed
         if (!state.projectConfirmed) {
-            return { message: msgs.needProject(wt, h), needsConfirmation: true }
+            return { message: msgs.needProject(wt, h), askingAnythingElse: false }
         }
 
-        return { message: '', needsConfirmation: false }
+        // All done
+        return { message: '', askingAnythingElse: false }
     }
 
     // CASE 0: Spam/unrelated message - don't log, just respond with fallback
@@ -792,11 +791,11 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         }
     }
 
-    // CASE 2: Missing fields - use ASSUMPTION-DRIVEN approach
+    // CASE 2: Missing fields - New flow: work info → "anything else?" → project
     if (validation.missingFields.length > 0) {
         if (attempts < 3) {
-            // Use assumption-driven helper for natural responses
-            const { message, needsConfirmation } = buildResponse()
+            // Use helper for new flow
+            const { message, askingAnythingElse } = buildResponse()
 
             // Save current extraction for next turn
             if (extraction) {
@@ -807,9 +806,9 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 
             let response = message
 
-            // Special case: projectId with numbered list (can't assume)
+            // Special case: projectId with numbered list
             const field = validation.missingFields[0]
-            if (field === 'projectId' || field === 'projectConfirmation') {
+            if ((field === 'projectId' || field === 'projectConfirmation') && !askingAnythingElse) {
                 // Fetch last project name if asking for confirmation
                 if (field === 'projectConfirmation' && state.member?.last_confirmed_project_id) {
                     const { data: project } = await supabase
@@ -847,13 +846,38 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             }
 
             await sendWhatsAppMessage(bucket.from_phone, response, bucket.source)
+
+            // Determine what type of question we just asked BEFORE the update
+            const missingField = validation.missingFields[0]
+            let questionType: string | null = null
+            if (askingAnythingElse) {
+                questionType = 'anything_else'
+            } else if (missingField === 'workType') {
+                questionType = 'work_type'
+            } else if (missingField === 'hoursWorked') {
+                questionType = 'hours'
+            } else if (missingField === 'projectConfirmation') {
+                questionType = 'project_confirm'
+            } else if (missingField === 'projectId') {
+                questionType = 'project_select'
+            }
+
+            // PERSIST to database so next message knows context
             await supabase.from('buckets').update({
                 status: 'open',
                 ai_response: response,
                 validation_attempts: attempts + 1,
+                last_question_type: questionType,  // Persist question type!
             }).eq('id', state.bucketId)
 
-            return { status: 'open', action: 'ask_missing', response }
+            // Return with state tracking
+            return {
+                status: 'open',
+                action: 'ask_missing',
+                response,
+                askedAnythingElse: askingAnythingElse ? true : state.askedAnythingElse,
+                lastQuestionType: questionType as 'work_type' | 'hours' | 'anything_else' | 'project_confirm' | 'project_select' | null
+            }
         } else {
             // Graceful fallback: save what we have
             await sendWhatsAppMessage(bucket.from_phone, msgs.savedBlanks, bucket.source)
