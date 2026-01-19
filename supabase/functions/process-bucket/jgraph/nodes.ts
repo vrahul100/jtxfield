@@ -272,9 +272,10 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
 
     // Check for raw text "n" or "no" if hint is missing
     let hint = extraction.projectHint ? String(extraction.projectHint).trim() : null
+    console.log(`[Node: ResolveProject] Initial hint from extraction: "${hint}"`)
 
-    // Fallback: If no hint, check raw text for "n" / "no" OR a number
-    // This catches cases where LLM fails to extract "NO" or "1" from simple short replies
+    // Fallback: If no hint, check raw text for confirmation words OR a number
+    // This catches cases where LLM fails to extract properly from complex messages
     if (!hint && state.rawText) {
         // raw_text may be a full conversation: "original\n---\nQ: which project?\nA: 1"
         // Extract only the LAST answer (after the last "A: ")
@@ -285,24 +286,35 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
         } else {
             raw = raw.trim()
         }
-        raw = raw.toLowerCase()
-        console.log(`[Node: ResolveProject] Extracted last answer: "${raw}"`)
+        const rawLower = raw.toLowerCase()
+        console.log(`[Node: ResolveProject] Checking raw text for confirmation: "${rawLower.substring(0, 50)}..."`)
 
-        if (['n', 'no', 'nope', 'nah'].includes(raw)) {
-            console.log(`[Node: ResolveProject] No LLM hint, but raw text is "${raw}" - treating as NO`)
+        // Check for YES/CONFIRM words (can be anywhere, including "yes. also did...")
+        if (rawLower.startsWith('yes') || rawLower.startsWith('y.') || rawLower.startsWith('y ') ||
+            rawLower.startsWith('si') || rawLower.startsWith('sí') || rawLower === 'y') {
+            console.log(`[Node: ResolveProject] No LLM hint, but raw text starts with YES - treating as CONFIRMED`)
+            hint = 'CONFIRMED'
+        }
+        // Check for NO words
+        else if (['n', 'no', 'nope', 'nah'].includes(rawLower.split(/[\s.,!]/)[0])) {
+            console.log(`[Node: ResolveProject] No LLM hint, but raw text starts with NO`)
             hint = 'NO'
-        } else if (/^(\d+)[\.)]?$/.test(raw)) {
-            const match = raw.match(/^(\d+)/)
-            const num = match ? match[1] : raw
-            console.log(`[Node: ResolveProject] No LLM hint, but raw text is number "${raw}" -> "${num}" - using as hint`)
+        }
+        // Check for number
+        else if (/^(\d+)[\.)]?/.test(rawLower)) {
+            const match = rawLower.match(/^(\d+)/)
+            const num = match ? match[1] : rawLower
+            console.log(`[Node: ResolveProject] No LLM hint, but raw text starts with number "${num}"`)
             hint = num
         }
     }
 
     if (!hint) {
-        console.log(`[Node: ResolveProject] No projectHint in extraction, skipping`)
+        console.log(`[Node: ResolveProject] No projectHint found, skipping`)
         return {}
     }
+
+    console.log(`[Node: ResolveProject] Final hint: "${hint}"`)
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
@@ -328,14 +340,42 @@ export async function resolveProjectNode(state: BrainState): Promise<Partial<Bra
         /\d+\.\s/.test(lastMsg) || // Contains a numbered list "1. "
         (hasHours && !state.projectConfirmed) // Heuristic: If we have hours but no project, a number is likely a project selection
 
-    // CASE A: User confirmed "YES" to "Still working on X?"
-    // We check if member has a last_confirmed_project_id
+    // CASE A: User confirmed "YES" to project question (e.g., "At Downtown Office? (Y/N)")
+    // Extract the project name from the bot's last message and look it up
     if (['confirmed', 'yes', 'si', 'confirmado', 'sí', 'yeah', 'yep', 'yup', 'y'].includes(hint.toLowerCase())) {
-        if (state.member?.last_confirmed_project_id && isConfirmationQuestion) {
-            console.log(`[Node: ResolveProject] User confirmed previous project ID: ${state.member.last_confirmed_project_id}`)
+        // Try to extract project name from bot's last message
+        // e.g., "drain for 6.5h. At Downtown Office Renovation? (Y/N)" -> "Downtown Office Renovation"
+        const lastMsgRaw = state.bucket?.ai_response || ''
+
+        // Pattern: "At [Project Name]? (Y/N)" or "En [Project Name]? (S/N)"
+        const atMatch = lastMsgRaw.match(/(?:At|at|En|en)\s+([^?]+?)\s*\?\s*\((?:Y\/N|S\/N)\)/i)
+        const projectNameFromQuestion = atMatch ? atMatch[1].trim() : null
+
+        if (projectNameFromQuestion) {
+            // Look up project by name
+            const { data: projects } = await supabase
+                .from('projects')
+                .select('id, name')
+                .eq('node_id', state.bucket?.node_id)
+                .ilike('name', `%${projectNameFromQuestion}%`)
+                .limit(1)
+
+            if (projects && projects.length > 0) {
+                console.log(`[Node: ResolveProject] User confirmed project from question: "${projectNameFromQuestion}" -> ID ${projects[0].id}`)
+                resolvedProjectId = projects[0].id
+            } else {
+                console.log(`[Node: ResolveProject] Could not find project "${projectNameFromQuestion}" by name, trying last_confirmed`)
+                // Fallback to member's last confirmed
+                if (state.member?.last_confirmed_project_id) {
+                    resolvedProjectId = state.member.last_confirmed_project_id
+                }
+            }
+        } else if (state.member?.last_confirmed_project_id && isConfirmationQuestion) {
+            // Fallback: no project name in message, use last confirmed
+            console.log(`[Node: ResolveProject] User confirmed, using last_confirmed_project_id: ${state.member.last_confirmed_project_id}`)
             resolvedProjectId = state.member.last_confirmed_project_id
         } else {
-            console.log(`[Node: ResolveProject] User said YES/CONFIRM, but not in response to confirmation question. Ignoring.`)
+            console.log(`[Node: ResolveProject] User said YES/CONFIRM, but couldn't find project to confirm. Ignoring.`)
         }
     }
     // CASE A.5: User said "NO" to "Still working on X?" - need to show project list
@@ -592,53 +632,122 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
     const lang = state.member?.language_preference || extraction?.responseLanguage || 'en'
     const ticketId = state.bucketId
 
-    // LLM-based bilingual messages (include ticket # for context)
-    // Make messages friendly and conversational!
+    // Dynamic values for natural responses
     const workType = extraction?.workType || 'work'
-    const projectName = state.bucket?.project_id ? '' : '' // Will be looked up when needed
+    const hours = extraction?.hoursWorked
+    const hasWork = extraction?.workType != null
+    const hasHours = extraction?.hoursWorked != null && extraction.hoursWorked > 0
+
+    // Get default project name if member has recent project
+    const memberProjectName = state.member?.last_confirmed_project_id ? 'your current project' : null
+
+    // ============================================================================
+    // ASSUMPTION-DRIVEN CONVERSATION PATTERN
+    // Core principle: Assume first, confirm second. State actions, don't ask.
+    // ============================================================================
 
     const msgs = lang === 'es' ? {
+        // Acknowledgments - terse, confident
+        captured: 'Capturado.',
+        noted: 'Anotado.',
+        gotIt: 'Listo.',
+
+        // Fallbacks
         clarify: '¿Puedes aclarar?',
-        flagged: `📋 *Ticket #${ticketId}*\n marcado para revisión. He guardado los datos.`,
-        savedBlanks: `📋 *Ticket #${ticketId}*\n guardado con datos incompletos. Lo arreglaremos después.`,
+        flagged: `✅ Guardado. Tu supervisor completará los detalles.`,
+        savedBlanks: `✅ Guardado con lo que tengo.`,
+
+        // Success - state the action, don't ask
         success: (wt: string, h: number, proj: string, summary?: string) => {
-            const base = `✅ *Ticket #${ticketId}*\n${wt} por ${h}h en ${proj}.`
-            return summary ? `${base}\n\n📝 _"${summary}"_\n\n¡Registrado!` : `${base} ¡Registrado!`
+            const base = `✅ ${wt} por ${h}h en ${proj}.`
+            return summary ? `${base}\n_"${summary}"_` : base
         },
-        askWorkType: `🔧 *Ticket #${ticketId}*\n ¿Qué tipo de trabajo hiciste?`,
-        askHours: `⏱️ *Ticket #${ticketId}*\n Veo ${workType}. ¿Cuántas horas trabajaste? (agrega detalles si quieres)`,
-        askSummary: `📝 *Ticket #${ticketId}*\n ¿Puedes describir brevemente lo que hiciste?`,
-        askProject: `📍 *Ticket #${ticketId}*\n ¿En qué proyecto trabajaste?`,
-        askProjectConfirmation: (pName: string) => `📍 *Ticket #${ticketId}*\n ¿Sigues en "${pName}"? (S/N)`,
+
+        // ASSUMPTION-DRIVEN: State what we assume, invite correction
+        assumeHours: (wt: string, defaultHrs: number) =>
+            `Capturado. ${wt}, ${defaultHrs}h hoy. ¿Ajustar?`,
+        assumeProject: (wt: string, h: number, proj: string) =>
+            `${wt} por ${h}h. Asumiendo ${proj}. ¿Correcto?`,
+        assumeAll: (wt: string, h: number, proj: string) =>
+            `${wt} por ${h}h en ${proj}. ¿Correcto?`,
+
+        // Only ask when we truly can't assume
+        needWorkType: `Capturado. ¿Qué tipo de trabajo?`,
+        needProject: (wt: string, h: number) =>
+            `${wt} por ${h}h. ¿En cuál proyecto?`,
+
+        fallbackGreeting: `👋 Mándame una foto o cuéntame qué hiciste.`,
     } : {
+        // Acknowledgments - terse, confident
+        captured: 'Captured.',
+        noted: 'Noted.',
+        gotIt: 'Got it.',
+
+        // Fallbacks
         clarify: 'Can you clarify?',
-        flagged: `📋 *Ticket #${ticketId}*\n flagged for boss to check. I've saved the data.`,
-        savedBlanks: `📋 *Ticket #${ticketId}*\n saved with blanks. We can fix it later.`,
+        flagged: `✅ Saved. Your supervisor will fill in details.`,
+        savedBlanks: `✅ Saved with what I have.`,
+
+        // Success - state the action, don't ask
         success: (wt: string, h: number, proj: string, summary?: string) => {
-            const base = `✅ *Ticket #${ticketId}*\n${wt} for ${h}h at ${proj}.`
-            return summary ? `${base}\n\n📝 _"${summary}"_\n\nLogged!` : `${base} Logged!`
+            const base = `✅ ${wt} for ${h}h at ${proj}.`
+            return summary ? `${base}\n_"${summary}"_` : base
         },
-        askWorkType: `🔧 *Ticket #${ticketId}*\n What type of work did you do?`,
-        askHours: `⏱️ *Ticket #${ticketId}*\n I see ${workType}. How many hours? (add details if you want)`,
-        askSummary: `📝 *Ticket #${ticketId}*\n Can you briefly describe what you did?`,
-        askProject: `📍 *Ticket #${ticketId}*\n Which project were you working on?`,
-        askProjectConfirmation: (pName: string) => `📍 *Ticket #${ticketId}*\n Still at "${pName}"? (Y/N)`,
+
+        // ASSUMPTION-DRIVEN: State what we assume, invite correction
+        assumeHours: (wt: string, defaultHrs: number) =>
+            `Captured. ${wt}, ${defaultHrs}h today. Adjust?`,
+        assumeProject: (wt: string, h: number, proj: string) =>
+            `${wt} for ${h}h. Assuming ${proj}. Correct?`,
+        assumeAll: (wt: string, h: number, proj: string) =>
+            `${wt} for ${h}h at ${proj}. Correct?`,
+
+        // Only ask when we truly can't assume
+        needWorkType: `Captured. What kind of work?`,
+        needProject: (wt: string, h: number) =>
+            `${wt} for ${h}h. Which project?`,
+
+        fallbackGreeting: `👋 Send me a photo or tell me what you worked on.`,
     }
 
-    // Map field names to questions
-    const fieldQuestions: Record<string, string> = {
-        workType: msgs.askWorkType,
-        hoursWorked: msgs.askHours,
-        summary: msgs.askSummary,
-        projectId: msgs.askProject,
+    // Helper: Build assumption-driven response based on what we have/need
+    function buildResponse(): { message: string, needsConfirmation: boolean } {
+        const wt = extraction?.workType
+        const h = extraction?.hoursWorked
+        const proj = state.projectConfirmed ? 'confirmed' : memberProjectName
+
+        // If we have everything, just confirm
+        if (wt && h && state.projectConfirmed) {
+            return { message: '', needsConfirmation: false } // Will use success path
+        }
+
+        // Missing work type - can't assume, must ask
+        if (!wt) {
+            return { message: msgs.needWorkType, needsConfirmation: true }
+        }
+
+        // Have work type, missing hours - assume 2h default
+        if (!h) {
+            return { message: msgs.assumeHours(wt, 2), needsConfirmation: true }
+        }
+
+        // Have work + hours, need project
+        if (!state.projectConfirmed && proj) {
+            return { message: msgs.assumeProject(wt, h, proj), needsConfirmation: true }
+        }
+
+        // Have work + hours, no project context at all
+        if (!state.projectConfirmed) {
+            return { message: msgs.needProject(wt, h), needsConfirmation: true }
+        }
+
+        return { message: '', needsConfirmation: false }
     }
 
     // CASE 0: Spam/unrelated message - don't log, just respond with fallback
     const isSpamMessage = extraction?.isWorkRelated === false && state.attempts === 0
     if (isSpamMessage) {
-        const spamResponse = lang === 'es'
-            ? `👋 ¡Hola! Estoy aquí para registrar tu trabajo. Mándame una foto o dime qué hiciste hoy.`
-            : `👋 Hey! I'm here to log your work. Send me a photo or tell me what you worked on today.`
+        const spamResponse = msgs.fallbackGreeting
 
         console.log(`[Node: Respond] Spam/unrelated message detected, sending fallback`)
         await sendWhatsAppMessage(bucket.from_phone, spamResponse, bucket.source)
@@ -683,71 +792,70 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
         }
     }
 
-    // CASE 2: Missing fields
+    // CASE 2: Missing fields - use ASSUMPTION-DRIVEN approach
     if (validation.missingFields.length > 0) {
-        if (attempts < 5) {
-            // IMPORTANT: Reorder fields so work details come FIRST, project LAST
-            // Priority: workType -> hoursWorked -> summary -> projectId/projectConfirmation
-            const workFields = validation.missingFields.filter(f => !f.startsWith('project'))
-            const projectFields = validation.missingFields.filter(f => f.startsWith('project'))
-            const orderedFields = [...workFields, ...projectFields]
-            const field = orderedFields[0]
+        if (attempts < 3) {
+            // Use assumption-driven helper for natural responses
+            const { message, needsConfirmation } = buildResponse()
 
-            let question: string
-
-            // Save current extraction to bucket for next turn
+            // Save current extraction for next turn
             if (extraction) {
                 await supabase.from('buckets').update({
                     extraction_json: JSON.stringify(extraction)
                 }).eq('id', state.bucketId)
             }
 
-            // Special handling for project confirmation (within 2-hour window)
-            if (field === 'projectConfirmation' && state.member?.last_confirmed_project_id) {
-                // Fetch the project name
-                const { data: project } = await supabase
-                    .from('projects')
-                    .select('name')
-                    .eq('id', state.member.last_confirmed_project_id)
-                    .single()
+            let response = message
 
-                const projectName = project?.name || 'your last project'
-                question = msgs.askProjectConfirmation(projectName)
-            }
-            // Special handling for projectId - send numbered list
-            else if (field === 'projectId') {
-                // Fetch projects for this node (excluding Inbox - same query as resolveProjectNode!)
-                const { data: projects } = await supabase
-                    .from('projects')
-                    .select('id, name')
-                    .eq('node_id', bucket.node_id)
-                    .eq('is_active', true)
-                    .eq('is_inbox', false)  // Exclude Inbox project
-                    .order('name')
-                    .limit(10)
+            // Special case: projectId with numbered list (can't assume)
+            const field = validation.missingFields[0]
+            if (field === 'projectId' || field === 'projectConfirmation') {
+                // Fetch last project name if asking for confirmation
+                if (field === 'projectConfirmation' && state.member?.last_confirmed_project_id) {
+                    const { data: project } = await supabase
+                        .from('projects')
+                        .select('name')
+                        .eq('id', state.member.last_confirmed_project_id)
+                        .single()
 
-                if (projects && projects.length > 0) {
-                    const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
-                    question = lang === 'es'
-                        ? `📍 *Ticket #${ticketId}*\n ¿En qué proyecto trabajaste?\n\n${projectList}\n\nResponde con el número.`
-                        : `📍 *Ticket #${ticketId}*\n Which project were you working on?\n\n${projectList}\n\nReply with the number.`
-                } else {
-                    question = fieldQuestions[field] || `What is the ${field}?`
+                    const projectName = project?.name || 'your last project'
+                    const wt = extraction?.workType || 'work'
+                    const h = extraction?.hoursWorked || 0
+                    response = lang === 'es'
+                        ? `${wt} por ${h}h. ¿En ${projectName}? (S/N)`
+                        : `${wt} for ${h}h. At ${projectName}? (Y/N)`
+                } else if (field === 'projectId') {
+                    // Fetch projects and show numbered list
+                    const { data: projects } = await supabase
+                        .from('projects')
+                        .select('id, name')
+                        .eq('node_id', bucket.node_id)
+                        .eq('is_active', true)
+                        .eq('is_inbox', false)
+                        .order('name')
+                        .limit(10)
+
+                    if (projects && projects.length > 0) {
+                        const wt = extraction?.workType || 'work'
+                        const h = extraction?.hoursWorked || 0
+                        const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n')
+                        response = lang === 'es'
+                            ? `${wt} por ${h}h.\n\n${projectList}\n\n¿Cuál?`
+                            : `${wt} for ${h}h.\n\n${projectList}\n\nWhich one?`
+                    }
                 }
             }
-            else {
-                question = fieldQuestions[field] || `What is the ${field}?`
-            }
 
-            await sendWhatsAppMessage(bucket.from_phone, question, bucket.source)
+            await sendWhatsAppMessage(bucket.from_phone, response, bucket.source)
             await supabase.from('buckets').update({
                 status: 'open',
-                ai_response: question,
+                ai_response: response,
                 validation_attempts: attempts + 1,
             }).eq('id', state.bucketId)
 
-            return { status: 'open', action: 'ask_missing', response: question }
+            return { status: 'open', action: 'ask_missing', response }
         } else {
+            // Graceful fallback: save what we have
             await sendWhatsAppMessage(bucket.from_phone, msgs.savedBlanks, bucket.source)
             await supabase.from('buckets').update({ status: 'pending_review' }).eq('id', state.bucketId)
 
@@ -818,97 +926,97 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
 // ============================================================================
 
 function buildExtractionPrompt(transcript: string, imageAnalysis: string, lastBotMessage?: string): string {
-    return `You are a construction foreman. Extract work log data and respond in the SAME LANGUAGE as the user.
+    return `You are a construction foreman's AI assistant. Extract ALL work log data from user's message.
 
 **CONTEXT - LAST MESSAGE FROM BOT:**
 ${lastBotMessage || '[None - new conversation]'}
 
-**USER INPUT:** (May be in English, Spanish, or any language)
+**USER INPUT:**
 ${transcript || '[NO TEXT - user only sent an image]'}
 
-**IMAGE ANALYSIS:** (What the photos show)
+**IMAGE ANALYSIS:**
 ${imageAnalysis || 'No images'}
 
 ---
 
-## HANDLING CORRECTIONS (CRITICAL!)
+## CRITICAL: EXTRACT ALL SIGNALS FROM USER MESSAGE
 
-The input may contain a MULTI-TURN conversation with corrections:
-- User: "masonry work"
-- Bot: "You said masonry but photo shows rebar. Can you clarify?"
-- User: "sorry, I meant rebar" OR "perdón, quise decir rebar"
-→ Use "rebar" as the FINAL workType (the correction!)
-→ isConsistent = TRUE (now matches)
+Users often provide MULTIPLE pieces of information in one message. Extract EVERYTHING mentioned.
 
-**CORRECTION PHRASES to detect:**
-English: "sorry", "I meant", "my bad", "actually", "no", "yes", "correct"
-Spanish: "perdón", "lo siento", "quise decir", "en realidad", "sí", "correcto"
+Example:
+- Bot: "drain work for 6.5h. At Downtown Office? (Y/N)"
+- User: "also did concrete for 4 hours. Yes"
 
-If user corrects themselves, USE THE CORRECTED work type.
+You MUST extract:
+- workType: "concrete" (or merge: "drain installation and concrete")
+- hoursWorked: 4 (user explicitly said 4 hours - this OVERRIDES previous)
+- projectHint: "CONFIRMED" (user said "Yes" to project question)
+- summary: updated to include concrete work
 
----
-
-## HANDLING PROJECT SELECTION (CRITICAL!):
-If LAST BOT MESSAGE contains a numbered list of projects like "1. ProjectA\n2. ProjectB" and user replies with just a NUMBER (1, 2, 3, etc.):
-→ Extract projectHint: THE NUMBER (e.g. "1", "2", "3")
-→ DO NOT extract/change workType, hoursWorked, or summary - leave them NULL
-
-If LAST BOT MESSAGE asked about a project with "(Y/N)" or "(S/N)" and user says:
-- "Y", "y", "Yes", "Si", "Sí", "Correct" → Extract projectHint: "CONFIRMED"
-- "N", "n", "No", "Nope", "Nah" → Extract projectHint: "NO"
-
-If user names a project (e.g. "at Plaza", "for site 5"):
-→ Extract projectHint: "Plaza" or "site 5" (the name mentioned)
+**DO NOT IGNORE** parts of the message just because you're focused on one question!
 
 ---
 
-## FOLLOW-UP TURN RULES (CRITICAL!):
-If LAST BOT MESSAGE asked a specific question (like "How many hours?"), ONLY extract the relevant field:
-- "How many hours?" → ONLY extract hoursWorked, leave others NULL
-- "What type of work?" → ONLY extract workType, leave others NULL  
-- "Which project?" with numbered list → ONLY extract projectHint (the number), leave others NULL
+## PROJECT CONFIRMATION DETECTION
 
-**DO NOT HALLUCINATE** values for fields that weren't asked about!
+If LAST BOT MESSAGE asked about a project (contains "Y/N" or "S/N" or project name):
+- "Y", "y", "Yes", "yes", "Si", "Sí", "yeah", "yep", "correct" → projectHint: "CONFIRMED"
+- "N", "n", "No", "no", "Nope", "nah" → projectHint: "NO"
+
+**IMPORTANT:** User may confirm AND provide other info. Look for confirmation words ANYWHERE in their message.
+
+---
+
+## PROJECT NUMBER SELECTION
+
+If LAST BOT MESSAGE shows numbered list (1. Project, 2. Project...):
+- User replies "1" or "2" → projectHint: that number as string
+- User may also add other info like hours - extract those too!
+
+---
+
+## HOURS EXTRACTION
+
+Look for hours ANYWHERE in the message:
+- "4 hours", "4h", "4 hrs" → hoursWorked: 4
+- "half hour", "30 min" → hoursWorked: 0.5
+- "all day", "full day" → hoursWorked: 8
+
+If user provides new hours, OVERRIDE previous - user is correcting.
+
+---
+
+## WORK TYPE UPDATES
+
+If user mentions NEW work in their response, UPDATE/MERGE:
+- "also did concrete" → add to summary, may update workType
+- "and finished drywall" → add to summary
 
 ---
 
 ## RULES:
-1. **NEVER HALLUCINATE!** If hours not stated, hoursWorked = null
-2. Extract workType from USER's FINAL statement (after any corrections)
-3. Compare FINAL workType against image - set isConsistent accordingly
-4. **responseLanguage**: DEFAULT TO "en" (English). Only set to "es" if the user's CURRENT message is clearly written in Spanish (e.g., contains Spanish words like "trabajo", "horas", "perdón", etc.). If user sends only an image or writes in English, responseLanguage = "en"
-5. **inconsistencyReason**: MUST be written in the language specified by responseLanguage - if "en", write in English; if "es", write in Spanish
-
-## SPAM/IRRELEVANT MESSAGE DETECTION:
-Set isWorkRelated = FALSE if message is:
-- Random jokes, emojis only, gibberish, test messages
-- Comments like "hello", "what's up", "lol", "haha", just greetings
-- Completely unrelated to work (personal chat, memes, etc.)
-
-Set isWorkRelated = TRUE if message:
-- Mentions ANY work activity, materials, hours, or construction terms
-- Contains a photo showing work/construction site
-- Is a follow-up to a work conversation (answering bot's questions like hours/project)
-- Even brief responses like "5" (hours) or "Y" (yes to project)
-
-**BE GENEROUS - when in doubt, set isWorkRelated = TRUE**
+1. Extract ALL information from user message, not just what was asked
+2. If user provides hours, USE THEM (override defaults)
+3. If user confirms project (Yes/Y/Si), set projectHint: "CONFIRMED"
+4. responseLanguage: "en" unless user writes clearly in Spanish
+5. isWorkRelated: TRUE for any work-related content
 
 ## WORK TYPES:
-"electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "general"
+"electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
 
 ---
 
 **EXTRACT (JSON only):**
-1. workType: The FINAL/CORRECTED work type from user
-2. hoursWorked: ONLY if user explicitly stated. Otherwise NULL.
-3. summary: Brief description
+1. workType: Work type (may combine multiple: "drain and concrete")
+2. hoursWorked: Hours if user stated ANY number. NULL only if truly not mentioned.
+3. summary: Brief description of ALL work mentioned
 4. materials: Materials visible/mentioned (array)
 5. location: If stated, else null
-6. projectHint: Project name OR "CONFIRMED" if agreeing to bot's project question. Otherwise NULL.
-7. isConsistent: TRUE if FINAL work type matches image
-8. inconsistencyReason: Only if FINAL type doesn't match image (write in responseLanguage!)
-9. responseLanguage: DEFAULT "en". Only "es" if current user message is clearly Spanish
-10. isWorkRelated: FALSE only if message is spam/mischief/completely unrelated
+6. projectHint: "CONFIRMED", "NO", project number, or project name. NULL if not mentioned.
+7. isConsistent: TRUE if work matches image
+8. inconsistencyReason: Only if mismatch
+9. responseLanguage: "en" or "es"
+10. isWorkRelated: TRUE for work content
 
 Return JSON only.`
 }

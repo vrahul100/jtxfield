@@ -3,6 +3,14 @@
 
 import type { Bucket, Member } from './types.ts'
 
+// Conversation phases - tracks where we are in the data collection flow
+export type ConversationPhase =
+    | 'initial'           // First contact, analyzing what we have
+    | 'collecting_work'   // Need work type
+    | 'collecting_hours'  // Got work type, need hours
+    | 'collecting_project'// Got work+hours, need project
+    | 'complete'          // All required data collected
+
 // Extraction result from LLM
 export interface ExtractionResult {
     workType: string | null
@@ -52,6 +60,12 @@ export interface BrainState {
     // Tracking
     attempts: number
     projectConfirmed: boolean  // True if user explicitly confirmed/provided project
+    conversationPhase: ConversationPhase  // Current phase in data collection
+    fieldAttempts: {  // Track attempts per field for graceful fallback
+        workType: number
+        hours: number
+        project: number
+    }
 
     // Modality tracking
     inputHasAudio: boolean  // True if user sent voice note
@@ -83,6 +97,12 @@ export function createInitialState(bucketId: number): BrainState {
         },
         attempts: 0,
         projectConfirmed: false,
+        conversationPhase: 'initial',
+        fieldAttempts: {
+            workType: 0,
+            hours: 0,
+            project: 0,
+        },
         inputHasAudio: false,
         status: 'processing',
         response: null,
