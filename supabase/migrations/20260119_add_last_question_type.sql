@@ -1,7 +1,10 @@
--- Add last_question_type column to buckets table
--- This tracks what question was last asked so responses can be interpreted in context
+-- Add conversation tracking columns for v2 state machine
 
 ALTER TABLE buckets 
-ADD COLUMN IF NOT EXISTS last_question_type text;
+ADD COLUMN IF NOT EXISTS conversation_state text;
 
-COMMENT ON COLUMN buckets.last_question_type IS 'Tracks conversational context: work_type, hours, anything_else, project_confirm, project_select';
+ALTER TABLE buckets 
+ADD COLUMN IF NOT EXISTS state_attempts integer DEFAULT 0;
+
+COMMENT ON COLUMN buckets.conversation_state IS 'XState v2: collecting_work, asking_more, confirming_project, selecting_project, complete';
+COMMENT ON COLUMN buckets.state_attempts IS 'Track attempts in current state for retry logic (max 2)';

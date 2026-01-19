@@ -68,6 +68,9 @@ export interface BrainState {
         hours: number
         project: number
     }
+    // State machine v2
+    shouldTransition: boolean  // Signal to transition to next state
+    stateAttempts: number  // Track attempts in current state (max 2)
 
     // Modality tracking
     inputHasAudio: boolean  // True if user sent voice note
@@ -107,6 +110,8 @@ export function createInitialState(bucketId: number): BrainState {
             hours: 0,
             project: 0,
         },
+        shouldTransition: false,
+        stateAttempts: 0,
         inputHasAudio: false,
         status: 'processing',
         response: null,

@@ -384,16 +384,12 @@ export async function appendToBucket(
     const existingTranscripts = bucket.transcripts ? JSON.parse(bucket.transcripts) : [];
     const existingSids = bucket.message_sids ? JSON.parse(bucket.message_sids) : [];
 
-    // Format new text - if there was a pending question, format as Q&A
+    // Format new text - just append directly, no Q&A formatting
     let formattedNewText = data.rawText || '';
-    if (bucket.ai_response && formattedNewText) {
-        // Format as Q&A conversation
-        formattedNewText = `Q: ${bucket.ai_response}\nA: ${formattedNewText}`;
-    }
 
     // Append new data
     const newText = bucket.raw_text
-        ? `${bucket.raw_text}\n---\n${formattedNewText}`
+        ? `${bucket.raw_text}\n${formattedNewText}`
         : formattedNewText;
 
     const [updated] = await sql`
