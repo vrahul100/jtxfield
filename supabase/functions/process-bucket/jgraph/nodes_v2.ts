@@ -1072,6 +1072,13 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         projectName = proj?.name || 'Inbox'
     }
 
+    // Update bucket with AI summary before completing
+    if (extraction.summary) {
+        await supabase.from('buckets').update({
+            summary: extraction.summary
+        }).eq('id', ctx.bucketId)
+    }
+
     // Create transaction (using correct schema columns)
     const txn = {
         bucket_id: ctx.bucketId,
@@ -1080,6 +1087,9 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         project_id: bucket.project_id,
         job: `${extraction.workType || 'work'} - ${extraction.hoursWorked || 0}h`,
         scope_description: extraction.summary || extraction.workType,
+        labor: extraction.summary || `${extraction.workType || 'work'} for ${extraction.hoursWorked || 0}h`,
+        material: extraction.materials?.join(', ') || null,
+        location: extraction.location || null,
         status: 'COMPLETED',
     }
 
