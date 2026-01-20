@@ -1,6 +1,5 @@
-// nodes_v2.ts - Clean State Handlers
-// FOCUS: State transitions and conversation flow ONLY
-// No media transcription, no complex extraction - just solid state machine
+// nodes_v2.ts - Clean State Handlers with Media Processing & Bilingual Support
+// State transitions, conversation flow, transcription, LLM extraction, and EN/ES responses
 
 import { createClient } from '@supabase/supabase-js'
 
@@ -8,22 +7,63 @@ import { createClient } from '@supabase/supabase-js'
 // TYPES
 // ============================================================================
 
+interface ExtractionResult {
+    workType: string | null
+    hoursWorked: number | null
+    summary: string | null
+    materials: string[]
+    location: string | null
+    projectHint: string | null
+    isConsistent: boolean
+    inconsistencyReason: string | null
+    responseLanguage: 'en' | 'es'
+    isWorkRelated: boolean
+}
+
 interface StateContext {
     bucketId: number
     bucket: any
     member: any
-    extraction: {
-        workType: string | null
-        hoursWorked: number | null
-        summary: string | null
-    }
+    extraction: ExtractionResult
+    transcripts: string[]
+    imageAnalysis: string
+    language: 'en' | 'es'
 }
 
 interface StateResult {
     nextState: string | null  // null = stay in current state (waiting for response)
     response: string | null
-    extraction?: any
+    extraction?: ExtractionResult
     projectId?: number | null
+}
+
+// ============================================================================
+// BILINGUAL MESSAGES
+// ============================================================================
+
+const MESSAGES = {
+    en: {
+        collectWork: 'What kind of work, and how many hours?',
+        anythingElse: (wt: string, h: number) => `${wt} for ${h}h. Anything else to add?`,
+        confirmProject: (wt: string, h: number, proj: string) => `${wt} for ${h}h. At ${proj}? (Y/N)`,
+        selectProject: (wt: string, h: number, list: string) => `${wt} for ${h}h.\n\n${list}\n\nWhich one?`,
+        success: (wt: string, h: number, proj: string, summary?: string) => {
+            const base = `✅ ${wt} for ${h}h at ${proj}.`
+            return summary ? `${base}\n"${summary}"` : base
+        },
+        noProjects: 'No projects available',
+    },
+    es: {
+        collectWork: '¿Qué tipo de trabajo, y cuántas horas?',
+        anythingElse: (wt: string, h: number) => `${wt} por ${h}h. ¿Algo más que agregar?`,
+        confirmProject: (wt: string, h: number, proj: string) => `${wt} por ${h}h. ¿En ${proj}? (S/N)`,
+        selectProject: (wt: string, h: number, list: string) => `${wt} por ${h}h.\n\n${list}\n\n¿Cuál?`,
+        success: (wt: string, h: number, proj: string, summary?: string) => {
+            const base = `✅ ${wt} por ${h}h en ${proj}.`
+            return summary ? `${base}\n"${summary}"` : base
+        },
+        noProjects: 'No hay proyectos disponibles',
+    }
 }
 
 // ============================================================================
@@ -57,7 +97,7 @@ function withDevInfo(response: string, state: string, extraction: any, attempts:
 async function sendMessage(phone: string, message: string, source: string) {
     const accountSid = Deno.env.get('TWILIO_ACCOUNT_SID')!
     const authToken = Deno.env.get('TWILIO_AUTH_TOKEN')!
-    const fromNumber = Deno.env.get('TWILIO_FROM_WHATSAPP')!  // Use correct env var name
+    const fromNumber = Deno.env.get('TWILIO_FROM_WHATSAPP')!
 
     console.log(`[Send] To ${phone}: ${message}`)
 
@@ -75,6 +115,225 @@ async function sendMessage(phone: string, message: string, source: string) {
         },
         body: params.toString(),
     })
+}
+
+// ============================================================================
+// TIMEOUT UTILITY
+// ============================================================================
+
+// Wrap a promise with a timeout to prevent hanging
+function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+    const timeout = new Promise<T>((resolve) => {
+        setTimeout(() => {
+            console.log(`[Timeout] Operation timed out after ${ms}ms`)
+            resolve(fallback)
+        }, ms)
+    })
+    return Promise.race([promise, timeout])
+}
+
+// ============================================================================
+// MEDIA PROCESSING (with timeouts)
+// ============================================================================
+
+// Transcribe audio using Whisper via Groq
+async function transcribeAudio(url: string): Promise<string | null> {
+    const groqApiKey = Deno.env.get('GROQ_API_KEY')
+    if (!groqApiKey) return null
+
+    try {
+        // Fetch audio with Twilio auth
+        const twilioSid = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
+        const twilioAuth = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
+        const headers: Record<string, string> = {}
+        if (twilioSid && twilioAuth && url.includes('twilio.com')) {
+            headers['Authorization'] = `Basic ${btoa(`${twilioSid}:${twilioAuth}`)}`
+        }
+
+        const audioResp = await fetch(url, { headers })
+        if (!audioResp.ok) return null
+
+        const audioBlob = await audioResp.blob()
+        const formData = new FormData()
+        formData.append('file', audioBlob, 'audio.ogg')
+        formData.append('model', 'whisper-large-v3')
+
+        const resp = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${groqApiKey}` },
+            body: formData,
+        })
+
+        if (!resp.ok) return null
+        const data = await resp.json()
+        console.log(`[Transcribe] Result: "${data.text?.substring(0, 50)}..."`)
+        return data.text || null
+    } catch (e) {
+        console.error('[Transcribe] Error:', e)
+        return null
+    }
+}
+
+// Analyze image using Llama vision
+async function analyzeImage(url: string): Promise<string> {
+    const groqApiKey = Deno.env.get('GROQ_API_KEY')
+    if (!groqApiKey) return 'Image analysis unavailable'
+
+    try {
+        // Fetch image with Twilio auth
+        const twilioSid = Deno.env.get('TWILIO_ACCOUNT_SID') || ''
+        const twilioAuth = Deno.env.get('TWILIO_AUTH_TOKEN') || ''
+        const headers: Record<string, string> = {}
+        if (twilioSid && twilioAuth && url.includes('twilio.com')) {
+            headers['Authorization'] = `Basic ${btoa(`${twilioSid}:${twilioAuth}`)}`
+        }
+
+        const imageResp = await fetch(url, { headers, redirect: 'follow' })
+        if (!imageResp.ok) return 'Image could not be loaded'
+
+        const contentType = imageResp.headers.get('content-type') || 'image/jpeg'
+        const arrayBuffer = await imageResp.arrayBuffer()
+
+        // Convert to base64 in chunks to avoid stack overflow
+        const uint8Array = new Uint8Array(arrayBuffer)
+        const chunkSize = 8192
+        let binaryString = ''
+        for (let i = 0; i < uint8Array.length; i += chunkSize) {
+            const chunk = uint8Array.slice(i, i + chunkSize)
+            binaryString += String.fromCharCode.apply(null, chunk as unknown as number[])
+        }
+        const base64 = btoa(binaryString)
+        const dataUrl = `data:${contentType};base64,${base64}`
+
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${groqApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                messages: [
+                    { role: 'system', content: 'Describe this construction/work image. List: Type of work, Materials visible, Completion status.' },
+                    {
+                        role: 'user', content: [
+                            { type: 'text', text: 'Analyze this work photo:' },
+                            { type: 'image_url', image_url: { url: dataUrl } }
+                        ]
+                    }
+                ],
+                temperature: 0.1,
+                max_tokens: 500,
+            }),
+        })
+
+        if (!response.ok) return 'Image analysis unavailable'
+        const data = await response.json()
+        const analysis = data.choices?.[0]?.message?.content || 'No analysis'
+        console.log(`[Vision] Analysis: "${analysis.substring(0, 80)}..."`)
+        return analysis
+    } catch (e) {
+        console.error('[Vision] Error:', e)
+        return 'Image analysis failed'
+    }
+}
+
+// Build extraction prompt for LLM
+function buildExtractionPrompt(transcript: string, imageAnalysis: string, lastBotMessage?: string): string {
+    return `You are a construction foreman's AI assistant. Extract work log data from user's message.
+
+**CONTEXT - LAST MESSAGE FROM BOT:**
+${lastBotMessage || '[None - new conversation]'}
+
+**USER INPUT:**
+${transcript || '[NO TEXT - user only sent an image]'}
+
+**IMAGE ANALYSIS:**
+${imageAnalysis || 'No images'}
+
+---
+
+## EXTRACTION RULES:
+1. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
+2. hoursWorked: Extract numbers like "4 hours", "4h", "half hour"=0.5, "all day"=8
+3. summary: Brief description of work
+4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
+5. responseLanguage: "en" unless user writes in Spanish → "es"
+6. isConsistent: TRUE if text matches image
+7. isWorkRelated: TRUE for work content, FALSE for spam/unrelated
+
+**RETURN JSON ONLY:**
+{
+  "workType": string | null,
+  "hoursWorked": number | null,
+  "summary": string,
+  "materials": string[],
+  "location": string | null,
+  "projectHint": string | null,
+  "isConsistent": boolean,
+  "inconsistencyReason": string | null,
+  "responseLanguage": "en" | "es",
+  "isWorkRelated": boolean
+}`
+}
+
+// Extract data using LLM
+async function extractWithLLM(rawText: string, transcripts: string[], imageAnalysis: string, lastBotMessage?: string): Promise<ExtractionResult | null> {
+    const groqApiKey = Deno.env.get('GROQ_API_KEY')
+    if (!groqApiKey) return null
+
+    const allText = [
+        rawText,
+        ...transcripts.map(t => `[Voice]: ${t}`)
+    ].filter(Boolean).join('\n')
+
+    const prompt = buildExtractionPrompt(allText, imageAnalysis, lastBotMessage)
+
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${groqApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'llama-3.3-70b-versatile',
+                messages: [{ role: 'user', content: prompt }],
+                temperature: 0.1,
+                response_format: { type: 'json_object' },
+            }),
+        })
+
+        if (!response.ok) {
+            console.error('[Extract] API error:', await response.text())
+            return null
+        }
+
+        const data = await response.json()
+        const content = data.choices?.[0]?.message?.content
+        const extraction = JSON.parse(content) as ExtractionResult
+        console.log(`[Extract] Result: workType=${extraction.workType}, hours=${extraction.hoursWorked}, lang=${extraction.responseLanguage}`)
+        return extraction
+    } catch (e) {
+        console.error('[Extract] Error:', e)
+        return null
+    }
+}
+
+// Create default extraction result
+function createDefaultExtraction(): ExtractionResult {
+    return {
+        workType: null,
+        hoursWorked: null,
+        summary: null,
+        materials: [],
+        location: null,
+        projectHint: null,
+        isConsistent: true,
+        inconsistencyReason: null,
+        responseLanguage: 'en',
+        isWorkRelated: true,
+    }
 }
 
 // ============================================================================
@@ -110,28 +369,89 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         console.log(`[StateMachine] Loaded member #${bucket.member_id}:`, member ? `last_confirmed_project_id=${member.last_confirmed_project_id}` : 'NULL')
     }
 
-    // Load extraction from bucket
-    let extraction = { workType: null, hoursWorked: null, summary: null }
+    // Load extraction from bucket (may be partially filled from previous runs)
+    let extraction: ExtractionResult = createDefaultExtraction()
     if (bucket.extraction_json) {
         try {
-            extraction = typeof bucket.extraction_json === 'string'
+            const parsed = typeof bucket.extraction_json === 'string'
                 ? JSON.parse(bucket.extraction_json)
                 : bucket.extraction_json
-        } catch (e) {
+            extraction = { ...extraction, ...parsed }
+        } catch (_e) {
             console.log('[StateMachine] Failed to parse extraction_json')
         }
     }
 
+    // Parse media URLs
+    const imageUrls: string[] = bucket.image_urls ? JSON.parse(bucket.image_urls) : []
+    const audioUrls: string[] = bucket.audio_urls ? JSON.parse(bucket.audio_urls) : []
+    let transcripts: string[] = bucket.transcripts ? JSON.parse(bucket.transcripts) : []
+    let imageAnalysis = ''
+
+    const currentState = bucket.conversation_state || 'initial'
+
+    // Process media only in initial state (first message)
+    if (currentState === 'initial') {
+        // Transcribe audio with 15s timeout
+        if (audioUrls.length > 0 && transcripts.length === 0) {
+            console.log(`[StateMachine] Transcribing ${audioUrls.length} audio files`)
+            for (const url of audioUrls) {
+                const transcript = await withTimeout(transcribeAudio(url), 15000, null)
+                if (transcript) transcripts.push(transcript)
+            }
+            // Save transcripts to bucket
+            if (transcripts.length > 0) {
+                await supabase.from('buckets').update({
+                    transcripts: JSON.stringify(transcripts)
+                }).eq('id', bucketId)
+            }
+        }
+
+        // Analyze image with 15s timeout
+        if (imageUrls.length > 0) {
+            console.log(`[StateMachine] Analyzing ${imageUrls.length} images`)
+            imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
+        }
+
+        // LLM extraction with 20s timeout (includes consistency check)
+        const llmExtraction = await withTimeout(
+            extractWithLLM(
+                bucket.raw_text || '',
+                transcripts,
+                imageAnalysis,
+                bucket.ai_response
+            ),
+            20000,
+            null
+        )
+        if (llmExtraction) {
+            extraction = { ...extraction, ...llmExtraction }
+            // Save extraction to bucket
+            await supabase.from('buckets').update({
+                extraction_json: JSON.stringify(extraction)
+            }).eq('id', bucketId)
+        }
+    }
+
+    // Check for consistency issues (validation)
+    if (!extraction.isConsistent && extraction.inconsistencyReason) {
+        console.log(`[StateMachine] ⚠️ Inconsistency detected: ${extraction.inconsistencyReason}`)
+    }
+
+    // Detect language from extraction or default to member preference
+    const language: 'en' | 'es' = extraction.responseLanguage || member?.language_preference || 'en'
+
     const ctx: StateContext = {
         bucketId,
         bucket,
-        member,  // Use explicitly loaded member
+        member,
         extraction,
+        transcripts,
+        imageAnalysis,
+        language,
     }
 
-    // Get current state
-    const currentState = bucket.conversation_state || 'initial'
-    console.log(`[StateMachine] Current state: ${currentState}`)
+    console.log(`[StateMachine] Current state: ${currentState}, language: ${language}, workType: ${extraction.workType}, hours: ${extraction.hoursWorked}`)
 
     // Route to state handler
     let result: StateResult
@@ -219,51 +539,31 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 // ============================================================================
 
 // INITIAL: First message - check what we have and route
-async function handleInitial(ctx: StateContext): Promise<StateResult> {
+function handleInitial(ctx: StateContext): StateResult {
     console.log('[State: Initial]')
 
-    const { bucket, extraction } = ctx
+    const { extraction } = ctx
 
-    // For now, mock extraction from raw_text (will add real extraction later)
-    const rawText = bucket.raw_text || ''
-
-    // Simple mock: look for patterns like "X hours" or "Xh"
-    let workType = extraction.workType
-    let hoursWorked = extraction.hoursWorked
-    let summary = extraction.summary
-
-    if (!workType && rawText) {
-        // Try to extract from raw text (simple patterns)
-        const hoursMatch = rawText.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)\b/i)
-        if (hoursMatch) {
-            hoursWorked = parseFloat(hoursMatch[1])
-        }
-
-        // For now, use raw text as work type if we have hours
-        if (hoursWorked && hoursWorked > 0) {
-            workType = rawText.replace(/\d+(?:\.\d+)?\s*(?:hours?|hrs?|h)\b/gi, '').trim() || 'work'
-            summary = rawText
-        }
-    }
-
-    const newExtraction = { workType, hoursWorked, summary }
-
-    // Check if we have work info
+    // LLM extraction already happened in entry point - just check what we have
+    const workType = extraction.workType
+    const hoursWorked = extraction.hoursWorked
     const hasWorkInfo = workType && hoursWorked && hoursWorked > 0
+
+    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, consistent=${extraction.isConsistent}`)
 
     if (hasWorkInfo) {
         // Go to asking_more
         return {
             nextState: 'asking_more',
             response: null,
-            extraction: newExtraction,
+            extraction,
         }
     } else {
         // Need to collect work info
         return {
             nextState: 'collecting_work',
             response: null,
-            extraction: newExtraction,
+            extraction,
         }
     }
 }
@@ -272,9 +572,10 @@ async function handleInitial(ctx: StateContext): Promise<StateResult> {
 async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
     console.log('[State: CollectingWork]')
 
-    const { bucket, extraction } = ctx
+    const { bucket, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
     const lastMsg = getLastMessage(bucket.raw_text || '')
+    const msg = MESSAGES[language]
 
     // If this is a response (attempts > 0), try to extract
     if (stateAttempts > 0 && lastMsg) {
@@ -287,7 +588,7 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
             return {
                 nextState: 'asking_more',
                 response: null,
-                extraction: { workType, hoursWorked: hours, summary: lastMsg },
+                extraction: { ...extraction, workType, hoursWorked: hours, summary: lastMsg },
             }
         }
     }
@@ -297,7 +598,7 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
         return {
             nextState: 'asking_more',
             response: null,
-            extraction: { workType: 'work', hoursWorked: 2, summary: bucket.raw_text },
+            extraction: { ...extraction, workType: 'work', hoursWorked: 2, summary: bucket.raw_text },
         }
     }
 
@@ -307,7 +608,7 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
 
     return {
         nextState: 'collecting_work',
-        response: withDevInfo("What kind of work, and how many hours?", 'collecting_work', extraction, stateAttempts + 1),
+        response: withDevInfo(msg.collectWork, 'collecting_work', extraction, stateAttempts + 1),
         extraction,
     }
 }
@@ -316,9 +617,10 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
 async function handleAskingMore(ctx: StateContext): Promise<StateResult> {
     console.log('[State: AskingMore]')
 
-    const { bucket, extraction } = ctx
+    const { bucket, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
     const lastMsg = getLastMessage(bucket.raw_text || '')
+    const msg = MESSAGES[language]
 
     console.log(`[State: AskingMore] stateAttempts=${stateAttempts}, lastMsg="${lastMsg}"`)
 
@@ -344,15 +646,15 @@ async function handleAskingMore(ctx: StateContext): Promise<StateResult> {
             }
         } else {
             // User added more - append and ask again
-            const newWorkType = extraction.workType || 'work'
-            const newHours = extraction.hoursWorked || 0
+            const wt = extraction.workType || 'work'
+            const h = extraction.hoursWorked || 0
 
             const supabase = getSupabase()
             await supabase.from('buckets').update({ state_attempts: stateAttempts + 1 }).eq('id', ctx.bucketId)
 
             return {
                 nextState: 'asking_more',
-                response: withDevInfo(`${newWorkType} for ${newHours}h. Anything else to add?`, 'asking_more', extraction, stateAttempts + 1, lastMsg),
+                response: withDevInfo(msg.anythingElse(wt, h), 'asking_more', extraction, stateAttempts + 1, lastMsg),
                 extraction,
             }
         }
@@ -367,7 +669,7 @@ async function handleAskingMore(ctx: StateContext): Promise<StateResult> {
 
     return {
         nextState: 'asking_more',
-        response: withDevInfo(`${wt} for ${h}h. Anything else to add?`, 'asking_more', extraction, 1, lastMsg),
+        response: withDevInfo(msg.anythingElse(wt, h), 'asking_more', extraction, 1, lastMsg),
         extraction,
     }
 }
@@ -376,13 +678,14 @@ async function handleAskingMore(ctx: StateContext): Promise<StateResult> {
 async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> {
     console.log('[State: ConfirmingProject]')
 
-    const { bucket, member, extraction } = ctx
+    const { bucket, member, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
     const lastMsg = getLastMessage(bucket.raw_text || '')
     const supabase = getSupabase()
+    const msg = MESSAGES[language]
 
     // Get member's last confirmed project (always, for Y/N response handling)
-    let memberProjectId: number | null = member?.last_confirmed_project_id || null
+    const memberProjectId: number | null = member?.last_confirmed_project_id || null
     let memberProjectName = ''
 
     if (memberProjectId) {
@@ -454,7 +757,7 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
 
     return {
         nextState: 'confirming_project',
-        response: withDevInfo(`${wt} for ${h}h. At ${memberProjectName}? (Y/N)`, 'confirming_project', extraction, 1),
+        response: withDevInfo(msg.confirmProject(wt, h, memberProjectName), 'confirming_project', extraction, 1),
         extraction,
     }
 }
@@ -463,10 +766,11 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
 async function handleSelectingProject(ctx: StateContext): Promise<StateResult> {
     console.log('[State: SelectingProject]')
 
-    const { bucket, member, extraction } = ctx
+    const { bucket, member, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
     const lastMsg = getLastMessage(bucket.raw_text || '')
     const supabase = getSupabase()
+    const msg = MESSAGES[language]
 
     // Get project list
     const { data: projects } = await supabase
@@ -526,13 +830,13 @@ async function handleSelectingProject(ctx: StateContext): Promise<StateResult> {
     // Show list
     const wt = extraction.workType || 'work'
     const h = extraction.hoursWorked || 0
-    const projectList = projects?.map((p, i) => `${i + 1}. ${p.name}`).join('\n') || 'No projects'
+    const projectList = projects?.map((p, i) => `${i + 1}. ${p.name}`).join('\n') || msg.noProjects
 
     await supabase.from('buckets').update({ state_attempts: stateAttempts + 1 }).eq('id', ctx.bucketId)
 
     return {
         nextState: 'selecting_project',
-        response: withDevInfo(`${wt} for ${h}h.\n\n${projectList}\n\nWhich one?`, 'selecting_project', extraction, stateAttempts + 1),
+        response: withDevInfo(msg.selectProject(wt, h, projectList), 'selecting_project', extraction, stateAttempts + 1),
         extraction,
     }
 }
@@ -541,8 +845,9 @@ async function handleSelectingProject(ctx: StateContext): Promise<StateResult> {
 async function handleComplete(ctx: StateContext): Promise<StateResult> {
     console.log('[State: Complete]')
 
-    const { bucket, extraction } = ctx
+    const { bucket, extraction, language } = ctx
     const supabase = getSupabase()
+    const msg = MESSAGES[language]
 
     // Get project name
     let projectName = 'Inbox'
@@ -567,7 +872,7 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
 
     const wt = extraction.workType || 'work'
     const h = extraction.hoursWorked || 0
-    const confirmMsg = withDevInfo(`✅ ${wt} for ${h}h at ${projectName}.\n"${extraction.summary || wt}"`, 'complete', extraction, 0)
+    const confirmMsg = withDevInfo(msg.success(wt, h, projectName, extraction.summary || undefined), 'complete', extraction, 0)
 
     return {
         nextState: 'complete',
