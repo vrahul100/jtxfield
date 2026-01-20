@@ -89,13 +89,25 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // Load bucket
     const { data: bucket, error } = await supabase
         .from('buckets')
-        .select('*, members(*)')
+        .select('*')
         .eq('id', bucketId)
         .single()
 
     if (error || !bucket) {
         console.error('[StateMachine] Failed to load bucket:', error)
         return { status: 'error', action: 'error' }
+    }
+
+    // Load member explicitly (join was not reliable)
+    let member = null
+    if (bucket.member_id) {
+        const { data: memberData } = await supabase
+            .from('members')
+            .select('*')
+            .eq('id', bucket.member_id)
+            .single()
+        member = memberData
+        console.log(`[StateMachine] Loaded member #${bucket.member_id}:`, member ? `last_confirmed_project_id=${member.last_confirmed_project_id}` : 'NULL')
     }
 
     // Load extraction from bucket
@@ -113,7 +125,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     const ctx: StateContext = {
         bucketId,
         bucket,
-        member: bucket.members,
+        member,  // Use explicitly loaded member
         extraction,
     }
 
@@ -156,10 +168,17 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
         // If transitioning, run the next state immediately (no message sent yet)
         if (!result.response) {
-            await supabase.from('buckets').update({
+            const transitionUpdate: any = {
                 conversation_state: result.nextState,
                 extraction_json: result.extraction ? JSON.stringify(result.extraction) : bucket.extraction_json,
-            }).eq('id', bucketId)
+            }
+
+            // CRITICAL: Include project_id if set (e.g., from confirming_project → complete)
+            if (result.projectId !== undefined) {
+                transitionUpdate.project_id = result.projectId
+            }
+
+            await supabase.from('buckets').update(transitionUpdate).eq('id', bucketId)
 
             // Recursively handle next state
             return runStateMachine(bucketId)
@@ -369,7 +388,9 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
     if (memberProjectId) {
         const { data: proj } = await supabase.from('projects').select('name').eq('id', memberProjectId).single()
         memberProjectName = proj?.name || 'your project'
-    }
+    } 
+    
+    console.log(`[ConfirmingProject] memberProjectName="${memberProjectName}"`)
 
     // Check if confirmation is "fresh" (within 8 hours) - only affects whether we ASK
     let projectIsFresh = false
@@ -530,16 +551,14 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         projectName = proj?.name || 'Inbox'
     }
 
-    // Create transaction
+    // Create transaction (using correct schema columns)
     const txn = {
         bucket_id: ctx.bucketId,
         company_id: bucket.node_id,
         user_id: bucket.member_id,
         project_id: bucket.project_id,
-        job: extraction.summary || extraction.workType,
-        time: extraction.hoursWorked,
-        labor: extraction.workType,
-        scope_description: extraction.summary,
+        job: `${extraction.workType || 'work'} - ${extraction.hoursWorked || 0}h`,
+        scope_description: extraction.summary || extraction.workType,
         status: 'COMPLETED',
     }
 

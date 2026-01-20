@@ -5,6 +5,29 @@
     "version": "0.2.0",
     "configurations": [
         {
+            "name": "Debug Edge Function (Deno)",
+            "type": "deno",
+            "request": "launch",
+            "program": "${workspaceFolder}/supabase/functions/process-bucket/test.ts",
+            "cwd": "${workspaceFolder}/supabase/functions/process-bucket",
+            "env": {
+                "SUPABASE_URL": "${env:SUPABASE_URL}",
+                "SUPABASE_SERVICE_ROLE_KEY": "${env:SUPABASE_SERVICE_ROLE_KEY}",
+                "TWILIO_ACCOUNT_SID": "${env:TWILIO_ACCOUNT_SID}",
+                "TWILIO_AUTH_TOKEN": "${env:TWILIO_AUTH_TOKEN}",
+                "TWILIO_FROM_WHATSAPP": "${env:TWILIO_FROM_WHATSAPP}",
+                "DEV_MODE": "true"
+            },
+            "args": [
+                "123"
+            ],
+            "runtimeArgs": [
+                "--allow-net",
+                "--allow-env",
+                "--allow-read"
+            ]
+        },
+        {
             "name": "Attach",
             "port": 9229,
             "request": "attach",
