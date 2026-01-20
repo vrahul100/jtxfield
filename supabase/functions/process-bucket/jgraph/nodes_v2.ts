@@ -44,7 +44,8 @@ interface StateResult {
 const MESSAGES = {
     en: {
         collectWork: 'What kind of work, and how many hours?',
-        anythingElse: (wt: string, h: number) => `${wt} for ${h}h. Anything else to add?`,
+        askHours: (wt: string) => `I see ${wt}. How many hours?`,
+        confirmAll: (wt: string, h: number, proj: string) => `${wt} for ${h}h at ${proj}. Correct? (Y/N)`,
         confirmProject: (wt: string, h: number, proj: string) => `${wt} for ${h}h. At ${proj}? (Y/N)`,
         selectProject: (wt: string, h: number, list: string) => `${wt} for ${h}h.\n\n${list}\n\nWhich one?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
@@ -55,7 +56,8 @@ const MESSAGES = {
     },
     es: {
         collectWork: '¿Qué tipo de trabajo, y cuántas horas?',
-        anythingElse: (wt: string, h: number) => `${wt} por ${h}h. ¿Algo más que agregar?`,
+        askHours: (wt: string) => `Veo ${wt}. ¿Cuántas horas?`,
+        confirmAll: (wt: string, h: number, proj: string) => `${wt} por ${h}h en ${proj}. ¿Correcto? (S/N)`,
         confirmProject: (wt: string, h: number, proj: string) => `${wt} por ${h}h. ¿En ${proj}? (S/N)`,
         selectProject: (wt: string, h: number, list: string) => `${wt} por ${h}h.\n\n${list}\n\n¿Cuál?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
@@ -463,8 +465,11 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         case 'collecting_work':
             result = await handleCollectingWork(ctx)
             break
-        case 'asking_more':
-            result = await handleAskingMore(ctx)
+        case 'collecting_hours':
+            result = await handleCollectingHours(ctx)
+            break
+        case 'confirming_all':
+            result = await handleConfirmingAll(ctx)
             break
         case 'confirming_project':
             result = await handleConfirmingProject(ctx)
@@ -542,24 +547,42 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 function handleInitial(ctx: StateContext): StateResult {
     console.log('[State: Initial]')
 
-    const { extraction } = ctx
+    const { extraction, member } = ctx
 
-    // LLM extraction already happened in entry point - just check what we have
     const workType = extraction.workType
     const hoursWorked = extraction.hoursWorked
-    const hasWorkInfo = workType && hoursWorked && hoursWorked > 0
+    const projectHint = extraction.projectHint
 
-    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, consistent=${extraction.isConsistent}`)
+    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, projectHint=${projectHint}`)
 
-    if (hasWorkInfo) {
-        // Go to asking_more
+    // Check what we have
+    const hasWork = !!workType
+    const hasHours = hoursWorked && hoursWorked > 0
+    const hasProject = !!projectHint || !!member?.last_confirmed_project_id
+
+    if (hasWork && hasHours && hasProject) {
+        // We have everything! Go to confirming_all
         return {
-            nextState: 'asking_more',
+            nextState: 'confirming_all',
+            response: null,
+            extraction,
+        }
+    } else if (hasWork && hasHours) {
+        // Have work + hours, need project
+        return {
+            nextState: 'confirming_project',
+            response: null,
+            extraction,
+        }
+    } else if (hasWork && !hasHours) {
+        // Have work type (maybe from image), need hours
+        return {
+            nextState: 'collecting_hours',
             response: null,
             extraction,
         }
     } else {
-        // Need to collect work info
+        // Need everything
         return {
             nextState: 'collecting_work',
             response: null,
@@ -586,7 +609,7 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
 
         if (hours && hours > 0) {
             return {
-                nextState: 'asking_more',
+                nextState: 'confirming_project',
                 response: null,
                 extraction: { ...extraction, workType, hoursWorked: hours, summary: lastMsg },
             }
@@ -596,7 +619,7 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
     // Max attempts reached - use defaults
     if (stateAttempts >= 2) {
         return {
-            nextState: 'asking_more',
+            nextState: 'confirming_project',
             response: null,
             extraction: { ...extraction, workType: 'work', hoursWorked: 2, summary: bucket.raw_text },
         }
@@ -613,63 +636,140 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
     }
 }
 
-// ASKING_MORE: "Anything else to add?"
-async function handleAskingMore(ctx: StateContext): Promise<StateResult> {
-    console.log('[State: AskingMore]')
+// COLLECTING_HOURS: We have work type (from image), just need hours
+async function handleCollectingHours(ctx: StateContext): Promise<StateResult> {
+    console.log('[State: CollectingHours]')
 
     const { bucket, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
     const lastMsg = getLastMessage(bucket.raw_text || '')
     const msg = MESSAGES[language]
 
-    console.log(`[State: AskingMore] stateAttempts=${stateAttempts}, lastMsg="${lastMsg}"`)
+    // If this is a response, try to extract hours
+    if (stateAttempts > 0 && lastMsg) {
+        const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h|horas?)?/i)
+        const hours = hoursMatch ? parseFloat(hoursMatch[1]) : null
 
-    // If this is a response (attempts > 0)
-    if (stateAttempts > 0) {
-        const firstWord = lastMsg.split(/[\s.,!]/)[0]
-
-        // Check for NO - user is done adding
-        const noWords = ['no', 'n', 'nope', 'nah', 'done', 'nothing', 'thats', "that's", 'nada']
-        const saidNo = noWords.includes(firstWord) || noWords.some(w => lastMsg === w)
-
-        console.log(`[State: AskingMore] firstWord="${firstWord}", saidNo=${saidNo}`)
-
-        if (saidNo) {
-            // User is done - go to project
-            const supabase = getSupabase()
-            await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
-
+        if (hours && hours > 0) {
             return {
                 nextState: 'confirming_project',
                 response: null,
-                extraction,
+                extraction: { ...extraction, hoursWorked: hours },
             }
-        } else {
-            // User added more - append and ask again
-            const wt = extraction.workType || 'work'
-            const h = extraction.hoursWorked || 0
+        }
+    }
 
-            const supabase = getSupabase()
-            await supabase.from('buckets').update({ state_attempts: stateAttempts + 1 }).eq('id', ctx.bucketId)
+    // Max attempts - use default 2 hours
+    if (stateAttempts >= 2) {
+        return {
+            nextState: 'confirming_project',
+            response: null,
+            extraction: { ...extraction, hoursWorked: 2 },
+        }
+    }
+
+    // Ask for hours
+    const supabase = getSupabase()
+    await supabase.from('buckets').update({ state_attempts: stateAttempts + 1 }).eq('id', ctx.bucketId)
+
+    const wt = extraction.workType || 'work'
+    return {
+        nextState: 'collecting_hours',
+        response: withDevInfo(msg.askHours(wt), 'collecting_hours', extraction, stateAttempts + 1),
+        extraction,
+    }
+}
+
+// CONFIRMING_ALL: We have everything - confirm all at once
+async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
+    console.log('[State: ConfirmingAll]')
+
+    const { bucket, member, extraction, language } = ctx
+    const stateAttempts = bucket.state_attempts || 0
+    const lastMsg = getLastMessage(bucket.raw_text || '')
+    const supabase = getSupabase()
+    const msg = MESSAGES[language]
+
+    // Get project info - use projectHint or member's last project
+    let projectId: number | null = null
+    let projectName = ''
+
+    // Try to match projectHint to a real project
+    if (extraction.projectHint && extraction.projectHint !== 'CONFIRMED') {
+        const { data: matched } = await supabase
+            .from('projects')
+            .select('id, name')
+            .eq('node_id', bucket.node_id)
+            .ilike('name', `%${extraction.projectHint}%`)
+            .limit(1)
+            .single()
+        
+        if (matched) {
+            projectId = matched.id
+            projectName = matched.name
+        }
+    }
+
+    // Fall back to member's last confirmed project
+    if (!projectId && member?.last_confirmed_project_id) {
+        projectId = member.last_confirmed_project_id
+        const { data: proj } = await supabase
+            .from('projects')
+            .select('name')
+            .eq('id', projectId)
+            .single()
+        projectName = proj?.name || 'your project'
+    }
+
+    // If this is a response
+    if (stateAttempts > 0) {
+        const firstWord = lastMsg.split(/[\s.,!]/)[0].toLowerCase()
+        const yesWords = ['yes', 'y', 'si', 'sí', 's', 'ok', 'yeah', 'yep', 'correct', 'correcto']
+        const saidYes = yesWords.includes(firstWord) || yesWords.some(w => lastMsg === w)
+
+        if (saidYes && projectId) {
+            // Confirmed! Complete
+            await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
+            await supabase.from('members').update({
+                last_confirmed_project_id: projectId,
+                project_confirmed_at: new Date().toISOString(),
+            }).eq('id', member.id)
 
             return {
-                nextState: 'asking_more',
-                response: withDevInfo(msg.anythingElse(wt, h), 'asking_more', extraction, stateAttempts + 1, lastMsg),
+                nextState: 'complete',
+                response: null,
+                extraction,
+                projectId,
+            }
+        } else {
+            // User said no or provided correction - go to selecting project
+            await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
+            return {
+                nextState: 'selecting_project',
+                response: null,
                 extraction,
             }
         }
     }
 
-    // First time - ask "Anything else?"
+    // First time - ask for confirmation of everything
+    if (!projectId) {
+        // No project found - go to selecting
+        return {
+            nextState: 'selecting_project',
+            response: null,
+            extraction,
+        }
+    }
+
     const wt = extraction.workType || 'work'
     const h = extraction.hoursWorked || 0
 
-    const supabase = getSupabase()
     await supabase.from('buckets').update({ state_attempts: 1 }).eq('id', ctx.bucketId)
 
     return {
-        nextState: 'asking_more',
-        response: withDevInfo(msg.anythingElse(wt, h), 'asking_more', extraction, 1, lastMsg),
+        nextState: 'confirming_all',
+        response: withDevInfo(msg.confirmAll(wt, h, projectName), 'confirming_all', extraction, 1),
         extraction,
     }
 }
