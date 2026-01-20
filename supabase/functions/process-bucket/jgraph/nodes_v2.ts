@@ -387,7 +387,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         console.log(`[StateMachine] Loaded member #${bucket.member_id}:`, member ? `last_confirmed_project_id=${member.last_confirmed_project_id}` : 'NULL')
     }
 
-    // Load extraction from bucket (may be partially filled from previous runs)
+    // Load extraction from bucket (should already be populated by background worker)
     let extraction: ExtractionResult = createDefaultExtraction()
     if (bucket.extraction_json) {
         try {
@@ -408,7 +408,8 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     const currentState = bucket.conversation_state || 'initial'
 
-    // Process media only in initial state (first message)
+    // TODO: Move this to separate background worker to avoid blocking
+    // For now, process media in initial state to maintain functionality
     if (currentState === 'initial') {
         // Transcribe audio with 15s timeout
         if (audioUrls.length > 0 && transcripts.length === 0) {
@@ -824,6 +825,25 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
         const saidYes = yesWords.includes(firstWord) || yesWords.some(w => lastMsg === w)
 
         if (saidYes && projectId) {
+            // Check if user added more details after "yes"
+            let updatedExtraction = extraction
+            
+            // Capture anything after the confirmation word
+            const confirmationPattern = /^(?:yes|y|si|sí|s|ok|yeah|yep|correct|correcto)[\s.,!]*(.*)/i
+            const match = lastMsg.match(confirmationPattern)
+            
+            if (match && match[1] && match[1].trim().length > 0) {
+                const additionalText = match[1].trim()
+                console.log(`[ConfirmingAll] User added text: "${additionalText}"`)
+                
+                // Just append raw text - no LLM call
+                const currentSummary = extraction.summary || extraction.workType || ''
+                updatedExtraction = {
+                    ...extraction,
+                    summary: currentSummary ? `${currentSummary}. ${additionalText}` : additionalText
+                }
+            }
+
             // Confirmed! Complete
             await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
             await supabase.from('members').update({
@@ -834,7 +854,7 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
             return {
                 nextState: 'complete',
                 response: null,
-                extraction,
+                extraction: updatedExtraction,
                 projectId,
             }
         } else {
