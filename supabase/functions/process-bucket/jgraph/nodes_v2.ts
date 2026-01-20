@@ -45,25 +45,29 @@ const MESSAGES = {
     en: {
         collectWork: 'What kind of work, and how many hours?',
         askHours: (wt: string) => `I see ${wt}. How many hours?`,
+        clarify: (reason: string) => `⚠️ ${reason} Can you clarify?`,
         confirmAll: (wt: string, h: number, proj: string) => `${wt} for ${h}h at ${proj}. Correct? (Y/N)`,
         confirmProject: (wt: string, h: number, proj: string) => `${wt} for ${h}h. At ${proj}? (Y/N)`,
         selectProject: (wt: string, h: number, list: string) => `${wt} for ${h}h.\n\n${list}\n\nWhich one?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} for ${h}h at ${proj}.`
-            return summary ? `${base}\n"${summary}"` : base
+            return summary ? `${base}\n"📝 ${summary}"` : base
         },
+        logged: 'Logged!',
         noProjects: 'No projects available',
     },
     es: {
         collectWork: '¿Qué tipo de trabajo, y cuántas horas?',
         askHours: (wt: string) => `Veo ${wt}. ¿Cuántas horas?`,
+        clarify: (reason: string) => `⚠️ ${reason} ¿Puedes aclarar?`,
         confirmAll: (wt: string, h: number, proj: string) => `${wt} por ${h}h en ${proj}. ¿Correcto? (S/N)`,
         confirmProject: (wt: string, h: number, proj: string) => `${wt} por ${h}h. ¿En ${proj}? (S/N)`,
         selectProject: (wt: string, h: number, list: string) => `${wt} por ${h}h.\n\n${list}\n\n¿Cuál?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} por ${h}h en ${proj}.`
-            return summary ? `${base}\n"${summary}"` : base
+            return summary ? `${base}\n"📝 ${summary}"` : base
         },
+        logged: '¡Registrado!',
         noProjects: 'No hay proyectos disponibles',
     }
 }
@@ -87,12 +91,24 @@ function getLastMessage(rawText: string): string {
     return (lines[lines.length - 1] || '').toLowerCase().trim()
 }
 
-// Add dev mode state info to response
-function withDevInfo(response: string, state: string, extraction: any, attempts: number, lastMsg?: string): string {
-    if (!DEV_MODE) return response
-    const ext = `workType:${extraction.workType || '-'} hours${extraction.hoursWorked || '-'}`
-    const msgPart = lastMsg ? ` lastMsg:"${lastMsg.substring(0, 20)}"` : ''
-    return `${response}\n\n_[DEV: state=${state}, ${ext}, attempts=${attempts}${msgPart}]_`
+// Add bold ticket number prefix to response (WhatsApp markdown)
+function withTicket(bucketId: number, response: string): string {
+    return `*TICKET #${bucketId}*\n${response}`
+}
+
+// Add ticket prefix and optional dev mode state info to response
+function withDevInfo(bucketId: number, response: string, state: string, extraction: ExtractionResult, attempts: number, lastMsg?: string): string {
+    // Always add ticket prefix
+    let result = withTicket(bucketId, response)
+    
+    // Add dev info if dev mode
+    if (DEV_MODE) {
+        const ext = `workType:${extraction.workType || '-'} hours${extraction.hoursWorked || '-'}`
+        const msgPart = lastMsg ? ` lastMsg:"${lastMsg.substring(0, 20)}"` : ''
+        result = `${result}\n\n_[DEV: state=${state}, ${ext}, attempts=${attempts}${msgPart}]_`
+    }
+    
+    return result
 }
 
 // Send WhatsApp message
@@ -462,6 +478,9 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         case 'initial':
             result = await handleInitial(ctx)
             break
+        case 'clarifying_inconsistency':
+            result = await handleClarifyingInconsistency(ctx)
+            break
         case 'collecting_work':
             result = await handleCollectingWork(ctx)
             break
@@ -552,8 +571,18 @@ function handleInitial(ctx: StateContext): StateResult {
     const workType = extraction.workType
     const hoursWorked = extraction.hoursWorked
     const projectHint = extraction.projectHint
+    const isConsistent = extraction.isConsistent
 
-    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, projectHint=${projectHint}`)
+    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, projectHint=${projectHint}, consistent=${isConsistent}`)
+
+    // Check for inconsistency FIRST - ask for clarification
+    if (!isConsistent && extraction.inconsistencyReason) {
+        return {
+            nextState: 'clarifying_inconsistency',
+            response: null,
+            extraction,
+        }
+    }
 
     // Check what we have
     const hasWork = !!workType
@@ -588,6 +617,73 @@ function handleInitial(ctx: StateContext): StateResult {
             response: null,
             extraction,
         }
+    }
+}
+
+// CLARIFYING_INCONSISTENCY: Ask user to clarify when image doesn't match text
+async function handleClarifyingInconsistency(ctx: StateContext): Promise<StateResult> {
+    console.log('[State: ClarifyingInconsistency]')
+
+    const { bucket, extraction, language, member } = ctx
+    const stateAttempts = bucket.state_attempts || 0
+    const lastMsg = getLastMessage(bucket.raw_text || '')
+    const supabase = getSupabase()
+    const msg = MESSAGES[language]
+
+    // If this is a response (user clarified)
+    if (stateAttempts > 0 && lastMsg) {
+        // Accept user's clarification - update work type with what they said
+        // Simple extraction: look for work type keywords or use the whole message
+        const workTypeMatch = lastMsg.match(/(?:it is|it's|its|es|it was|was)\s+(.+)/i)
+        const clarifiedWorkType = workTypeMatch ? workTypeMatch[1].trim() : lastMsg.trim()
+
+        console.log(`[ClarifyingInconsistency] User clarified: "${clarifiedWorkType}"`)
+
+        // Update extraction with user's override and mark as consistent now
+        const updatedExtraction: ExtractionResult = {
+            ...extraction,
+            workType: clarifiedWorkType || extraction.workType,
+            isConsistent: true,  // User confirmed, so it's now consistent
+            inconsistencyReason: null,
+        }
+
+        // Reset attempts and continue to project confirmation
+        await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
+
+        // Check what we have and route appropriately
+        const hasHours = updatedExtraction.hoursWorked && updatedExtraction.hoursWorked > 0
+        const hasProject = !!updatedExtraction.projectHint || !!member?.last_confirmed_project_id
+
+        if (hasHours && hasProject) {
+            return {
+                nextState: 'confirming_all',
+                response: null,
+                extraction: updatedExtraction,
+            }
+        } else if (hasHours) {
+            return {
+                nextState: 'confirming_project',
+                response: null,
+                extraction: updatedExtraction,
+            }
+        } else {
+            return {
+                nextState: 'collecting_hours',
+                response: null,
+                extraction: updatedExtraction,
+            }
+        }
+    }
+
+    // First time - ask for clarification
+    const reason = extraction.inconsistencyReason || 'The information seems inconsistent.'
+    
+    await supabase.from('buckets').update({ state_attempts: 1 }).eq('id', ctx.bucketId)
+
+    return {
+        nextState: 'clarifying_inconsistency',
+        response: withDevInfo(ctx.bucketId, msg.clarify(reason), 'clarifying_inconsistency', extraction, 1),
+        extraction,
     }
 }
 
@@ -631,7 +727,7 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
 
     return {
         nextState: 'collecting_work',
-        response: withDevInfo(msg.collectWork, 'collecting_work', extraction, stateAttempts + 1),
+        response: withDevInfo(ctx.bucketId, msg.collectWork, 'collecting_work', extraction, stateAttempts + 1),
         extraction,
     }
 }
@@ -675,7 +771,7 @@ async function handleCollectingHours(ctx: StateContext): Promise<StateResult> {
     const wt = extraction.workType || 'work'
     return {
         nextState: 'collecting_hours',
-        response: withDevInfo(msg.askHours(wt), 'collecting_hours', extraction, stateAttempts + 1),
+        response: withDevInfo(ctx.bucketId, msg.askHours(wt), 'collecting_hours', extraction, stateAttempts + 1),
         extraction,
     }
 }
@@ -769,7 +865,7 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
 
     return {
         nextState: 'confirming_all',
-        response: withDevInfo(msg.confirmAll(wt, h, projectName), 'confirming_all', extraction, 1),
+        response: withDevInfo(ctx.bucketId, msg.confirmAll(wt, h, projectName), 'confirming_all', extraction, 1),
         extraction,
     }
 }
@@ -857,7 +953,7 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
 
     return {
         nextState: 'confirming_project',
-        response: withDevInfo(msg.confirmProject(wt, h, memberProjectName), 'confirming_project', extraction, 1),
+        response: withDevInfo(ctx.bucketId, msg.confirmProject(wt, h, memberProjectName), 'confirming_project', extraction, 1),
         extraction,
     }
 }
@@ -936,7 +1032,7 @@ async function handleSelectingProject(ctx: StateContext): Promise<StateResult> {
 
     return {
         nextState: 'selecting_project',
-        response: withDevInfo(msg.selectProject(wt, h, projectList), 'selecting_project', extraction, stateAttempts + 1),
+        response: withDevInfo(ctx.bucketId, msg.selectProject(wt, h, projectList), 'selecting_project', extraction, stateAttempts + 1),
         extraction,
     }
 }
@@ -972,7 +1068,7 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
 
     const wt = extraction.workType || 'work'
     const h = extraction.hoursWorked || 0
-    const confirmMsg = withDevInfo(msg.success(wt, h, projectName, extraction.summary || undefined), 'complete', extraction, 0)
+    const confirmMsg = withDevInfo(ctx.bucketId, msg.success(wt, h, projectName, extraction.summary || undefined), 'complete', extraction, 0)
 
     return {
         nextState: 'complete',
