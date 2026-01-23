@@ -603,8 +603,8 @@ export function Tickets() {
                                                                                 className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
                                                                             >
                                                                                 <div
-                                                                                    className={`max-w-[85%] px-3 py-2 rounded-lg text-xs shadow ${msg.role === 'user'
-                                                                                        ? 'bg-[#DCF8C6] text-gray-900 rounded-tr-none'
+                                                                                    className={`max-w-[75%] px-3 py-2 rounded-lg text-xs shadow ${msg.role === 'user'
+                                                                                        ? 'bg-green-100 text-gray-900 rounded-tr-none'
                                                                                         : 'bg-white text-gray-900 rounded-tl-none'
                                                                                         }`}
                                                                                 >
@@ -642,8 +642,8 @@ export function Tickets() {
                                                                             if (messages.length === 0) {
                                                                                 return (
                                                                                     <div className="flex justify-end">
-                                                                                        <div className="max-w-[85%] px-3 py-2 rounded-lg rounded-tr-none text-xs shadow bg-[#DCF8C6] text-gray-900">
-                                                                                            <p className="whitespace-pre-wrap">{text || '(No message)'}</p>
+                                                                                        <div className="max-w-[75%] px-3 py-2 rounded-lg rounded-tr-none text-xs shadow bg-green-100 text-gray-900">
+                                                                                            <p className="whitespace-pre-wrap text-xs">{text || '(No message)'}</p>
                                                                                         </div>
                                                                                     </div>
                                                                                 );
@@ -655,12 +655,12 @@ export function Tickets() {
                                                                                     className={`flex ${msg.role === 'answer' ? 'justify-end' : 'justify-start'}`}
                                                                                 >
                                                                                     <div
-                                                                                        className={`max-w-[85%] px-3 py-2 rounded-lg text-xs shadow ${msg.role === 'answer'
-                                                                                            ? 'bg-[#DCF8C6] text-gray-900 rounded-tr-none'
+                                                                                        className={`max-w-[75%] px-3 py-2 rounded-lg text-xs shadow ${msg.role === 'answer'
+                                                                                            ? 'bg-green-100 text-gray-900 rounded-tr-none'
                                                                                             : 'bg-white text-gray-900 rounded-tl-none'
                                                                                             }`}
                                                                                     >
-                                                                                        <p className="whitespace-pre-wrap">{msg.content}</p>
+                                                                                        <p className="whitespace-pre-wrap text-xs">{msg.content}</p>
                                                                                     </div>
                                                                                 </div>
                                                                             ));
