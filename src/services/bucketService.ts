@@ -293,7 +293,7 @@ export async function addProjectAlias(
 // Open Bucket Logic
 // ============================================================================
 
-const BUCKET_TIME_WINDOW_MINUTES = 10; // Time window to group messages into same bucket
+const BUCKET_TIME_WINDOW_SECONDS = 300; // Time window to group messages into same bucket
 
 /**
  * Find an open bucket for a member within a time window
@@ -305,19 +305,19 @@ export async function findOpenBucket(
     memberId: number,
     projectId: number | null // kept for API compatibility but not used for matching
 ): Promise<Bucket | null> {
-    // Find any open bucket for this member created within the time window
-    // Include 'pending_processing' to prevent duplicate buckets when multiple media arrives rapidly
+    // Find any open bucket for this member updated within the time window
+    // Use updated_at to check when last message was added
     const buckets = await sql`
         SELECT * FROM buckets 
         WHERE member_id = ${memberId}
           AND status IN ('open', 'processing', 'pending_processing')
-          AND created_at > NOW() - INTERVAL '${sql.unsafe(String(BUCKET_TIME_WINDOW_MINUTES))} minutes'
-        ORDER BY created_at DESC
+          AND updated_at > NOW() - INTERVAL '${sql.unsafe(String(BUCKET_TIME_WINDOW_SECONDS))} seconds'
+        ORDER BY updated_at DESC
         LIMIT 1
     `;
 
     if (buckets.length > 0) {
-        console.log(`[BucketService] Found open bucket #${buckets[0].id} within ${BUCKET_TIME_WINDOW_MINUTES}min window`);
+        console.log(`[BucketService] Found open bucket #${buckets[0].id} within ${BUCKET_TIME_WINDOW_SECONDS}s window`);
         return buckets[0] as Bucket;
     }
 
