@@ -197,12 +197,12 @@ Your message has been saved. An admin will add you to your project soon!`;
   }
 
   // 8. MARK BUCKET FOR ASYNC PROCESSING (triggers DB function)
-  // For new buckets, this update triggers the process_bucket_trigger
-  // For appended buckets, the bucket already has status pending_processing so trigger may not fire again
+  // Only update if bucket is NOT already completed/submitted
   await sql`
     UPDATE buckets 
     SET status = 'pending_processing', updated_at = NOW()
     WHERE id = ${bucket.id}
+      AND status NOT IN ('submitted', 'flagged', 'pending_review')
   `;
 
   console.log(`[WEBHOOK] Bucket #${bucket.id} marked for processing`);

@@ -120,8 +120,8 @@ async function sendMessage(phone: string, message: string, source: string) {
     console.log(`[Send] To ${phone}: ${message}`)
 
     const params = new URLSearchParams({
-        To: `whatsapp:${phone}`,
-        From: `whatsapp:${fromNumber}`,
+        To: source === 'whatsapp' ? `whatsapp:${phone}` : phone,
+        From: fromNumber,    
         Body: message,
     })
 
@@ -363,7 +363,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     const supabase = getSupabase()
 
-    // Load bucket
+    // Load bucket ONCE at the start
     const { data: bucket, error } = await supabase
         .from('buckets')
         .select('*')
@@ -406,7 +406,13 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     let transcripts: string[] = bucket.transcripts ? JSON.parse(bucket.transcripts) : []
     let imageAnalysis = ''
 
-    const currentState = bucket.conversation_state || 'initial'
+    // Use let so we can update state in the loop without re-reading from DB
+    let currentState = bucket.conversation_state || 'initial'
+    
+    // Loop to handle state transitions (max 10 iterations to prevent infinite loops)
+    const MAX_ITERATIONS = 10
+    for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        console.log(`[StateMachine] Iteration ${iteration}, state: ${currentState}`)
 
     // TODO: Move this to separate background worker to avoid blocking
     // For now, process media in initial state to maintain functionality
@@ -511,7 +517,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     if (result.nextState && result.nextState !== currentState) {
         console.log(`[StateMachine] Transitioning: ${currentState} → ${result.nextState}`)
 
-        // If transitioning, run the next state immediately (no message sent yet)
+        // If transitioning without response, update state and continue loop
         if (!result.response) {
             const transitionUpdate: any = {
                 conversation_state: result.nextState,
@@ -523,10 +529,36 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                 transitionUpdate.project_id = result.projectId
             }
 
-            await supabase.from('buckets').update(transitionUpdate).eq('id', bucketId)
+            // CRITICAL: Set status to submitted when transitioning to complete
+            if (result.nextState === 'complete') {
+                transitionUpdate.status = 'submitted'
+            }
 
-            // Recursively handle next state
-            return runStateMachine(bucketId)
+            // DEBUG: Log transition update
+            console.log(`[StateMachine] 📤 Transition update for bucket #${bucketId}:`, JSON.stringify({
+                conversation_state: transitionUpdate.conversation_state,
+                status: transitionUpdate.status,
+                project_id: transitionUpdate.project_id
+            }))
+
+            const { error: transitionError } = await supabase.from('buckets').update(transitionUpdate).eq('id', bucketId)
+            if (transitionError) {
+                console.error(`[StateMachine] ❌ Transition update failed for bucket #${bucketId}:`, transitionError)
+            }
+
+            // Update extraction for next iteration
+            if (result.extraction) {
+                extraction = result.extraction
+            }
+
+            // Update local bucket.project_id so subsequent states see the correct value
+            if (result.projectId !== undefined) {
+                bucket.project_id = result.projectId
+            }
+
+            // Update local state and continue loop (don't re-read from DB!)
+            currentState = result.nextState
+            continue
         }
     }
 
@@ -551,12 +583,28 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         updates.project_id = result.projectId
     }
 
-    await supabase.from('buckets').update(updates).eq('id', bucketId)
+    // DEBUG: Log what we're updating
+    console.log(`[StateMachine] 📝 Updating bucket #${bucketId}:`, JSON.stringify({
+        status: updates.status,
+        conversation_state: updates.conversation_state,
+        hasResponse: !!result.response,
+        nextState: result.nextState
+    }))
+
+    const { error: updateError } = await supabase.from('buckets').update(updates).eq('id', bucketId)
+    if (updateError) {
+        console.error(`[StateMachine] ❌ DB update failed for bucket #${bucketId}:`, updateError)
+    }
 
     return {
         status: result.nextState === 'complete' ? 'submitted' : 'open',
         action: result.nextState === 'complete' ? 'success' : 'waiting',
     }
+    } // End of for loop
+
+    // Fallback if max iterations reached
+    console.error(`[StateMachine] ❌ Max iterations reached for bucket #${bucketId}`)
+    return { status: 'error', action: 'max_iterations_reached' }
 }
 
 // ============================================================================
