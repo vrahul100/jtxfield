@@ -389,14 +389,14 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     // Load extraction from bucket (should already be populated by background worker)
     let extraction: ExtractionResult = createDefaultExtraction()
-    if (bucket.extraction_json) {
+    if (bucket.extracted_data) {
         try {
-            const parsed = typeof bucket.extraction_json === 'string'
-                ? JSON.parse(bucket.extraction_json)
-                : bucket.extraction_json
+            const parsed = typeof bucket.extracted_data === 'string'
+                ? JSON.parse(bucket.extracted_data)
+                : bucket.extracted_data
             extraction = { ...extraction, ...parsed }
         } catch (_e) {
-            console.log('[StateMachine] Failed to parse extraction_json')
+            console.log('[StateMachine] Failed to parse extracted_data')
         }
     }
 
@@ -453,7 +453,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
             extraction = { ...extraction, ...llmExtraction }
             // Save extraction to bucket
             await supabase.from('buckets').update({
-                extraction_json: JSON.stringify(extraction)
+                extracted_data: JSON.stringify(extraction)
             }).eq('id', bucketId)
         }
     }
@@ -521,7 +521,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         if (!result.response) {
             const transitionUpdate: any = {
                 conversation_state: result.nextState,
-                extraction_json: result.extraction ? JSON.stringify(result.extraction) : bucket.extraction_json,
+                extracted_data: result.extraction ? JSON.stringify(result.extraction) : bucket.extracted_data,
             }
 
             // CRITICAL: Include project_id if set (e.g., from confirming_project → complete)
@@ -564,7 +564,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     // Save state and send response if any
     const updates: any = {
-        extraction_json: result.extraction ? JSON.stringify(result.extraction) : bucket.extraction_json,
+        extracted_data: result.extraction ? JSON.stringify(result.extraction) : bucket.extracted_data,
     }
 
     if (result.nextState) {

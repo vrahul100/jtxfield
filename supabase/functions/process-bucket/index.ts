@@ -92,6 +92,21 @@ Deno.serve(async (req: Request) => {
 
     } catch (error) {
         console.error('[Brain] ❌ Error:', error)
+        
+        // RECOVERY: Reset status so bucket isn't stuck in 'processing'
+        try {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL')!
+            const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+            const supabase = createClient(supabaseUrl, supabaseKey)
+            const body = await req.clone().json().catch(() => ({}))
+            if (body.bucketId) {
+                await supabase.from('buckets').update({ status: 'open' }).eq('id', body.bucketId)
+                console.log(`[Brain] 🔓 Released lock for bucket #${body.bucketId}`)
+            }
+        } catch (e) {
+            console.error('[Brain] Failed to release lock:', e)
+        }
+        
         return new Response(JSON.stringify({ error: 'Internal error', details: String(error) }), {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },

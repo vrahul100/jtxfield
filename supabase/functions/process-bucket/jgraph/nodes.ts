@@ -49,9 +49,9 @@ export async function loadContextNode(state: BrainState): Promise<Partial<BrainS
 
     // Load previous extraction if exists (for multi-turn conversations)
     let previousExtraction: ExtractionResult | null = null
-    if (bucket.extraction_json) {
+    if (bucket.extracted_data) {
         try {
-            previousExtraction = JSON.parse(bucket.extraction_json) as ExtractionResult
+            previousExtraction = JSON.parse(bucket.extracted_data) as ExtractionResult
             console.log(`[Node: LoadContext] Loaded previous extraction: workType=${previousExtraction.workType}, hours=${previousExtraction.hoursWorked}`)
         } catch (e) {
             console.log(`[Node: LoadContext] Failed to parse previous extraction`)
@@ -800,7 +800,7 @@ export async function respondNode(state: BrainState): Promise<Partial<BrainState
             // Save current extraction for next turn
             if (extraction) {
                 await supabase.from('buckets').update({
-                    extraction_json: JSON.stringify(extraction)
+                    extracted_data: JSON.stringify(extraction)
                 }).eq('id', state.bucketId)
             }
 
