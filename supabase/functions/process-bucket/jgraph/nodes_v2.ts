@@ -51,7 +51,7 @@ const MESSAGES = {
         selectProject: (wt: string, h: number, list: string) => `${wt} for ${h}h.\n\n${list}\n\nWhich one?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} for ${h}h at ${proj}.`
-            const summaryText = summary ? `\n_"${summary}"_` : ''
+            const summaryText = summary ? `\n\n_"${summary}"_` : ''
             return `${base}${summaryText}\n\n*Status: SUBMITTED*`
         },
         logged: 'Logged!',
@@ -66,7 +66,7 @@ const MESSAGES = {
         selectProject: (wt: string, h: number, list: string) => `${wt} por ${h}h.\n\n${list}\n\n¿Cuál?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} por ${h}h en ${proj}.`
-            const summaryText = summary ? `\n_"${summary}"_` : ''
+            const summaryText = summary ? `\n\n_"${summary}"_` : ''
             return `${base}${summaryText}\n\n*Estado: ENVIADO*`
         },
         logged: '¡Registrado!',
