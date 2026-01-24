@@ -51,7 +51,8 @@ const MESSAGES = {
         selectProject: (wt: string, h: number, list: string) => `${wt} for ${h}h.\n\n${list}\n\nWhich one?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} for ${h}h at ${proj}.`
-            return summary ? `${base}\n"📝 ${summary}"` : base
+            const summaryText = summary ? `\n_"${summary}"_` : ''
+            return `${base}${summaryText}\n\n*Status: SUBMITTED*`
         },
         logged: 'Logged!',
         noProjects: 'No projects available',
@@ -65,7 +66,8 @@ const MESSAGES = {
         selectProject: (wt: string, h: number, list: string) => `${wt} por ${h}h.\n\n${list}\n\n¿Cuál?`,
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} por ${h}h en ${proj}.`
-            return summary ? `${base}\n"📝 ${summary}"` : base
+            const summaryText = summary ? `\n_"${summary}"_` : ''
+            return `${base}${summaryText}\n\n*Estado: ENVIADO*`
         },
         logged: '¡Registrado!',
         noProjects: 'No hay proyectos disponibles',
@@ -257,9 +259,23 @@ async function analyzeImage(url: string): Promise<string> {
 }
 
 // Build extraction prompt for LLM
-function buildExtractionPrompt(transcript: string, imageAnalysis: string, lastBotMessage?: string): string {
-    return `You are a construction foreman's AI assistant. Extract work log data from user's message.
+function buildExtractionPrompt(transcript: string, imageAnalysis: string, lastBotMessage?: string, existingExtraction?: ExtractionResult): string {
+    const existingContext = existingExtraction ? `
+**EXISTING EXTRACTION (from previous messages):**
+- Work Type: ${existingExtraction.workType || 'none'}
+- Hours: ${existingExtraction.hoursWorked || 0}
+- Summary: ${existingExtraction.summary || 'none'}
+- Materials: ${existingExtraction.materials?.join(', ') || 'none'}
+- Location: ${existingExtraction.location || 'none'}
 
+IMPORTANT: Intelligently merge the new user input with the existing extraction:
+- If user says "also", "more", "another", "additionally" → ADD to existing values
+- If user says "actually", "correct", "it was", "make it", "change to" → REPLACE existing values  
+- If user just adds new details without corrections → APPEND to summary, ADD materials, etc.
+` : ''
+
+    return `You are a construction foreman's AI assistant. Extract work log data from user's message.
+${existingContext}
 **CONTEXT - LAST MESSAGE FROM BOT:**
 ${lastBotMessage || '[None - new conversation]'}
 
@@ -274,6 +290,8 @@ ${imageAnalysis || 'No images'}
 ## EXTRACTION RULES:
 1. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
 2. hoursWorked: Extract numbers like "4 hours", "4h", "half hour"=0.5, "all day"=8
+   - If user says "another 3 hours" or "3 more hours" → return ONLY the additional hours (3)
+   - If user says "actually 5 hours" or "make it 5 hours" → return the corrected total (5)
 3. summary: Brief description of work
 4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
 5. responseLanguage: "en" unless user writes in Spanish → "es"
@@ -296,7 +314,7 @@ ${imageAnalysis || 'No images'}
 }
 
 // Extract data using LLM
-async function extractWithLLM(rawText: string, transcripts: string[], imageAnalysis: string, lastBotMessage?: string): Promise<ExtractionResult | null> {
+async function extractWithLLM(rawText: string, transcripts: string[], imageAnalysis: string, lastBotMessage?: string, existingExtraction?: ExtractionResult): Promise<ExtractionResult | null> {
     const groqApiKey = Deno.env.get('GROQ_API_KEY')
     if (!groqApiKey) return null
 
@@ -305,7 +323,7 @@ async function extractWithLLM(rawText: string, transcripts: string[], imageAnaly
         ...transcripts.map(t => `[Voice]: ${t}`)
     ].filter(Boolean).join('\n')
 
-    const prompt = buildExtractionPrompt(allText, imageAnalysis, lastBotMessage)
+    const prompt = buildExtractionPrompt(allText, imageAnalysis, lastBotMessage, existingExtraction)
 
     try {
         const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -681,20 +699,29 @@ async function handleClarifyingInconsistency(ctx: StateContext): Promise<StateRe
 
     // If this is a response (user clarified)
     if (stateAttempts > 0 && lastMsg) {
-        // Accept user's clarification - update work type with what they said
-        // Simple extraction: look for work type keywords or use the whole message
-        const workTypeMatch = lastMsg.match(/(?:it is|it's|its|es|it was|was)\s+(.+)/i)
-        const clarifiedWorkType = workTypeMatch ? workTypeMatch[1].trim() : lastMsg.trim()
+        console.log(`[ClarifyingInconsistency] User clarified: "${lastMsg}"`)
 
-        console.log(`[ClarifyingInconsistency] User clarified: "${clarifiedWorkType}"`)
+        // Re-extract from the clarification text to get correct hours and work type
+        const clarifiedExtraction = await withTimeout(
+            extractWithLLM(lastMsg, ctx.transcripts || [], ctx.imageAnalysis || '', bucket.ai_response, extraction),
+            15000,
+            null
+        )
 
-        // Update extraction with user's override and mark as consistent now
+        // Use the re-extracted values if available, otherwise keep original
         const updatedExtraction: ExtractionResult = {
             ...extraction,
-            workType: clarifiedWorkType || extraction.workType,
+            workType: clarifiedExtraction?.workType || extraction.workType,
+            hoursWorked: clarifiedExtraction?.hoursWorked || extraction.hoursWorked, // Use NEW hours from clarification
+            summary: clarifiedExtraction?.summary || extraction.summary,
+            materials: clarifiedExtraction?.materials || extraction.materials,
+            location: clarifiedExtraction?.location || extraction.location,
+            projectHint: clarifiedExtraction?.projectHint || extraction.projectHint,
             isConsistent: true,  // User confirmed, so it's now consistent
             inconsistencyReason: null,
         }
+
+        console.log(`[ClarifyingInconsistency] Updated: workType=${updatedExtraction.workType}, hours=${updatedExtraction.hoursWorked}`)
 
         // Reset attempts and continue to project confirmation
         await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
@@ -884,11 +911,46 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
                 const additionalText = match[1].trim()
                 console.log(`[ConfirmingAll] User added text: "${additionalText}"`)
                 
-                // Just append raw text - no LLM call
-                const currentSummary = extraction.summary || extraction.workType || ''
-                updatedExtraction = {
-                    ...extraction,
-                    summary: currentSummary ? `${currentSummary}. ${additionalText}` : additionalText
+                // Run LLM with existing extraction context - it will intelligently merge
+                const additionalExtraction = await withTimeout(
+                    extractWithLLM(additionalText, [], '', bucket.ai_response, extraction),
+                    15000,
+                    null
+                )
+                
+                if (additionalExtraction && additionalExtraction.hoursWorked) {
+                    // Add the hours together
+                    const totalHours = (extraction.hoursWorked || 0) + additionalExtraction.hoursWorked
+                    console.log(`[ConfirmingAll] Adding ${additionalExtraction.hoursWorked}h to existing ${extraction.hoursWorked}h = ${totalHours}h`)
+                    
+                    // Combine work types if different
+                    let combinedWorkType = extraction.workType || ''
+                    if (additionalExtraction.workType && additionalExtraction.workType !== extraction.workType) {
+                        combinedWorkType = combinedWorkType 
+                            ? `${combinedWorkType}, ${additionalExtraction.workType}` 
+                            : additionalExtraction.workType
+                    }
+                    
+                    // Combine summaries
+                    const currentSummary = extraction.summary || extraction.workType || ''
+                    const additionalSummary = additionalExtraction.summary || additionalExtraction.workType || additionalText
+                    const combinedSummary = currentSummary 
+                        ? `${currentSummary}. ${additionalSummary}` 
+                        : additionalSummary
+                    
+                    updatedExtraction = {
+                        ...extraction,
+                        hoursWorked: totalHours,
+                        workType: combinedWorkType || extraction.workType,
+                        summary: combinedSummary
+                    }
+                } else {
+                    // No additional hours found, just append to summary
+                    const currentSummary = extraction.summary || extraction.workType || ''
+                    updatedExtraction = {
+                        ...extraction,
+                        summary: currentSummary ? `${currentSummary}. ${additionalText}` : additionalText
+                    }
                 }
             }
 

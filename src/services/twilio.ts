@@ -60,8 +60,8 @@ export async function sendTwilioMessage(
 
         // Add media URL if provided (Twilio expects MediaUrl as array)
         if (mediaUrl) {
-            console.log(`[Twilio] 🖼️ Including media: ${mediaUrl}`);
-            params.append('MediaUrl', [mediaUrl]);
+            // console.log(`[Twilio] 🖼️ Including media: ${mediaUrl}`);
+            // params.append('MediaUrl', [mediaUrl]);
         }
 
         const response = await fetch(url, {
