@@ -633,7 +633,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 function handleInitial(ctx: StateContext): StateResult {
     console.log('[State: Initial]')
 
-    const { extraction, member } = ctx
+    const { extraction, member, bucket } = ctx
 
     const workType = extraction.workType
     const hoursWorked = extraction.hoursWorked
@@ -655,6 +655,21 @@ function handleInitial(ctx: StateContext): StateResult {
     const hasWork = !!workType
     const hasHours = hoursWorked && hoursWorked > 0
     const hasProject = !!projectHint || !!member?.last_confirmed_project_id
+    
+    // Check if workType is too vague - if so, ask for clarification
+    const vagueWords = ['general', 'work', 'labor', 'job', 'task']
+    const isVague = hasWork && vagueWords.some(vw => workType?.toLowerCase().includes(vw))
+    const hasUserText = bucket.raw_text && bucket.raw_text.trim().length > 5 // User provided some text
+    
+    // If workType is vague AND user didn't provide specific text, ask what they worked on
+    if (isVague && !hasUserText) {
+        console.log(`[State: Initial] Work type "${workType}" is vague, asking for clarification`)
+        return {
+            nextState: 'collecting_work',
+            response: null,
+            extraction,
+        }
+    }
 
     if (hasWork && hasHours && hasProject) {
         // We have everything! Go to confirming_all
@@ -801,9 +816,15 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
     const supabase = getSupabase()
     await supabase.from('buckets').update({ state_attempts: stateAttempts + 1 }).eq('id', ctx.bucketId)
 
+    // Build context message if we have image analysis or vague work type
+    let message = msg.collectWork
+    if (ctx.imageAnalysis && extraction.workType) {
+        message = `I see ${extraction.workType} work. What exactly did you work on, and how many hours?`
+    }
+
     return {
         nextState: 'collecting_work',
-        response: withDevInfo(ctx.bucketId, msg.collectWork, 'collecting_work', extraction, stateAttempts + 1),
+        response: withDevInfo(ctx.bucketId, message, 'collecting_work', extraction, stateAttempts + 1),
         extraction,
     }
 }
