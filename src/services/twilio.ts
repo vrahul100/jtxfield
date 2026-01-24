@@ -8,6 +8,10 @@ interface TwilioConfig {
     authToken: string;
     fromNumber: string;       // For SMS
     fromWhatsApp: string;     // For WhatsApp (e.g., "whatsapp:+12029536899")
+    templates: {
+        confirmAll: { en?: string; es?: string };
+        selectProject: { en?: string; es?: string };
+    };
 }
 
 function getConfig(): TwilioConfig {
@@ -16,15 +20,21 @@ function getConfig(): TwilioConfig {
         authToken: process.env.TWILIO_AUTH_TOKEN || '',
         fromNumber: process.env.TWILIO_FROM_NUMBER || '',
         fromWhatsApp: process.env.TWILIO_FROM_WHATSAPP || 'whatsapp:+14155238886',
+        templates: {
+            confirmAll: {
+                en: process.env.WHATSAPP_TEMPLATE_CONFIRM_ALL_EN,
+                es: process.env.WHATSAPP_TEMPLATE_CONFIRM_ALL_ES,
+            },
+            selectProject: {
+                en: process.env.WHATSAPP_TEMPLATE_SELECT_PROJECT_EN,
+                es: process.env.WHATSAPP_TEMPLATE_SELECT_PROJECT_ES,
+            },
+        },
     };
 }
 
 /**
  * Send a message via Twilio (SMS or WhatsApp based on source)
- * @param to - Phone number to send to
- * @param body - Message text
- * @param source - 'whatsapp' or 'sms'
- * @param mediaUrl - Optional URL to an image to include with the message
  */
 export async function sendTwilioMessage(
     to: string,
@@ -39,7 +49,6 @@ export async function sendTwilioMessage(
         return { success: false, error: 'Missing Twilio credentials' };
     }
 
-    // Format the "to" and "from" based on source
     const toNumber = source === 'whatsapp' ? `whatsapp:${to}` : to;
     const fromNumber = source === 'whatsapp' ? config.fromWhatsApp : config.fromNumber;
 
@@ -49,7 +58,6 @@ export async function sendTwilioMessage(
     }
 
     try {
-        // Use fetch to call Twilio API directly (avoids heavy SDK)
         const url = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages.json`;
 
         const params = new URLSearchParams({
@@ -58,10 +66,8 @@ export async function sendTwilioMessage(
             Body: body,
         });
 
-        // Add media URL if provided (Twilio expects MediaUrl as array)
         if (mediaUrl) {
-            // console.log(`[Twilio] 🖼️ Including media: ${mediaUrl}`);
-            // params.append('MediaUrl', [mediaUrl]);
+            // params.append('MediaUrl', mediaUrl);
         }
 
         const response = await fetch(url, {
@@ -74,17 +80,178 @@ export async function sendTwilioMessage(
         });
 
         const data = await response.json() as any;
-        console.log(`[Twilio] ✅ Message sent to ${toNumber} | SID: ${data.sid}${mediaUrl ? ' (with media)' : ''}`);
+        
         if (!response.ok) {
             console.error('[Twilio] API Error:', data);
             return { success: false, error: data.message || 'Twilio API error' };
         }
 
-
+        console.log(`[Twilio] ✅ Message sent to ${toNumber} | SID: ${data.sid}${mediaUrl ? ' (with media)' : ''}`);
         return { success: true, sid: data.sid };
     } catch (error) {
         console.error('[Twilio] Send error:', error);
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+}
+
+/**
+ * Send WhatsApp interactive message with reply buttons
+ */
+export async function sendConfirmButtons(
+    to: string,
+    workType: string,
+    hours: number,
+    project: string,
+    source: MessageSource,
+    language: 'en' | 'es' = 'en'
+): Promise<{ success: boolean; sid?: string; error?: string }> {
+    const config = getConfig();
+
+    if (!config.accountSid || !config.authToken) {
+        console.warn('[Twilio] Missing credentials');
+        return { success: false, error: 'Missing Twilio credentials' };
+    }
+
+    // Get template for user's language
+    const templateSid = config.templates.confirmAll[language];
+    
+    // Fallback to text if template not configured for this language
+    if (!templateSid) {
+        console.warn(`[Twilio] No interactive template for language: ${language}, using text`);
+        const text = language === 'es' 
+            ? `${workType} por ${hours}h en ${project}. ¿Correcto? (S/N)`
+            : `${workType} for ${hours}h at ${project}. Correct? (Y/N)`;
+        return sendTwilioMessage(to, text, source);
+    }
+
+    const toNumber = source === 'whatsapp' ? `whatsapp:${to}` : to;
+    const fromNumber = source === 'whatsapp' ? config.fromWhatsApp : config.fromNumber;
+
+    try {
+        const url = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages.json`;
+
+        const params = new URLSearchParams({
+            To: toNumber,
+            From: fromNumber,
+            ContentSid: templateSid,
+            ContentVariables: JSON.stringify({
+                "1": workType,
+                "2": hours.toString(),
+                "3": project
+            })
+        });
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Basic ' + Buffer.from(`${config.accountSid}:${config.authToken}`).toString('base64'),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params,
+        });
+
+        const data = await response.json() as any;
+        
+        if (!response.ok) {
+            console.error('[Twilio] Interactive message error:', data);
+            const text = language === 'es'
+                ? `${workType} por ${hours}h en ${project}. ¿Correcto? (S/N)`
+                : `${workType} for ${hours}h at ${project}. Correct? (Y/N)`;
+            return sendTwilioMessage(to, text, source);
+        }
+
+        console.log(`[Twilio] ✅ Interactive button message sent (${language}) | SID: ${data.sid}`);
+        return { success: true, sid: data.sid };
+    } catch (error) {
+        console.error('[Twilio] Interactive message error:', error);
+        const text = language === 'es'
+            ? `${workType} por ${hours}h en ${project}. ¿Correcto? (S/N)`
+            : `${workType} for ${hours}h at ${project}. Correct? (Y/N)`;
+        return sendTwilioMessage(to, text, source);
+    }
+}
+
+/**
+ * Send WhatsApp interactive list message for project selection
+ */
+export async function sendProjectList(
+    to: string,
+    workType: string,
+    hours: number,
+    projects: {id: number, name: string}[],
+    source: MessageSource,
+    language: 'en' | 'es' = 'en'
+): Promise<{ success: boolean; sid?: string; error?: string }> {
+    const config = getConfig();
+
+    if (!config.accountSid || !config.authToken) {
+        return { success: false, error: 'Missing Twilio credentials' };
+    }
+
+    const templateSid = config.templates.selectProject[language];
+
+    // Fallback to text if template not configured or too many projects
+    if (!templateSid || projects.length > 10) {
+        console.warn(`[Twilio] Using text list (no template for ${language} or >10 projects)`);
+        const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+        const text = language === 'es'
+            ? `${workType} por ${hours}h.\n\n${projectList}\n\n¿Cuál?`
+            : `${workType} for ${hours}h.\n\n${projectList}\n\nWhich one?`;
+        return sendTwilioMessage(to, text, source);
+    }
+
+    const toNumber = source === 'whatsapp' ? `whatsapp:${to}` : to;
+    const fromNumber = source === 'whatsapp' ? config.fromWhatsApp : config.fromNumber;
+
+    try {
+        const url = `https://api.twilio.com/2010-04-01/Messages.json`;
+
+        const listItems = projects.slice(0, 10).map(p => ({
+            id: p.id.toString(),
+            title: p.name.substring(0, 24),
+            description: p.name.length > 24 ? p.name : undefined
+        }));
+
+        const params = new URLSearchParams({
+            To: toNumber,
+            From: fromNumber,
+            ContentSid: templateSid,
+            ContentVariables: JSON.stringify({
+                "1": workType,
+                "2": hours.toString(),
+                "list_items": listItems
+            })
+        });
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Authorization': 'Basic ' + Buffer.from(`${config.accountSid}:${config.authToken}`).toString('base64'),
+                'Content-Type': 'application/x-www-form-urlencoded',
+            },
+            body: params,
+        });
+
+        const data = await response.json() as any;
+        
+        if (!response.ok) {
+            console.error('[Twilio] List message error:', data);
+            const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+            const text = language === 'es'
+                ? `${workType} por ${hours}h.\n\n${projectList}\n\n¿Cuál?`
+                : `${workType} for ${hours}h.\n\n${projectList}\n\nWhich one?`;
+            return sendTwilioMessage(to, text, source);
+        }
+
+        console.log(`[Twilio] ✅ Interactive list message sent (${language}) | SID: ${data.sid}`);
+        return { success: true, sid: data.sid };
+    } catch (error) {
+        console.error('[Twilio] List message error:', error);
+        const projectList = projects.map((p, i) => `${i + 1}. ${p.name}`).join('\n');
+        const text = language === 'es'
+            ? `${workType} por ${hours}h.\n\n${projectList}\n\n¿Cuál?`
+            : `${workType} for ${hours}h.\n\n${projectList}\n\nWhich one?`;
+        return sendTwilioMessage(to, text, source);
     }
 }
 
@@ -99,11 +266,9 @@ export function formatReplyMessage(
     const lang = aiResult?.reply_language || 'en';
     const emoji = aiResult?.reply_message ? '' : '✅';
 
-    // Use AI-generated reply if available, otherwise default
     if (aiResult?.reply_message) {
         return `${aiResult.reply_message}\n\n📋 *Ticket #${ticketId}*\n`;
     }
 
-    // Default English response
     return `${emoji} *Ticket #${ticketId}*\n logged.\n💰 Value: $${revenue.toFixed(2)}`;
 }
