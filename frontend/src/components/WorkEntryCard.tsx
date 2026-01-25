@@ -73,18 +73,17 @@ export function WorkEntryCard({
         }
     };
 
-    const getCardBgColor = (status: string) => {
-        switch (status) {
+    // Status color for card header bar only
+    const getHeaderBgColor = (status: string): string => {
+        switch (status.toLowerCase()) {
             case 'submitted':
-                return 'bg-green-50';
+                return 'bg-green-500';
             case 'pending_review':
-                return 'bg-orange-50';
+                return 'bg-orange-500';
             case 'rejected':
-                return 'bg-red-50';
-            case 'open':
-                return 'bg-white';
+                return 'bg-red-500';
             default:
-                return 'bg-white';
+                return 'bg-gray-200';
         }
     };
 
@@ -111,10 +110,11 @@ export function WorkEntryCard({
     const showActions = ['pending_review', 'processing', 'open', 'flagged'].includes(bucket.status);
 
     return (
-        <div className={`card overflow-hidden hover:shadow-lg transition-shadow ${getCardBgColor(bucket.status)} ${isExpanded ? 'border-4 border-indigo-500' : ''}`}>
-            {/* Card Header */}
+        <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${isExpanded ? 'border-4 border-indigo-500' : ''}`}>
+            {/* Card Header - Status Color Bar */}
+            <div className={`h-4 ${getHeaderBgColor(bucket.status)}`}></div>
             <div
-                className={`p-4 border-b cursor-pointer ${isExpanded ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+                className={`p-4 border-b cursor-pointer ${isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                 onClick={onToggleExpand}
             >
                 <div className="flex justify-between items-start gap-3">
@@ -199,13 +199,13 @@ export function WorkEntryCard({
 
             {/* Expanded Details */}
             {isExpanded && (
-                <div className="p-4 bg-blue-50 border-t">
+                <div className="p-4 bg-gray-50 border-t">
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
                         {/* Left Column: AI Summary + Attachments */}
                         <div className="space-y-3">
                             {/* AI Summary (if not already shown) */}
                             {bucket.summary && (
-                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <div className="p-3 bg-gray-50 rounded-lg border border-blue-200">
                                     <div className="flex items-center gap-2 mb-1">
                                         <span className="text-black font-semibold uppercase text-xs">✨ AI Summary</span>
                                     </div>
@@ -345,7 +345,7 @@ export function WorkEntryCard({
                         e.stopPropagation();
                         onEdit();
                     }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-gray-50 rounded transition-colors"
                     title="Edit"
                 >
                     <PencilIcon className="w-4 h-4" strokeWidth={3} />

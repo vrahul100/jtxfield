@@ -46,10 +46,11 @@ export function TransactionCard({
         return 'bg-gray-100 text-gray-800 border-gray-200';
     };
 
-    const getCardBgColor = (status: string) => {
-        if (status === 'COMPLETED') return 'bg-green-50';
-        if (status === 'PENDING') return 'bg-orange-50';
-        return 'bg-white';
+    // Status color for card header bar only
+    const getHeaderBgColor = (status: string): string => {
+        if (status === 'COMPLETED') return 'bg-green-500';
+        if (status === 'PENDING') return 'bg-orange-500';
+        return 'bg-gray-200';
     };
 
     const formatDate = (dateString: string) => {
@@ -88,10 +89,11 @@ export function TransactionCard({
     };
 
     return (
-        <div className={`card overflow-hidden hover:shadow-lg transition-shadow ${getCardBgColor(transaction.status)} ${isExpanded ? 'border-4 border-indigo-500' : ''}`}>
-            {/* Card Header */}
+        <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${isExpanded ? 'border-4 border-indigo-500' : ''}`}>
+            {/* Card Header - Status Color Bar */}
+            <div className={`h-4 ${getHeaderBgColor(transaction.status)}`}></div>
             <div
-                className={`p-4 border-b cursor-pointer ${isExpanded ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}
+                className={`p-4 border-b cursor-pointer ${isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                 onClick={onToggleExpand}
             >
                 <div className="flex justify-between items-start gap-3">
@@ -161,11 +163,11 @@ export function TransactionCard({
 
             {/* Expanded Details */}
             {isExpanded && (
-                <div className="p-4 bg-blue-50 border-t">
+                <div className="p-4 bg-gray-50  border-t">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-3">
                             {transaction.ai_summary && (
-                                <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
+                                <div className="p-3 bg-gray-50 rounded-lg border border-gray-200">
                                     <span className="text-black font-semibold uppercase text-xs">✨ AI Summary</span>
                                     <p className="text-gray-700 italic text-sm mt-1">{transaction.ai_summary}</p>
                                 </div>
@@ -217,7 +219,7 @@ export function TransactionCard({
                         e.stopPropagation();
                         onEdit();
                     }}
-                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-blue-50 rounded transition-colors"
+                    className="flex items-center gap-1 px-3 py-1.5 text-sm text-blue-600 hover:bg-gray-50 rounded transition-colors"
                     title="Edit"
                 >
                     <PencilIcon className="w-4 h-4" strokeWidth={3} />

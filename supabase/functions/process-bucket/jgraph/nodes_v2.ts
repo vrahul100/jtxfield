@@ -52,7 +52,8 @@ const MESSAGES = {
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} for ${h}h at ${proj}.`
             const summaryText = summary ? `\n\n_"${summary}"_` : ''
-            return `${base}${summaryText}\n\n*Status: SUBMITTED*`
+            return `${base}${summaryText}*`
+            // return `${base}${summaryText}\n\n*Status: SUBMITTED*`
         },
         logged: 'Logged!',
         noProjects: 'No projects available',
@@ -67,7 +68,8 @@ const MESSAGES = {
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} por ${h}h en ${proj}.`
             const summaryText = summary ? `\n\n_"${summary}"_` : ''
-            return `${base}${summaryText}\n\n*Estado: ENVIADO*`
+            return `${base}${summaryText}*`
+            // return `${base}${summaryText}\n\n*Estado: ENVIADO*`
         },
         logged: '¡Registrado!',
         noProjects: 'No hay proyectos disponibles',
@@ -126,7 +128,9 @@ async function sendMessage(phone: string, message: string, source: string) {
         From: fromNumber,    
         Body: message,
     })
-
+    console.log(`[Send] To ${phone}: ${message}`)
+    console.log(`[Send] From ${fromNumber}`)
+    console.log(`[Send] Params ${params.toString()}`)
     await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
         method: 'POST',
         headers: {
