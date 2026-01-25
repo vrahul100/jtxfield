@@ -50,25 +50,30 @@ export async function getWorklog(c: Context, sql: Sql) {
             conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
         }
 
-        // Search across ID, member name, phone, project name, and raw text
+        // Search across ID, member name, project name, raw text, AI summary, and transcripts
         if (search.trim()) {
             const searchTerm = search.trim().replace(/'/g, "''");
             // Check if search term is a number (for ID search)
             const isNumeric = /^\d+$/.test(searchTerm);
             if (isNumeric) {
+                // Numeric search: only match ID exactly, or in text fields (not phone)
                 conditions.push(`(
                     b.id = ${parseInt(searchTerm)}
                     OR m.full_name ILIKE '%${searchTerm}%' 
-                    OR m.phone_number ILIKE '%${searchTerm}%'
                     OR p.name ILIKE '%${searchTerm}%'
                     OR b.raw_text ILIKE '%${searchTerm}%'
+                    OR b.summary ILIKE '%${searchTerm}%'
+                    OR b.transcripts::text ILIKE '%${searchTerm}%'
                 )`);
             } else {
+                // Text search: include phone numbers for text queries
                 conditions.push(`(
                     m.full_name ILIKE '%${searchTerm}%' 
                     OR m.phone_number ILIKE '%${searchTerm}%'
                     OR p.name ILIKE '%${searchTerm}%'
                     OR b.raw_text ILIKE '%${searchTerm}%'
+                    OR b.summary ILIKE '%${searchTerm}%'
+                    OR b.transcripts::text ILIKE '%${searchTerm}%'
                 )`);
             }
         }

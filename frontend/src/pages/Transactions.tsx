@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EditModal, EditField } from '../components/EditModal';
-import { SquareChevronRight, SquareChevronDown, SquareChevronLeft, AlertTriangle, PencilIcon } from 'lucide-react';
+import { TransactionCard } from '../components/TransactionCard';
+import { SquareChevronRight, SquareChevronLeft } from 'lucide-react';
 
 interface Transaction {
     id: number;
@@ -96,16 +97,11 @@ export function Transactions() {
         }
     };
 
-    const formatDate = (dateString: string) => {
-        return new Date(dateString).toLocaleString();
-    };
-
     const toggleExpand = (id: number) => {
+        // Accordion behavior: only one card open at a time
         setExpandedIds(prev => {
-            const newSet = new Set(prev);
-            if (newSet.has(id)) {
-                newSet.delete(id);
-            } else {
+            const newSet = new Set<number>();
+            if (!prev.has(id)) {
                 newSet.add(id);
             }
             return newSet;
@@ -253,159 +249,25 @@ export function Transactions() {
                     </div>
                 </div>
 
-                <div className="card overflow-hidden">
-                    <table className="table-auto w-full">
-                        <thead className="bg-gray-50">
-                            <tr>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"></th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Ticket</th>
-                                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500 uppercase" title="This time is linked to a potential scope change">⚠️ Change?</th>
-
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Member</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Project</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Time (hrs)</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Labor</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Material</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
-                                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-gray-200">
-                            {transactions.map((txn) => {
-                                const isExpanded = expandedIds.has(txn.id);
-                                return (
-                                    <React.Fragment key={txn.id}>
-                                        <tr
-                                            className={`hover:bg-gray-50 cursor-pointer ${isExpanded ? 'bg-amber-50' : ''}`}
-                                            onClick={() => toggleExpand(txn.id)}
-                                        >
-                                            <td className="px-6 py-4 whitespace-nowrap">
-                                                <button
-                                                    className="w-6 h-6 p-1 hover:bg-gray-200 rounded "
-                                                >
-                                                    {isExpanded ? <SquareChevronDown className="w-6 h-6" strokeWidth={3} /> : <SquareChevronRight className="w-6 h-6" strokeWidth={3} />}
-                                                </button>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.id}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">{formatDate(txn.created_at)}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">#{txn.bucket_id}</td>
-                                            <td className="px-4 py-4 text-center">
-                                                {txn.potential_change ? (
-                                                    <span
-                                                        className="text-orange-600"
-                                                        title="⚠️ This time is linked to a potential scope change"
-                                                    >
-                                                        <AlertTriangle className="w-6 h-6 inline" fill="currentColor" strokeWidth={3} />
-                                                    </span>
-                                                ) : (
-                                                    <span className="text-gray-200">-</span>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm">
-                                                <div>{txn.member_name || 'Unknown'}</div>
-                                                {txn.member_phone && (
-                                                    <div className="text-xs text-gray-500">{txn.member_phone}</div>
-                                                )}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm">{txn.project_name || '-'}</td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                {txn.time ? Number(txn.time).toFixed(1) : '-'}
-                                            </td>
-                                            <td className="px-6 py-4 text-sm">
-                                                <div className="line-clamp-2">{txn.labor || '-'}</div>
-                                            </td>
-                                            <td className="px-6 py-4 text-sm">
-                                                <div className="line-clamp-2">{txn.material || '-'}</div>
-                                            </td>
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm">
-                                                <span className="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
-                                                    {txn.status}
-                                                </span>
-                                            </td>
-
-                                            <td className="px-6 py-4 whitespace-nowrap text-sm font-medium" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    onClick={() => handleEdit(txn)}
-                                                    className="flex items-center gap-1 text-blue-600 hover:text-blue-800"
-                                                >
-                                                    <PencilIcon className="w-6 h-6" strokeWidth={3} />
-                                                    Edit
-                                                </button>
-                                            </td>
-                                        </tr>
-
-                                        {/* Expanded Row */}
-                                        {isExpanded && (
-                                            <tr className="bg-amber-50">
-                                                <td colSpan={12} className="px-6 py-4">
-                                                    <div className="grid grid-cols-2 gap-4 text-sm">
-                                                        {txn.ai_summary && (
-                                                            <div className="col-span-2 p-3 bg-blue-50 rounded-lg border border-gray-500 mb-2">
-                                                                <div className="flex items-center gap-2 mb-1">
-                                                                    <span className="text-black font-semibold uppercase text-xs">✨ AI Summary:</span>
-                                                                </div>
-                                                                <p className="text-gray-700 italic whitespace-normal break-words">{txn.ai_summary}</p>
-                                                            </div>
-                                                        )}
-                                                        <div>
-                                                            <strong className="ttx-title">Job Description:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600">{txn.job || 'N/A'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <strong className="ttx-title">Scope:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap">{txn.scope_description || 'N/A'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <strong className="ttx-title">Labor Details:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap break-words overflow-hidden">{txn.labor || 'N/A'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <strong className="ttx-title">Materials:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600 whitespace-pre-wrap break-words overflow-hidden">{txn.material || 'N/A'}</p>
-                                                        </div>
-                                                        <div>
-                                                            <strong className="ttx-title">Evidence:</strong>
-                                                            <div className="flex flex-col gap-1 mt-1">
-                                                                {(() => {
-                                                                    if (!txn.evidence) return <span className="text-xs text-gray-500">N/A</span>;
-                                                                    try {
-                                                                        const links = JSON.parse(txn.evidence);
-                                                                        if (Array.isArray(links)) {
-                                                                            return links.map((link, i) => (
-                                                                                <a
-                                                                                    key={i}
-                                                                                    href={link}
-                                                                                    target="_blank"
-                                                                                    rel="noopener noreferrer"
-                                                                                    className="text-xs underline text-blue-600 hover:text-blue-800 break-all"
-                                                                                >
-                                                                                    {link.split('/').pop() || `Evidence ${i + 1}`}
-                                                                                </a>
-                                                                            ));
-                                                                        }
-                                                                        return <a href={txn.evidence} target="_blank" rel="noopener noreferrer" className="text-xs underline text-blue-600">Link</a>;
-                                                                    } catch {
-                                                                        return <a href={txn.evidence} target="_blank" rel="noopener noreferrer" className="text-xs underline text-blue-600">Link</a>;
-                                                                    }
-                                                                })()}
-                                                            </div>
-                                                        </div>
-                                                        <div>
-                                                            <strong className="ttx-title">Status:</strong>
-                                                            <p className="text-xs mt-1 text-gray-600">{txn.status}</p>
-                                                        </div>
-                                                    </div>
-                                                </td>
-                                            </tr>
-                                        )}
-                                    </React.Fragment>
-                                );
-                            })}
-                        </tbody>
-                    </table>
+                                {/* Cards Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+                    {transactions.map((txn) => (
+                        <TransactionCard
+                            key={txn.id}
+                            transaction={txn}
+                            isExpanded={expandedIds.has(txn.id)}
+                            onToggleExpand={() => toggleExpand(txn.id)}
+                            onEdit={() => handleEdit(txn)}
+                        />
+                    ))}
                 </div>
+
+                {transactions.length === 0 && (
+                    <div className="card p-8 text-center text-gray-500">
+                        <p className="text-lg">No timesheets found.</p>
+                        <p className="text-sm mt-2">Try adjusting your filters or search query.</p>
+                    </div>
+                )}
 
                 {totalPages > 1 && (
                     <div className="flex justify-between items-center mt-6">

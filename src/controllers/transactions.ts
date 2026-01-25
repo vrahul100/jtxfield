@@ -39,23 +39,31 @@ export async function getTransactions(c: Context, sql: Sql) {
             conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
         }
 
+        // Search across all text fields including AI summary
         if (search.trim()) {
             const searchTerm = search.trim().replace(/'/g, "''");
             const isNumeric = /^\d+$/.test(searchTerm);
             if (isNumeric) {
+                // Numeric search: only match ID exactly, or in text fields (not phone)
                 conditions.push(`(
                     t.id = ${parseInt(searchTerm)}
-                    OR m.full_name ILIKE '%${searchTerm}%' 
-                    OR m.phone_number ILIKE '%${searchTerm}%'
+                    OR m.full_name ILIKE '%${searchTerm}%'
                     OR p.name ILIKE '%${searchTerm}%'
                     OR t.job ILIKE '%${searchTerm}%'
+                    OR t.labor ILIKE '%${searchTerm}%'
+                    OR t.material ILIKE '%${searchTerm}%'
+                    OR b.summary ILIKE '%${searchTerm}%'
                 )`);
             } else {
+                // Text search: include phone numbers for text queries
                 conditions.push(`(
-                    m.full_name ILIKE '%${searchTerm}%' 
+                    m.full_name ILIKE '%${searchTerm}%'
                     OR m.phone_number ILIKE '%${searchTerm}%'
                     OR p.name ILIKE '%${searchTerm}%'
                     OR t.job ILIKE '%${searchTerm}%'
+                    OR t.labor ILIKE '%${searchTerm}%'
+                    OR t.material ILIKE '%${searchTerm}%'
+                    OR b.summary ILIKE '%${searchTerm}%'
                 )`);
             }
         }
