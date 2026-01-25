@@ -12,12 +12,13 @@ export function Layout({ children }: LayoutProps) {
             <Header />
             <div className="flex pt-20 flex-1">
                 <Sidebar />
-                <main className="flex-1 ml-64 p-8 pb-20">
+                {/* Responsive margin: ml-0 on mobile (sidebar overlays), ml-64 on desktop */}
+                <main className="flex-1 ml-0 md:ml-64 p-8 pb-20 transition-all duration-300">
                     {children}
                 </main>
             </div>
-            {/* Footer - Fixed at bottom */}
-            <footer className="fixed bottom-0 left-64 right-0 bg-gray-50 border-t border-slate-200 py-2 px-8 text-center z-10">
+            {/* Footer - Responsive left margin */}
+            <footer className="fixed bottom-0 left-0 md:left-64 right-0 bg-gray-50 border-t border-slate-200 py-2 px-8 text-center z-10 transition-all duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center text-med text-slate-500">
                     <p>© 2024 Jentyx. All rights reserved.</p>
                     <div className="flex gap-4 mt-2 md:mt-0">
