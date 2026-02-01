@@ -113,9 +113,12 @@ export function WorkEntryCard({
     const showActions = ['pending_review', 'processing', 'open', 'flagged'].includes(bucket.status);
 
     return (
-        <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${isExpanded ? 'border-4 border-indigo-500' : ''}`}>
+        <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${
+            isExpanded ? 'border-4 border-indigo-500' : 
+            bucket.potential_change ? 'border-2 border-red-500' : ''
+        }`}>
             {/* Card Header - Status Color Bar */}
-            <div className={`h-4 ${getHeaderBgColor(bucket.status)}`}></div>
+            <div className={`h-2 ${getHeaderBgColor(bucket.status)}`}></div>
             <div
                 className={`p-4 cursor-pointer ${isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                 onClick={onToggleExpand}
