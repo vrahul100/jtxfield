@@ -43,36 +43,50 @@ interface StateResult {
 
 const MESSAGES = {
     en: {
-        collectWork: 'What kind of work, and how many hours?',
-        askHours: (wt: string) => `I see ${wt}. How many hours?`,
-        clarify: (reason: string) => `⚠️ ${reason} Can you clarify?`,
-        confirmAll: (wt: string, h: number, proj: string) => `${wt} for ${h}h at ${proj}. Correct? (Y/N)`,
-        confirmProject: (wt: string, h: number, proj: string) => `${wt} for ${h}h. At ${proj}? (Y/N)`,
-        selectProject: (wt: string, h: number, list: string) => `${wt} for ${h}h.\n\n${list}\n\nWhich one?`,
-        success: (wt: string, h: number, proj: string, summary?: string) => {
-            const base = `✅ ${wt} for ${h}h at ${proj}.`
-            const summaryText = summary ? `\n\n_"${summary}"_` : ''
-            return `${base}${summaryText}`
-            // return `${base}${summaryText}\n\n*Status: SUBMITTED*`
+        collectWork: '🔧 *What kind of work did you do?*\n\nAlso tell me how many hours.\n(Example: "electrical for 6 hours")',
+        askHours: (wt: string) => `⏱️ Got it: *${wt}* work\n\nHow many hours did you work?\n(Example: 6.5 or "6 and a half")`,
+        clarify: (reason: string) => `⚠️ *NEEDS CLARIFICATION*\n\n${reason}\n\nCan you provide more details?`,
+        confirmAll: (wt: string, h: number, proj: string, materials?: string, location?: string) => {
+            let msg = `📝 *CONFIRM YOUR WORK*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${h} hours\n📍 *Project:* ${proj}`
+            if (materials) msg += `\n🧰 *Materials:* ${materials}`
+            if (location) msg += `\n📌 *Location:* ${location}`
+            msg += `\n\nIs this correct? Reply *Y* or *N*`
+            return msg
         },
-        logged: 'Logged!',
-        noProjects: 'No projects available',
+        confirmProject: (wt: string, h: number, proj: string) => `📝 *CONFIRM PROJECT*\n\n🔧 ${wt}\n⏱️ ${h} hours\n\nAt *${proj}*?\n\nReply *Y* or *N*`,
+        selectProject: (wt: string, h: number, list: string) => `📌 *SELECT PROJECT*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nReply with number (1, 2, or 3)`,
+        success: (wt: string, h: number, proj: string, materials?: string, location?: string, summary?: string) => {
+            let msg = `✅ *LOGGED*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${h} hours\n📍 *Project:* ${proj}`
+            if (materials) msg += `\n🧰 *Materials:* ${materials}`
+            if (location) msg += `\n📌 *Location:* ${location}`
+            if (summary) msg += `\n\n_"${summary}"_`
+            return msg
+        },
+        logged: '✅ Logged!',
+        noProjects: '❌ No projects available',
     },
     es: {
-        collectWork: '¿Qué tipo de trabajo, y cuántas horas?',
-        askHours: (wt: string) => `Veo ${wt}. ¿Cuántas horas?`,
-        clarify: (reason: string) => `⚠️ ${reason} ¿Puedes aclarar?`,
-        confirmAll: (wt: string, h: number, proj: string) => `${wt} por ${h}h en ${proj}. ¿Correcto? (S/N)`,
-        confirmProject: (wt: string, h: number, proj: string) => `${wt} por ${h}h. ¿En ${proj}? (S/N)`,
-        selectProject: (wt: string, h: number, list: string) => `${wt} por ${h}h.\n\n${list}\n\n¿Cuál?`,
-        success: (wt: string, h: number, proj: string, summary?: string) => {
-            const base = `✅ ${wt} por ${h}h en ${proj}.`
-            const summaryText = summary ? `\n\n_"${summary}"_` : ''
-            return `${base}${summaryText}`
-            // return `${base}${summaryText}\n\n*Estado: ENVIADO*`
+        collectWork: '🔧 *¿Qué tipo de trabajo hiciste?*\n\nTambién dime cuántas horas.\n(Ejemplo: "eléctrico por 6 horas")',
+        askHours: (wt: string) => `⏱️ Entendido: trabajo de *${wt}*\n\n¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`,
+        clarify: (reason: string) => `⚠️ *NECESITA ACLARACIÓN*\n\n${reason}\n\n¿Puedes dar más detalles?`,
+        confirmAll: (wt: string, h: number, proj: string, materials?: string, location?: string) => {
+            let msg = `📝 *CONFIRMA TU TRABAJO*\n\n🔧 *Trabajo:* ${wt}\n⏱️ *Tiempo:* ${h} horas\n📍 *Proyecto:* ${proj}`
+            if (materials) msg += `\n🧰 *Materiales:* ${materials}`
+            if (location) msg += `\n📌 *Ubicación:* ${location}`
+            msg += `\n\n¿Es correcto? Responde *S* o *N*`
+            return msg
         },
-        logged: '¡Registrado!',
-        noProjects: 'No hay proyectos disponibles',
+        confirmProject: (wt: string, h: number, proj: string) => `📝 *CONFIRMA PROYECTO*\n\n🔧 ${wt}\n⏱️ ${h} horas\n\n¿En *${proj}*?\n\nResponde *S* o *N*`,
+        selectProject: (wt: string, h: number, list: string) => `📌 *SELECCIONA PROYECTO*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nResponde con número (1, 2, o 3)`,
+        success: (wt: string, h: number, proj: string, materials?: string, location?: string, summary?: string) => {
+            let msg = `✅ *REGISTRADO*\n\n🔧 *Trabajo:* ${wt}\n⏱️ *Tiempo:* ${h} horas\n📍 *Proyecto:* ${proj}`
+            if (materials) msg += `\n🧰 *Materiales:* ${materials}`
+            if (location) msg += `\n📌 *Ubicación:* ${location}`
+            if (summary) msg += `\n\n_"${summary}"_`
+            return msg
+        },
+        logged: '✅ ¡Registrado!',
+        noProjects: '❌ No hay proyectos disponibles',
     }
 }
 
@@ -1266,7 +1280,15 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
 
     const wt = extraction.workType || 'work'
     const h = extraction.hoursWorked || 0
-    const confirmMsg = withDevInfo(ctx.bucketId, msg.success(wt, h, projectName, extraction.summary || undefined), 'complete', extraction, 0)
+    const materials = extraction.materials?.join(', ') || undefined
+    const location = extraction.location || undefined
+    const confirmMsg = withDevInfo(
+        ctx.bucketId, 
+        msg.success(wt, h, projectName, materials, location, extraction.summary || undefined), 
+        'complete', 
+        extraction, 
+        0
+    )
 
     return {
         nextState: 'complete',
