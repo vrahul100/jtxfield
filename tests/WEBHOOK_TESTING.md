@@ -2,36 +2,43 @@
 
 ## Overview
 
-This directory contains automated test suites for the Twilio webhook endpoint that processes incoming WhatsApp messages.
+This directory contains automated test suites for the Twilio webhook endpoint
+that processes incoming WhatsApp messages.
 
 ## Test Modes
 
 ### 1. Standard Mode (Auto-Cleanup)
+
 Runs tests and automatically deletes all test data after completion.
 
 ```bash
 npm run test:webhook
 ```
 
-### 2. Persist Mode ✨ NEW
-Runs tests and **keeps** all test buckets in the database for manual review in the UI.
+### 2. Persist Mode 🤖 NEW
+
+Runs tests and **keeps** all test buckets in the database for manual review in
+the UI.
 
 ```bash
 npm run test:webhook:persist
 ```
 
 **Use cases:**
+
 - Review AI extraction quality in the Tickets UI
 - Debug specific test cases
 - Verify conversational flows
 - Manual QA before deployment
 
 **Test identification:**
+
 - All persisted test messages are tagged with `[TEST_RUN:<timestamp>]`
 - View them in the Tickets page alongside real data
 - Each test run has a unique ID for easy filtering
 
-### 3. Cleanup Mode ✨ NEW
+### 3. Cleanup Mode 🤖 NEW
+
 Delete all test buckets from previous persist mode runs.
 
 ```bash
@@ -48,9 +55,11 @@ npm run test:cleanup -- --force
 ## Test Files
 
 ### `webhook-test-cases.csv`
+
 Defines individual test cases with expected outcomes.
 
 **Columns:**
+
 - `phone_number`: Test phone number
 - `message_text`: Message content to send
 - `image_url`: Optional image URL
@@ -60,7 +69,9 @@ Defines individual test cases with expected outcomes.
 - `description`: Test case description
 
 ### `run-webhook-tests.ts`
+
 Main test runner that:
+
 1. Reads test cases from CSV
 2. Simulates Twilio webhook calls
 3. Waits for async LLM processing
@@ -69,7 +80,9 @@ Main test runner that:
 6. (Optional) Cleans up or persists test data
 
 ### `cleanup-test-buckets.ts`
+
 Utility script to delete test data created by persist mode:
+
 - Finds all buckets with `[TEST_RUN:]` marker
 - Shows preview of what will be deleted
 - Requires confirmation (unless `--force`)
@@ -78,11 +91,13 @@ Utility script to delete test data created by persist mode:
 ## Running Tests
 
 ### Quick Test (Auto-cleanup)
+
 ```bash
 npm run test:webhook
 ```
 
 ### Test + UI Review Workflow
+
 ```bash
 # 1. Run tests in persist mode
 npm run test:webhook:persist
@@ -97,11 +112,13 @@ npm run test:cleanup
 ### Adding New Test Cases
 
 1. Add a new row to `webhook-test-cases.csv`:
+
 ```csv
 +15102198037,New test message,,,2,steel,Description of test
 ```
 
 2. Run tests:
+
 ```bash
 npm run test:webhook
 ```
@@ -109,21 +126,25 @@ npm run test:webhook
 ## Test Features
 
 ### Automatic Transcription
+
 - Audio URLs are automatically transcribed using Groq Whisper
 - Transcripts are validated and stored
 - Test cases can verify transcription output
 
 ### LLM Extraction
+
 - All messages processed through AI extraction pipeline
 - Tests verify `extracted_data` is populated
 - Validates hours, materials, location extraction
 
 ### Transaction Creation
+
 - Verifies work logs (transactions) are created
 - Validates extracted data flows to transactions
 - Tests project inference logic
 
 ### ForceNewBucket
+
 - Each test creates a fresh bucket
 - Prevents test interference
 - Ensures clean state per test
@@ -139,6 +160,7 @@ npm run test:webhook
 ## Best Practices
 
 ✅ **Do:**
+
 - Use persist mode when debugging
 - Clean up test data after manual review
 - Add diverse test cases (audio, images, edge cases)
@@ -146,6 +168,7 @@ npm run test:webhook
 - Verify both text and media handling
 
 ❌ **Don't:**
+
 - Leave test data in production database long-term
 - Use real Twilio URLs (they expire)
 - Skip cleanup after persist mode

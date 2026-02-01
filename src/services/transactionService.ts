@@ -35,26 +35,31 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
     // PRIORITY 1: Use AI extracted_data if available
     let time: number | null = null;
     let material: string | null = null;
+    let extracted: any = null;
 
-    if (bucket.extracted_data) {
+    const extractionSource = bucket.extracted_data || bucket.ai_response;
+    if (extractionSource) {
         try {
-            const extracted = typeof bucket.extracted_data === 'string'
-                ? JSON.parse(bucket.extracted_data)
-                : bucket.extracted_data;
+            extracted = typeof extractionSource === 'string'
+                ? JSON.parse(extractionSource)
+                : extractionSource;
 
             // Use AI-extracted hours
-            if (extracted.hoursWorked && typeof extracted.hoursWorked === 'number') {
-                time = extracted.hoursWorked;
-                console.log(`[TxnExtraction] Using AI-extracted hours: ${time}`);
+            if (extracted?.hoursWorked !== undefined && extracted?.hoursWorked !== null) {
+                const parsedTime = Number(extracted.hoursWorked);
+                if (!isNaN(parsedTime)) {
+                    time = parsedTime;
+                    console.log(`[TxnExtraction] Using AI-extracted hours: ${time}`);
+                }
             }
 
             // Use AI-extracted materials
-            if (extracted.materialsUsed && Array.isArray(extracted.materialsUsed) && extracted.materialsUsed.length > 0) {
+            if (extracted?.materialsUsed && Array.isArray(extracted.materialsUsed) && extracted.materialsUsed.length > 0) {
                 material = extracted.materialsUsed.join(', ');
                 console.log(`[TxnExtraction] Using AI-extracted materials: ${material}`);
             }
         } catch (e) {
-            console.warn(`[TxnExtraction] Failed to parse extracted_data:`, e);
+            console.warn(`[TxnExtraction] Failed to parse extraction data:`, e);
         }
     }
 
@@ -67,8 +72,8 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
 
             for (const msg of history) {
                 if (msg.role === 'user') {
-                    // Look for hours in user messages
-                    const hoursMatch = msg.content?.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/i);
+                    // Look for hours in user messages - improved regex
+                    const hoursMatch = msg.content?.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h\b)/i);
                     if (hoursMatch) {
                         time = parseFloat(hoursMatch[1]);
                         break;
@@ -85,39 +90,58 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
         }
     }
 
-    // PRIORITY 3: Fallback to raw_text parsing
-    if (!time && bucket.raw_text) {
-        const hoursMatch = bucket.raw_text.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)/i);
+    // PRIORITY 3: Fallback to regex parsing (scan raw_text AND transcripts)
+    if (!time) {
+        const combinedContext = [
+            bucket.raw_text,
+            ...(Array.isArray(bucket.transcripts) ? bucket.transcripts : 
+               (typeof bucket.transcripts === 'string' ? JSON.parse(bucket.transcripts || '[]') : []))
+        ].filter(Boolean).join(' ');
+
+        // Improved regex: catches "6.5 hours", "6.5h", "6.5 hrs", "6.5 hours worked"
+        const hoursMatch = combinedContext.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h\b)/i);
         if (hoursMatch) {
             time = parseFloat(hoursMatch[1]);
+            console.log(`[TxnExtraction] Found hours via regex in combined context: ${time}`);
         }
     }
 
-    // Extract materials from raw_text if not from AI
-    if (!material && bucket.raw_text) {
+    // Extract materials from raw_text AND transcripts if not from AI
+    if (!material) {
+        const combinedContext = [
+            bucket.raw_text,
+            ...(Array.isArray(bucket.transcripts) ? bucket.transcripts : 
+               (typeof bucket.transcripts === 'string' ? JSON.parse(bucket.transcripts || '[]') : []))
+        ].filter(Boolean).join(' ');
+
         // Simple material extraction - looks for common construction materials
-        const materialWords = bucket.raw_text.match(/\b(rebar|wire|concrete|lumber|steel|brick|drywall|paint|nails|screws|wood|metal|pipe|cable|copper|pvc|outlets|wires)\b/gi);
+        const materialWords = combinedContext.match(/\b(rebar|wire|concrete|lumber|steel|brick|drywall|paint|nails|screws|wood|metal|pipe|cable|copper|pvc|outlets|wires|drains)\b/gi);
         if (materialWords && materialWords.length > 0) {
             material = [...new Set(materialWords.map((m: string) => m.toLowerCase()))].join(', ');
         }
     }
 
-    // Extract labor description from raw_text
-    const labor = bucket.raw_text || null;
+    // Extract labor description - Priority: AI Summary > Raw Text
+    const labor = extracted?.summary || bucket.raw_text || null;
+
+    // Use AI-extracted materials if available
+    if (extracted?.materialsUsed && Array.isArray(extracted.materialsUsed) && extracted.materialsUsed.length > 0) {
+        material = extracted.materialsUsed.join(', ');
+    }
 
     // Build evidence JSON (images + audio)
     let evidence: string | null = null;
     const evidenceItems: string[] = [];
     if (bucket.image_urls) {
         try {
-            const images = JSON.parse(bucket.image_urls);
-            evidenceItems.push(...images);
+            const images = typeof bucket.image_urls === 'string' ? JSON.parse(bucket.image_urls) : bucket.image_urls;
+            if (Array.isArray(images)) evidenceItems.push(...images);
         } catch { /* ignore */ }
     }
     if (bucket.audio_urls) {
         try {
-            const audio = JSON.parse(bucket.audio_urls);
-            evidenceItems.push(...audio);
+            const audio = typeof bucket.audio_urls === 'string' ? JSON.parse(bucket.audio_urls) : bucket.audio_urls;
+            if (Array.isArray(audio)) evidenceItems.push(...audio);
         } catch { /* ignore */ }
     }
     if (evidenceItems.length > 0) {
@@ -137,19 +161,21 @@ export async function extractTransactionFromBucket(sql: Sql, bucketId: number): 
             material,
             evidence,
             scope_description,
-            status
+            status,
+            potential_change
         ) VALUES (
             ${bucketId},
             ${bucket.node_id},
             ${bucket.member_id},
             ${bucket.project_id},
-            ${bucket.project_name_raw || null},
+            ${bucket.projectNameRaw || bucket.project_name_raw || null},
             ${time},
             ${labor},
             ${material},
             ${evidence},
             ${bucket.raw_text || null},
-            'COMPLETED'
+            'COMPLETED',
+            ${bucket.potential_change || false}
         )
     `;
 

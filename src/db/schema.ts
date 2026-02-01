@@ -98,9 +98,11 @@ export const buckets = pgTable('buckets', {
     validationErrors: text('validation_errors'),  // JSON array of issues
     validationAttempts: integer('validation_attempts').default(0), // Consistency check retries
     aiResponse: text('ai_response'),
+    extractedData: text('extracted_data'),
 
     // Twilio tracking
     messageSids: text('message_sids'),   // JSON array of Twilio message SIDs
+    potentialChange: boolean('potential_change').default(false),
 
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
@@ -127,7 +129,10 @@ export const txns = pgTable('txns', {
     evidence: text('evidence'),          // JSON array of media URLs (images + audio)
 
     scopeDescription: text('scope_description'),
-    estimatedRevenue: decimal('estimated_revenue', { precision: 10, scale: 2 }),
+    time: decimal('time', { precision: 10, scale: 2 }),
+    labor: text('labor'),
+    material: text('material'),
+    potentialChange: boolean('potential_change').default(false),
     status: varchar('status', { length: 20 }).default('PROCESSING'),
 
     createdAt: timestamp('created_at').defaultNow(),

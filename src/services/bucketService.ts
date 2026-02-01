@@ -448,6 +448,7 @@ export async function validateBucket(
             intent = ${extraction.intent},
             project_name_raw = ${extraction.projectName},
             ai_response = ${JSON.stringify(extraction)},
+            extracted_data = ${JSON.stringify(extraction)},
             updated_at = NOW()
         WHERE id = ${bucket.id}
     `;

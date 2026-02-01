@@ -79,10 +79,12 @@ Analyze ALL inputs (text + voice transcripts + images) and extract these fields:
 3. isProjectClear: true if you're confident which project, false if uncertain
 4. clarityScore: 0.0 to 1.0 rating of how clear the message is
 5. summary: Brief 1-line summary of the work done
-6. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "general"
-7. hoursWorked: Number of hours spent (IMPORTANT: look for any number in the text - if someone just says "4" that means 4 hours)
+6. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
+7. hoursWorked: Number of hours spent as a JSON NUMBER.
+   - Look for patterns like "took me 6.5 hours", "worked for 4 hrs", "3.5h today".
+   - If someone just says a number like "4" in response to an hours question, that's 4 hours.
 8. workersCount: Number of workers (default 1)
-9. materialsUsed: Array of materials used (e.g., ["wire", "outlets"])
+9. materialsUsed: Array of materials used (e.g., ["wire", "outlets", "drains"])
 10. location: Where the work was done (e.g., "floor 3", "unit 5B")
 
 CRITICAL CONSISTENCY CHECK:
@@ -97,7 +99,7 @@ IMPORTANT: If you see an image, ALWAYS analyze it carefully. Default isConsisten
 
 IMPORTANT: ALWAYS try to extract projectName if ANY location or project is mentioned. Even partial names like "the school" or "mall project" are valuable tags.
 
-Always try to extract workType and hoursWorked if the message is about logging work.
+IMPORTANT: Always try to extract hoursWorked if mentioned in natural language like "3 hours" or "for 4 hours".
 
 Return JSON only.`;
 
@@ -234,7 +236,7 @@ export async function extractMessageInfo(
 
             // Construction fields
             workType: extracted.workType,
-            hoursWorked: extracted.hoursWorked,
+            hoursWorked: extracted.hoursWorked !== undefined && extracted.hoursWorked !== null ? Number(extracted.hoursWorked) : undefined,
             workersCount: extracted.workersCount,
             materialsUsed: extracted.materialsUsed,
             location: extracted.location,

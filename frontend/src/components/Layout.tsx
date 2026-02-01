@@ -19,7 +19,7 @@ export function Layout({ children }: LayoutProps) {
             </div>
             {/* Footer - Responsive left margin */}
             <footer className="fixed bottom-0 left-0 md:left-64 right-0 bg-gray-50 border-t border-slate-200 py-2 px-8 text-center z-10 transition-all duration-300">
-                <div className="flex flex-col md:flex-row justify-between items-center text-med text-slate-500">
+                <div className="flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 italic">
                     <p>© 2024 Jentyx. All rights reserved.</p>
                     <div className="flex gap-4 mt-2 md:mt-0">
                         <a href="#" className="hover:text-blue-600 transition-colors">Terms of Service</a>

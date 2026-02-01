@@ -52,7 +52,7 @@ const MESSAGES = {
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} for ${h}h at ${proj}.`
             const summaryText = summary ? `\n\n_"${summary}"_` : ''
-            return `${base}${summaryText}*`
+            return `${base}${summaryText}`
             // return `${base}${summaryText}\n\n*Status: SUBMITTED*`
         },
         logged: 'Logged!',
@@ -68,7 +68,7 @@ const MESSAGES = {
         success: (wt: string, h: number, proj: string, summary?: string) => {
             const base = `✅ ${wt} por ${h}h en ${proj}.`
             const summaryText = summary ? `\n\n_"${summary}"_` : ''
-            return `${base}${summaryText}*`
+            return `${base}${summaryText}`
             // return `${base}${summaryText}\n\n*Estado: ENVIADO*`
         },
         logged: '¡Registrado!',
@@ -293,9 +293,11 @@ ${imageAnalysis || 'No images'}
 
 ## EXTRACTION RULES:
 1. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
-2. hoursWorked: Extract numbers like "4 hours", "4h", "half hour"=0.5, "all day"=8
-   - If user says "another 3 hours" or "3 more hours" → return ONLY the additional hours (3)
-   - If user says "actually 5 hours" or "make it 5 hours" → return the corrected total (5)
+2. hoursWorked: HEAVILY prioritize finding hours in USER INPUT and [Voice] transcripts. 
+   - Look for phrases like "took me 6.5 hours", "worked 4h", "it was 8 hours".
+   - Return hours as a JSON number (e.g., 6.5).
+   - If user says "another 3 hours" or "3 more hours" → return ONLY the additional hours (3).
+   - If user says "actually 5 hours" or "make it 5 hours" → return the corrected total (5).
 3. summary: Brief description of work
 4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
 5. responseLanguage: "en" unless user writes in Spanish → "es"
@@ -337,7 +339,7 @@ async function extractWithLLM(rawText: string, transcripts: string[], imageAnaly
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'llama-3.3-70b-versatile',
+                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.1,
                 response_format: { type: 'json_object' },
@@ -358,6 +360,29 @@ async function extractWithLLM(rawText: string, transcripts: string[], imageAnaly
         console.error('[Extract] Error:', e)
         return null
     }
+}
+
+// Refine extraction with regex (fallback for when LLM misses obvious data)
+function refineExtractionWithRegex(extraction: ExtractionResult, rawText: string, transcripts: string[]): ExtractionResult {
+    // Only refine if hours are missing
+    if (extraction.hoursWorked !== null && extraction.hoursWorked !== undefined) {
+        return extraction
+    }
+
+    const combinedText = [rawText, ...transcripts].join(' ')
+    // Regex for hours: "6.5 hours", "6.5h", "6.5 hrs", "6.5 hours worked"
+    const hoursMatch = combinedText.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h\b)/i)
+    
+    if (hoursMatch) {
+        const hours = parseFloat(hoursMatch[1])
+        console.log(`[RegexRefine] Found hours via regex: ${hours}`)
+        return {
+            ...extraction,
+            hoursWorked: hours
+        }
+    }
+
+    return extraction
 }
 
 // Create default extraction result
@@ -472,7 +497,14 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
             null
         )
         if (llmExtraction) {
-            extraction = { ...extraction, ...llmExtraction }
+            // Merge with existing
+            let merged = { ...extraction, ...llmExtraction }
+            
+            // Apply regex refinement to catch missed hours
+            merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts)
+            
+            extraction = merged
+            
             // Save extraction to bucket
             await supabase.from('buckets').update({
                 extracted_data: JSON.stringify(extraction)
@@ -1225,6 +1257,7 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         labor: extraction.summary || `${extraction.workType || 'work'} for ${extraction.hoursWorked || 0}h`,
         material: extraction.materials?.join(', ') || null,
         location: extraction.location || null,
+        time: extraction.hoursWorked || null,  // ← CRITICAL: Store hours as numeric value
         status: 'COMPLETED',
     }
 
