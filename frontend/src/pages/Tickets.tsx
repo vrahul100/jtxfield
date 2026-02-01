@@ -34,6 +34,7 @@ interface Bucket {
     clarity_score: number | null;
     notes: string | null;
     potential_change: boolean | null;
+    hours: number | null;
     created_at: string;
     updated_at?: string;
 }
@@ -211,6 +212,27 @@ export function Tickets() {
         }
     };
 
+    const handleUpdateHours = async (id: number, hours: number | null) => {
+        try {
+            const response = await fetch(`/api/worklog/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({ hours }),
+            });
+            if (response.ok) {
+                // Update local state immediately for better UX
+                setBuckets(prev => prev.map(b =>
+                    b.id === id ? { ...b, hours } : b
+                ));
+            } else {
+                console.error('Failed to update hours');
+            }
+        } catch (error) {
+            console.error('Error updating hours:', error);
+        }
+    };
+
     const getEditFields = (): EditField[] => {
         if (!editingBucket) return [];
 
@@ -342,6 +364,7 @@ export function Tickets() {
                             onSubmit={() => handleSubmit(bucket.id)}
                             onReject={() => handleReject(bucket.id)}
                             onToggleChange={() => handleTogglePotentialChange(bucket.id, bucket.potential_change)}
+                            onUpdateHours={(hours) => handleUpdateHours(bucket.id, hours)}
                         />
                     ))}
                 </div>

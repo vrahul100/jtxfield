@@ -103,6 +103,7 @@ export const buckets = pgTable('buckets', {
     // Twilio tracking
     messageSids: text('message_sids'),   // JSON array of Twilio message SIDs
     potentialChange: boolean('potential_change').default(false),
+    hours: decimal('hours', { precision: 10, scale: 2 }), // Extracted hours for editing
 
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),

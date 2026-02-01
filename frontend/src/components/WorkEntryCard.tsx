@@ -35,6 +35,7 @@ interface Bucket {
     clarity_score: number | null;
     notes: string | null;
     potential_change: boolean | null;
+    hours: number | null;
     created_at: string;
     updated_at?: string;
 }
@@ -47,6 +48,7 @@ interface WorkEntryCardProps {
     onSubmit: () => void;
     onReject: () => void;
     onToggleChange: () => void;
+    onUpdateHours?: (hours: number | null) => void;
 }
 
 export function WorkEntryCard({
@@ -56,7 +58,8 @@ export function WorkEntryCard({
     onEdit,
     onSubmit,
     onReject,
-    onToggleChange
+    onToggleChange,
+    onUpdateHours
 }: WorkEntryCardProps) {
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -188,6 +191,29 @@ export function WorkEntryCard({
                                     </div>
                                 </div>
                                 
+                                {/* Hours */}
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-medium text-gray-500 mb-0.5">Hours</span>
+                                    {onUpdateHours ? (
+                                        <input
+                                            type="number"
+                                            step="0.5"
+                                            min="0"
+                                            value={bucket.hours || ''}
+                                            onChange={(e) => {
+                                                e.stopPropagation();
+                                                const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                                                onUpdateHours(val);
+                                            }}
+                                            onClick={(e) => e.stopPropagation()}
+                                            className="w-20 px-2 py-0.5 text-md border rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                            placeholder="0"
+                                        />
+                                    ) : (
+                                        <span className="text-md text-gray-700">{bucket.hours ?? 'N/A'} h</span>
+                                    )}
+                                </div>
+
                                 {/* Potential Change */}
                                 <div className="flex flex-col">
                                     <span className="text-xs font-medium text-gray-500 mb-0.5">Status</span>

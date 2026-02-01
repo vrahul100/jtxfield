@@ -105,6 +105,7 @@ export async function getWorklog(c: Context, sql: Sql) {
                 b.clarity_score,
                 b.extracted_data,
                 b.potential_change,
+                b.hours,
                 b.created_at,
                 b.updated_at,
                 b.node_id,
@@ -191,7 +192,7 @@ export async function updateBucket(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const bucketId = parseInt(c.req.param('id'));
         const body = await getRequestBody(c);
-        const { rawText, projectId, potential_change } = body;
+        const { rawText, projectId, potential_change, hours } = body;
 
         // Get bucket
         const buckets = await sql`SELECT * FROM buckets WHERE id = ${bucketId}`;
@@ -223,9 +224,13 @@ export async function updateBucket(c: Context, sql: Sql) {
             updates.push(`potential_change = $${paramIndex++}`);
             values.push(potential_change);
         }
+        if (hours !== undefined) {
+            updates.push(`hours = $${paramIndex++}`);
+            values.push(hours);
+        }
 
         if (updates.length === 0) {
-            return c.json({ error: 'rawText, projectId, or potential_change is required' }, 400);
+            return c.json({ error: 'At least one field (rawText, projectId, potential_change, hours) is required' }, 400);
         }
 
         updates.push('updated_at = NOW()');

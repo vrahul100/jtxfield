@@ -1253,25 +1253,33 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         projectName = proj?.name || 'Inbox'
     }
 
-    // Update bucket with AI summary before completing
-    if (extraction.summary) {
-        await supabase.from('buckets').update({
-            summary: extraction.summary
-        }).eq('id', ctx.bucketId)
+    // Update bucket with AI summary and hours before completing
+    const updateData: any = {}
+    if (extraction.summary) updateData.summary = extraction.summary
+    if (extraction.hoursWorked !== null && extraction.hoursWorked !== undefined) {
+        updateData.hours = extraction.hoursWorked
+    }
+    
+    if (Object.keys(updateData).length > 0) {
+        await supabase.from('buckets').update(updateData).eq('id', ctx.bucketId)
     }
 
     // Create transaction (using correct schema columns)
+    // Use bucket.hours if available (allows editing), fallback to extraction
+    const finalHours = bucket.hours ?? extraction.hoursWorked ?? null
+    
     const txn = {
         bucket_id: ctx.bucketId,
         company_id: bucket.node_id,
         user_id: bucket.member_id,
         project_id: bucket.project_id,
-        job: `${extraction.workType || 'work'} - ${extraction.hoursWorked || 0}h`,
+        job: `${extraction.workType || 'work'} - ${finalHours || 0}h`,
         scope_description: extraction.summary || extraction.workType,
-        labor: extraction.summary || `${extraction.workType || 'work'} for ${extraction.hoursWorked || 0}h`,
+        labor: extraction.summary || `${extraction.workType || 'work'} for ${finalHours || 0}h`,
         material: extraction.materials?.join(', ') || null,
         location: extraction.location || null,
-        time: extraction.hoursWorked || null,  // ← CRITICAL: Store hours as numeric value
+        time: finalHours,  // Use final hours value
+        potential_change: bucket.potential_change || false,  // ← PROPAGATE FLAG
         status: 'COMPLETED',
     }
 
