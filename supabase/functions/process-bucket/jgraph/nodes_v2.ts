@@ -54,7 +54,10 @@ const MESSAGES = {
             return msg
         },
         confirmProject: (wt: string, h: number, proj: string) => `📝 *CONFIRM PROJECT*\n\n🔧 ${wt}\n⏱️ ${h} hours\n\nAt *${proj}*?\n\nReply *Y* or *N*`,
-        selectProject: (wt: string, h: number, list: string) => `📌 *SELECT PROJECT*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nReply with number (1, 2, or 3)`,
+        selectProject: (wt: string, h: number, list: string, count: number) => {
+            const options = count === 1 ? '1' : count === 2 ? '1 or 2' : Array.from({length: count}, (_, i) => i + 1).join(', ').replace(/, ([^,]*)$/, ', or $1')
+            return `📌 *SELECT PROJECT*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nReply with number (${options})`
+        },
         success: (wt: string, h: number, proj: string, materials?: string, location?: string, summary?: string) => {
             let msg = `✅ *LOGGED*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${h} hours\n📍 *Project:* ${proj}`
             if (materials) msg += `\n🧰 *Materials:* ${materials}`
@@ -77,7 +80,10 @@ const MESSAGES = {
             return msg
         },
         confirmProject: (wt: string, h: number, proj: string) => `📝 *CONFIRMA PROYECTO*\n\n🔧 ${wt}\n⏱️ ${h} horas\n\n¿En *${proj}*?\n\nResponde *S* o *N*`,
-        selectProject: (wt: string, h: number, list: string) => `📌 *SELECCIONA PROYECTO*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nResponde con número (1, 2, o 3)`,
+        selectProject: (wt: string, h: number, list: string, count: number) => {
+            const options = count === 1 ? '1' : count === 2 ? '1 o 2' : Array.from({length: count}, (_, i) => i + 1).join(', ').replace(/, ([^,]*)$/, ', o $1')
+            return `📌 *SELECCIONA PROYECTO*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nResponde con número (${options})`
+        },
         success: (wt: string, h: number, proj: string, materials?: string, location?: string, summary?: string) => {
             let msg = `✅ *REGISTRADO*\n\n🔧 *Trabajo:* ${wt}\n⏱️ *Tiempo:* ${h} horas\n📍 *Proyecto:* ${proj}`
             if (materials) msg += `\n🧰 *Materiales:* ${materials}`
@@ -1228,12 +1234,13 @@ async function handleSelectingProject(ctx: StateContext): Promise<StateResult> {
     const wt = extraction.workType || 'work'
     const h = extraction.hoursWorked || 0
     const projectList = projects?.map((p, i) => `${i + 1}. ${p.name}`).join('\n') || msg.noProjects
+    const projectCount = projects?.length || 0
 
     await supabase.from('buckets').update({ state_attempts: stateAttempts + 1 }).eq('id', ctx.bucketId)
 
     return {
         nextState: 'selecting_project',
-        response: withDevInfo(ctx.bucketId, msg.selectProject(wt, h, projectList), 'selecting_project', extraction, stateAttempts + 1),
+        response: withDevInfo(ctx.bucketId, msg.selectProject(wt, h, projectList, projectCount), 'selecting_project', extraction, stateAttempts + 1),
         extraction,
     }
 }

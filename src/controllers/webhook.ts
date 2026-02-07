@@ -168,35 +168,55 @@ Your message has been saved. An admin will add you to your project soon!`;
   // 6. EXTRACT MEDIA URLS (Worker will copy to storage async)
   const { imageUrls, audioUrls, messageSid } = extractMediaUrls(normalized, body);
 
-  // 7. FIND OR CREATE BUCKET
-  const inboxProjectId = await ensureInboxProject(sql, member.company_id);
-  const forceNewBucket = body.ForceNewBucket === 'true' || body.ForceNewBucket === '1';
-  let bucket = forceNewBucket ? null : await findOpenBucket(sql, member.id, inboxProjectId);
+  // 7. USE TRANSACTION WITH ROW-LEVEL LOCK TO PREVENT RACE CONDITIONS
+  // Lock the member row - this blocks concurrent requests for the same member
+  // until this transaction completes
+  console.log(`[WEBHOOK] Starting transaction with row lock for member ${member.id}`);
+  
+  let bucket: Bucket | undefined;
+  await sql.begin(async (sql) => {
+    // Lock the member row - second request will WAIT here until first completes
+    await sql`SELECT * FROM members WHERE id = ${member.id} FOR UPDATE`;
+    console.log(`[WEBHOOK] Acquired row lock for member ${member.id}`);
 
-  if (bucket) {
-    bucket = await appendToBucket(sql, bucket, {
-      rawText: normalized.text,
-      imageUrls,
-      audioUrls,
-      transcripts: [],
-      messageSid,
-    });
-  } else {
-    bucket = await createBucket(sql, {
-      memberId: member.id,
-      nodeId: member.company_id,
-      projectId: inboxProjectId,
-      source: normalized.source,
-      fromPhone: normalized.sender,
-      rawText: normalized.text,
-      imageUrls,
-      audioUrls,
-      transcripts: [],
-      messageSid,
-    });
+    // 8. FIND OR CREATE BUCKET (protected by row lock)
+    const inboxProjectId = await ensureInboxProject(sql, member.company_id);
+    const forceNewBucket = body.ForceNewBucket === 'true' || body.ForceNewBucket === '1';
+    let foundBucket = forceNewBucket ? null : await findOpenBucket(sql, member.id, inboxProjectId);
+
+    if (foundBucket) {
+      bucket = await appendToBucket(sql, foundBucket, {
+        rawText: normalized.text,
+        imageUrls,
+        audioUrls,
+        transcripts: [],
+        messageSid,
+      });
+    } else {
+      bucket = await createBucket(sql, {
+        memberId: member.id,
+        nodeId: member.company_id,
+        projectId: inboxProjectId,
+        source: normalized.source,
+        fromPhone: normalized.sender,
+        rawText: normalized.text,
+        imageUrls,
+        audioUrls,
+        transcripts: [],
+        messageSid,
+      });
+    }
+    
+    console.log(`[WEBHOOK] Transaction complete, releasing row lock for member ${member.id}`);
+  });
+
+  if (!bucket) {
+    console.error('[WEBHOOK] Failed to create or find bucket');
+    return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
   }
 
-  // 8. MARK BUCKET FOR ASYNC PROCESSING (triggers DB function)
+
+  // 9. MARK BUCKET FOR ASYNC PROCESSING (triggers DB function)
   // Only update if bucket is NOT already completed/submitted
   await sql`
     UPDATE buckets 
@@ -207,12 +227,12 @@ Your message has been saved. An admin will add you to your project soon!`;
 
   console.log(`[WEBHOOK] Bucket #${bucket.id} marked for processing`);
 
-  // 9. EDGE FUNCTION IS TRIGGERED BY DATABASE TRIGGER
+  // 10. EDGE FUNCTION IS TRIGGERED BY DATABASE TRIGGER
   // The process_bucket_trigger on the buckets table handles Edge Function invocation
   // This ensures single-source triggering and prevents duplicate processing
   console.log(`[WEBHOOK] DB trigger will handle Edge Function for bucket #${bucket.id}`);
 
-  // 10. SEND IMMEDIATE RECEIPT (So user isn't ghosted)
+  // 11. SEND IMMEDIATE RECEIPT (So user isn't ghosted)
   // Only for new buckets or if we are appending to one that was just created
   try {
     const statusMsg = "🤖 Received! Processing your work...";
@@ -221,7 +241,7 @@ Your message has been saved. An admin will add you to your project soon!`;
     console.error('[WEBHOOK] Failed to send receipt:', e);
   }
 
-  // 11. RETURN IMMEDIATE ACKNOWLEDGMENT
+  // 12. RETURN IMMEDIATE ACKNOWLEDGMENT
   return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
 }
 

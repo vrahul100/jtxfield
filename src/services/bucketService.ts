@@ -299,6 +299,10 @@ const BUCKET_TIME_WINDOW_SECONDS = 300; // Time window to group messages into sa
  * Find an open bucket for a member within a time window
  * Ignores project ID - if member has ANY open bucket within time window, use it
  * This prevents creating new buckets when multiple media is sent quickly
+ * 
+ * NOTE: Race conditions are prevented by advisory lock in webhook controller,
+ * not at this query level. The webhook acquires pg_advisory_lock(member_id)
+ * before calling this function.
  */
 export async function findOpenBucket(
     sql: Sql,
