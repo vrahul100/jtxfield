@@ -482,14 +482,8 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // Use let so we can update state in the loop without re-reading from DB
     let currentState = bucket.conversation_state || 'initial'
     
-    // Loop to handle state transitions (max 10 iterations to prevent infinite loops)
-    const MAX_ITERATIONS = 10
-    for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
-        console.log(`[StateMachine] Iteration ${iteration}, state: ${currentState}`)
-
     // =========================================================================
-    // MULTIMODAL SIGNAL EXTRACTION - Runs on EVERY message (not just initial)
-    // This ensures we extract signals from text, audio, and images in all states
+    // MULTIMODAL SIGNAL EXTRACTION - Runs ONCE per message (before state loop)
     // =========================================================================
 
     // Transcribe NEW audio with 15s timeout (only process files not yet transcribed)
@@ -515,33 +509,46 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
     }
 
-    // LLM extraction with 20s timeout - ALWAYS run to capture signals from latest message
-    // Pass existing extraction for intelligent merging (handles "also", "another", corrections)
-    const llmExtraction = await withTimeout(
-        extractWithLLM(
-            bucket.raw_text || '',
-            transcripts,
-            imageAnalysis,
-            bucket.ai_response,
-            extraction  // Pass existing extraction for context-aware merging
-        ),
-        20000,
-        null
-    )
-    if (llmExtraction) {
-        // Merge with existing
-        let merged = { ...extraction, ...llmExtraction }
+    // Check if user is just confirming (Y/N) - skip full extraction if we already have data
+    const lastInput = (bucket.raw_text || '').split('\n').pop()?.toLowerCase().trim() || ''
+    const lastTranscript = transcripts.length > 0 ? transcripts[transcripts.length - 1].toLowerCase().trim() : ''
+    const userInput = lastTranscript || lastInput
+    const isSimpleConfirmation = /^(y|n|yes|no|si|sí|ok|1|2|3|4|5)$/i.test(userInput)
+    const hasWorkData = extraction.workType && extraction.hoursWorked && extraction.hoursWorked > 0
+    const isConfirmState = ['confirming_project', 'confirming_all', 'selecting_project'].includes(currentState)
+    
+    // Only run LLM extraction if we need to (not for simple confirmations when we have data)
+    if (!(isSimpleConfirmation && hasWorkData && isConfirmState)) {
+        console.log(`[StateMachine] Running LLM extraction (isSimple=${isSimpleConfirmation}, hasData=${hasWorkData}, confirmState=${isConfirmState})`)
         
-        // Apply regex refinement to catch missed hours
-        merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts)
-        
-        extraction = merged
-        
-        // Save extraction to bucket
-        await supabase.from('buckets').update({
-            extracted_data: JSON.stringify(extraction)
-        }).eq('id', bucketId)
+        const llmExtraction = await withTimeout(
+            extractWithLLM(
+                bucket.raw_text || '',
+                transcripts,
+                imageAnalysis,
+                bucket.ai_response,
+                extraction
+            ),
+            20000,
+            null
+        )
+        if (llmExtraction) {
+            let merged = { ...extraction, ...llmExtraction }
+            merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts)
+            extraction = merged
+            
+            await supabase.from('buckets').update({
+                extracted_data: JSON.stringify(extraction)
+            }).eq('id', bucketId)
+        }
+    } else {
+        console.log(`[StateMachine] Skipping extraction - simple confirmation with existing data`)
     }
+
+    // Loop to handle state transitions (max 10 iterations to prevent infinite loops)
+    const MAX_ITERATIONS = 10
+    for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
+        console.log(`[StateMachine] Iteration ${iteration}, state: ${currentState}`)
 
     // Check for consistency issues (validation)
     if (!extraction.isConsistent && extraction.inconsistencyReason) {
