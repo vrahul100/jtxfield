@@ -67,6 +67,9 @@ const MESSAGES = {
         },
         logged: '✅ Logged!',
         noProjects: '❌ No projects available',
+        // Fallback for non-work messages
+        notWorkRelated: '👋 Hi! I\'m your work logging assistant.\n\nTo log work, send:\n• A photo of completed work\n• A voice note describing what you did\n• Text like "electrical 6 hours"\n\n💡 _Example: "Replaced outlet covers, 2 hours"_',
+        greeting: '👋 Hello! Ready to log your work?\n\nSend a photo, voice note, or describe what you worked on.',
     },
     es: {
         collectWork: '🔧 *¿Qué tipo de trabajo hiciste?*\n\nTambién dime cuántas horas.\n(Ejemplo: "eléctrico por 6 horas")',
@@ -93,6 +96,9 @@ const MESSAGES = {
         },
         logged: '✅ ¡Registrado!',
         noProjects: '❌ No hay proyectos disponibles',
+        // Fallback for non-work messages
+        notWorkRelated: '👋 ¡Hola! Soy tu asistente de registro de trabajo.\n\nPara registrar trabajo, envía:\n• Una foto del trabajo terminado\n• Una nota de voz describiendo lo que hiciste\n• Texto como "eléctrico 6 horas"\n\n💡 _Ejemplo: "Cambié tapas de enchufes, 2 horas"_',
+        greeting: '👋 ¡Hola! ¿Listo para registrar tu trabajo?\n\nEnvía una foto, nota de voz, o describe lo que trabajaste.',
     }
 }
 
@@ -481,55 +487,60 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     for (let iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
         console.log(`[StateMachine] Iteration ${iteration}, state: ${currentState}`)
 
-    // TODO: Move this to separate background worker to avoid blocking
-    // For now, process media in initial state to maintain functionality
-    if (currentState === 'initial') {
-        // Transcribe audio with 15s timeout
-        if (audioUrls.length > 0 && transcripts.length === 0) {
-            console.log(`[StateMachine] Transcribing ${audioUrls.length} audio files`)
-            for (const url of audioUrls) {
-                const transcript = await withTimeout(transcribeAudio(url), 15000, null)
-                if (transcript) transcripts.push(transcript)
-            }
-            // Save transcripts to bucket
-            if (transcripts.length > 0) {
-                await supabase.from('buckets').update({
-                    transcripts: JSON.stringify(transcripts)
-                }).eq('id', bucketId)
-            }
-        }
+    // =========================================================================
+    // MULTIMODAL SIGNAL EXTRACTION - Runs on EVERY message (not just initial)
+    // This ensures we extract signals from text, audio, and images in all states
+    // =========================================================================
 
-        // Analyze image with 15s timeout
-        if (imageUrls.length > 0) {
-            console.log(`[StateMachine] Analyzing ${imageUrls.length} images`)
-            imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
+    // Transcribe NEW audio with 15s timeout (only process files not yet transcribed)
+    if (audioUrls.length > transcripts.length) {
+        const newAudioCount = audioUrls.length - transcripts.length
+        console.log(`[StateMachine] Transcribing ${newAudioCount} NEW audio files (${transcripts.length} already done)`)
+        for (let i = transcripts.length; i < audioUrls.length; i++) {
+            const url = audioUrls[i]
+            const transcript = await withTimeout(transcribeAudio(url), 15000, null)
+            if (transcript) transcripts.push(transcript)
         }
-
-        // LLM extraction with 20s timeout (includes consistency check)
-        const llmExtraction = await withTimeout(
-            extractWithLLM(
-                bucket.raw_text || '',
-                transcripts,
-                imageAnalysis,
-                bucket.ai_response
-            ),
-            20000,
-            null
-        )
-        if (llmExtraction) {
-            // Merge with existing
-            let merged = { ...extraction, ...llmExtraction }
-            
-            // Apply regex refinement to catch missed hours
-            merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts)
-            
-            extraction = merged
-            
-            // Save extraction to bucket
+        // Save transcripts to bucket
+        if (transcripts.length > 0) {
             await supabase.from('buckets').update({
-                extracted_data: JSON.stringify(extraction)
+                transcripts: JSON.stringify(transcripts)
             }).eq('id', bucketId)
         }
+    }
+
+    // Analyze image with 15s timeout (only on first pass when no analysis exists)
+    if (imageUrls.length > 0 && currentState === 'initial') {
+        console.log(`[StateMachine] Analyzing ${imageUrls.length} images`)
+        imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
+    }
+
+    // LLM extraction with 20s timeout - ALWAYS run to capture signals from latest message
+    // Pass existing extraction for intelligent merging (handles "also", "another", corrections)
+    const llmExtraction = await withTimeout(
+        extractWithLLM(
+            bucket.raw_text || '',
+            transcripts,
+            imageAnalysis,
+            bucket.ai_response,
+            extraction  // Pass existing extraction for context-aware merging
+        ),
+        20000,
+        null
+    )
+    if (llmExtraction) {
+        // Merge with existing
+        let merged = { ...extraction, ...llmExtraction }
+        
+        // Apply regex refinement to catch missed hours
+        merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts)
+        
+        extraction = merged
+        
+        // Save extraction to bucket
+        await supabase.from('buckets').update({
+            extracted_data: JSON.stringify(extraction)
+        }).eq('id', bucketId)
     }
 
     // Check for consistency issues (validation)
@@ -696,9 +707,26 @@ function handleInitial(ctx: StateContext): StateResult {
     const projectHint = extraction.projectHint
     const isConsistent = extraction.isConsistent
 
-    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, projectHint=${projectHint}, consistent=${isConsistent}`)
+    console.log(`[State: Initial] workType=${workType}, hours=${hoursWorked}, projectHint=${projectHint}, consistent=${isConsistent}, isWorkRelated=${extraction.isWorkRelated}`)
 
-    // Check for inconsistency FIRST - ask for clarification
+    // Check for non-work-related messages FIRST - send helpful fallback response
+    if (!extraction.isWorkRelated) {
+        console.log('[State: Initial] Message is not work-related, sending fallback response')
+        const msg = MESSAGES[ctx.language]
+        
+        // Detect greeting patterns for a friendlier response
+        const rawText = (bucket.raw_text || '').toLowerCase().trim()
+        const greetingWords = ['hi', 'hello', 'hey', 'hola', 'buenos', 'buenas', 'good morning', 'good afternoon']
+        const isGreeting = greetingWords.some(g => rawText.startsWith(g))
+        
+        return {
+            nextState: 'initial',  // Stay in initial state, waiting for work content
+            response: withTicket(ctx.bucketId, isGreeting ? msg.greeting : msg.notWorkRelated),
+            extraction,
+        }
+    }
+
+    // Check for inconsistency - ask for clarification
     if (!isConsistent && extraction.inconsistencyReason) {
         return {
             nextState: 'clarifying_inconsistency',
