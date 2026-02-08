@@ -121,6 +121,19 @@ function getLastMessage(rawText: string): string {
     return (lines[lines.length - 1] || '').toLowerCase().trim()
 }
 
+// Get the last user input from BOTH text AND transcripts (multimodal)
+// This ensures voice notes are treated equally to text messages
+function getLastUserInput(rawText: string, transcripts: string[]): string {
+    const textLines = (rawText || '').split('\n').filter(line => line.trim() !== '')
+    const lastText = textLines.length > 0 ? textLines[textLines.length - 1] : ''
+    const lastTranscript = transcripts.length > 0 ? transcripts[transcripts.length - 1] : ''
+    
+    // Prefer transcript if available (voice is typically the most recent response)
+    const combined = lastTranscript || lastText
+    console.log(`[getLastUserInput] text="${lastText.substring(0, 30)}" transcript="${lastTranscript.substring(0, 30)}" → "${combined.substring(0, 30)}"`)
+    return combined.toLowerCase().trim()
+}
+
 // Add bold ticket number prefix to response (WhatsApp markdown)
 function withTicket(bucketId: number, response: string): string {
     return `*TICKET #${bucketId}*\n${response}`
@@ -968,9 +981,10 @@ async function handleCollectingHours(ctx: StateContext): Promise<StateResult> {
 async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
     console.log('[State: ConfirmingAll]')
 
-    const { bucket, member, extraction, language } = ctx
+    const { bucket, member, extraction, language, transcripts } = ctx
     const stateAttempts = bucket.state_attempts || 0
-    const lastMsg = getLastMessage(bucket.raw_text || '')
+    // Use multimodal input: check BOTH text and transcripts for confirmation
+    const lastMsg = getLastUserInput(bucket.raw_text || '', transcripts)
     const supabase = getSupabase()
     const msg = MESSAGES[language]
 
@@ -1116,9 +1130,10 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
 async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> {
     console.log('[State: ConfirmingProject]')
 
-    const { bucket, member, extraction, language } = ctx
+    const { bucket, member, extraction, language, transcripts } = ctx
     const stateAttempts = bucket.state_attempts || 0
-    const lastMsg = getLastMessage(bucket.raw_text || '')
+    // Use multimodal input: check BOTH text and transcripts for Y/N response
+    const lastMsg = getLastUserInput(bucket.raw_text || '', transcripts)
     const supabase = getSupabase()
     const msg = MESSAGES[language]
 
@@ -1204,9 +1219,10 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
 async function handleSelectingProject(ctx: StateContext): Promise<StateResult> {
     console.log('[State: SelectingProject]')
 
-    const { bucket, member, extraction, language } = ctx
+    const { bucket, member, extraction, language, transcripts } = ctx
     const stateAttempts = bucket.state_attempts || 0
-    const lastMsg = getLastMessage(bucket.raw_text || '')
+    // Use multimodal input: check BOTH text and transcripts for number selection
+    const lastMsg = getLastUserInput(bucket.raw_text || '', transcripts)
     const supabase = getSupabase()
     const msg = MESSAGES[language]
 
