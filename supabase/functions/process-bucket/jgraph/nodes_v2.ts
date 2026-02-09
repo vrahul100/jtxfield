@@ -331,12 +331,17 @@ ${imageAnalysis || 'No images'}
 ---
 
 ## EXTRACTION RULES:
+Extract ALL signals from ALL messages to fill these slots:
+
 1. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
-2. hoursWorked: HEAVILY prioritize finding hours in USER INPUT and [Voice] transcripts. 
-   - Look for phrases like "took me 6.5 hours", "worked 4h", "it was 8 hours".
-   - Return hours as a JSON number (e.g., 6.5).
-   - If user says "another 3 hours" or "3 more hours" → return ONLY the additional hours (3).
-   - If user says "actually 5 hours" or "make it 5 hours" → return the corrected total (5).
+2. hoursWorked: Find hours in text AND [Voice] transcripts.
+   - Handle BOTH numeric AND word-based: "6.5 hours", "4h", "three hours", "dos horas"
+   - ALWAYS convert words to numbers: one=1, two=2, three=3, four=4, five=5, six=6, seven=7, eight=8, nine=9, ten=10
+   - Spanish: uno/una=1, dos=2, tres=3, cuatro=4, cinco=5, seis=6, siete=7, ocho=8, nueve=9, diez=10
+   - "half"=0.5, "and a half"=+0.5, "y media"=+0.5
+   - Return as JSON number (if user says "three hours" → return 3)
+   - "another X" or "X more" → return X (additional hours to add)
+   - "actually X" or "make it X" → return X (correction)
 3. summary: Brief description of work
 4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
 5. responseLanguage: "en" unless user writes in Spanish → "es"
@@ -402,23 +407,56 @@ async function extractWithLLM(rawText: string, transcripts: string[], imageAnaly
 }
 
 // Refine extraction with regex (fallback for when LLM misses obvious data)
-function refineExtractionWithRegex(extraction: ExtractionResult, rawText: string, transcripts: string[]): ExtractionResult {
-    // Only refine if hours are missing
-    if (extraction.hoursWorked !== null && extraction.hoursWorked !== undefined) {
+// When forceValidate=true, will override existing hours if a clear match is found
+function refineExtractionWithRegex(extraction: ExtractionResult, rawText: string, transcripts: string[], forceValidate = false): ExtractionResult {
+    // Only refine if hours are missing OR we're force validating
+    if (extraction.hoursWorked !== null && extraction.hoursWorked !== undefined && !forceValidate) {
         return extraction
     }
 
-    const combinedText = [rawText, ...transcripts].join(' ')
-    // Regex for hours: "6.5 hours", "6.5h", "6.5 hrs", "6.5 hours worked"
-    const hoursMatch = combinedText.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h\b)/i)
+    const combinedText = [rawText, ...transcripts].join(' ').toLowerCase()
     
-    if (hoursMatch) {
-        const hours = parseFloat(hoursMatch[1])
-        console.log(`[RegexRefine] Found hours via regex: ${hours}`)
-        return {
-            ...extraction,
-            hoursWorked: hours
+    // Word-to-number mapping for common hour values
+    const wordToNumber: Record<string, number> = {
+        'one': 1, 'two': 2, 'three': 3, 'four': 4, 'five': 5,
+        'six': 6, 'seven': 7, 'eight': 8, 'nine': 9, 'ten': 10,
+        'half': 0.5, 'half an': 0.5, 'an': 1, 'a': 1,
+        // Spanish
+        'uno': 1, 'una': 1, 'dos': 2, 'tres': 3, 'cuatro': 4, 'cinco': 5,
+        'seis': 6, 'siete': 7, 'ocho': 8, 'nueve': 9, 'diez': 10,
+        'media': 0.5,
+    }
+    
+    let foundHours: number | null = null
+    
+    // First try numeric: "6.5 hours", "6.5h", "6.5 hrs"
+    const numericMatch = combinedText.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h\b|horas?)/i)
+    if (numericMatch) {
+        foundHours = parseFloat(numericMatch[1])
+        console.log(`[RegexRefine] Found numeric hours: ${foundHours}`)
+    }
+    
+    // Try word-based: "three hours", "two and a half hours"
+    if (foundHours === null) {
+        const wordPattern = /(one|two|three|four|five|six|seven|eight|nine|ten|uno|una|dos|tres|cuatro|cinco|seis|siete|ocho|nueve|diez)(?:\s+(?:and\s+(?:a\s+)?half|y\s+media))?\s*(?:hours?|hrs?|horas?)/i
+        const wordMatch = combinedText.match(wordPattern)
+        if (wordMatch) {
+            const wordPart = wordMatch[1].toLowerCase()
+            foundHours = wordToNumber[wordPart] || 0
+            // Check for "and a half" / "y media"
+            if (wordMatch[0].includes('half') || wordMatch[0].includes('media')) {
+                foundHours += 0.5
+            }
+            console.log(`[RegexRefine] Found word-based hours: "${wordMatch[0]}" → ${foundHours}`)
         }
+    }
+    
+    // If we found hours and they differ from LLM extraction, log and override
+    if (foundHours !== null) {
+        if (extraction.hoursWorked !== foundHours) {
+            console.log(`[RegexRefine] ⚠️ Hours mismatch! LLM=${extraction.hoursWorked}, Regex=${foundHours}. Using regex value.`)
+        }
+        return { ...extraction, hoursWorked: foundHours }
     }
 
     return extraction
@@ -522,17 +560,46 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
     }
 
-    // Check if user is just confirming (Y/N) - skip full extraction if we already have data
-    const lastInput = (bucket.raw_text || '').split('\n').pop()?.toLowerCase().trim() || ''
-    const lastTranscript = transcripts.length > 0 ? transcripts[transcripts.length - 1].toLowerCase().trim() : ''
-    const userInput = lastTranscript || lastInput
-    const isSimpleConfirmation = /^(y|n|yes|no|si|sí|ok|1|2|3|4|5)$/i.test(userInput)
+    // Check if we're in a confirmation state with existing work data
     const hasWorkData = extraction.workType && extraction.hoursWorked && extraction.hoursWorked > 0
     const isConfirmState = ['confirming_project', 'confirming_all', 'selecting_project'].includes(currentState)
     
-    // Only run LLM extraction if we need to (not for simple confirmations when we have data)
-    if (!(isSimpleConfirmation && hasWorkData && isConfirmState)) {
-        console.log(`[StateMachine] Running LLM extraction (isSimple=${isSimpleConfirmation}, hasData=${hasWorkData}, confirmState=${isConfirmState})`)
+    // When in confirmation state with data, only extract from LATEST input (not all accumulated transcripts)
+    // This lets the LLM understand the user's answer in context without re-processing old work data
+    if (isConfirmState && hasWorkData) {
+        console.log(`[StateMachine] Confirmation state - extracting from LATEST input only`)
+        
+        // Get only the latest transcript (the user's response to the confirmation question)
+        const latestTranscript = transcripts.length > 0 ? [transcripts[transcripts.length - 1]] : []
+        const latestText = (bucket.raw_text || '').split('\n').pop() || ''
+        
+        const llmExtraction = await withTimeout(
+            extractWithLLM(
+                latestText,
+                latestTranscript,
+                '',  // No image analysis for confirmation responses
+                bucket.ai_response,  // Pass the confirmation question as context
+                extraction  // Pass existing extraction so LLM knows what we're confirming
+            ),
+            20000,
+            null
+        )
+        
+        if (llmExtraction) {
+            // Only update projectHint from the confirmation response, preserve everything else
+            extraction = {
+                ...extraction,
+                projectHint: llmExtraction.projectHint,
+                responseLanguage: llmExtraction.responseLanguage
+            }
+            
+            await supabase.from('buckets').update({
+                extracted_data: JSON.stringify(extraction)
+            }).eq('id', bucketId)
+        }
+    } else {
+        // Not in confirmation state - run full extraction on all data
+        console.log(`[StateMachine] Running full LLM extraction (confirmState=${isConfirmState}, hasData=${hasWorkData})`)
         
         const llmExtraction = await withTimeout(
             extractWithLLM(
@@ -547,15 +614,14 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         )
         if (llmExtraction) {
             let merged = { ...extraction, ...llmExtraction }
-            merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts)
+            // Regex refinement only fills in missing hours, does not override LLM
+            merged = refineExtractionWithRegex(merged, bucket.raw_text || '', transcripts, false)
             extraction = merged
             
             await supabase.from('buckets').update({
                 extracted_data: JSON.stringify(extraction)
             }).eq('id', bucketId)
         }
-    } else {
-        console.log(`[StateMachine] Skipping extraction - simple confirmation with existing data`)
     }
 
     // Loop to handle state transitions (max 10 iterations to prevent infinite loops)
@@ -981,10 +1047,8 @@ async function handleCollectingHours(ctx: StateContext): Promise<StateResult> {
 async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
     console.log('[State: ConfirmingAll]')
 
-    const { bucket, member, extraction, language, transcripts } = ctx
+    const { bucket, member, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
-    // Use multimodal input: check BOTH text and transcripts for confirmation
-    const lastMsg = getLastUserInput(bucket.raw_text || '', transcripts)
     const supabase = getSupabase()
     const msg = MESSAGES[language]
 
@@ -1019,68 +1083,16 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
         projectName = proj?.name || 'your project'
     }
 
-    // If this is a response
+    // If this is a response - use LLM's projectHint to understand user intent in context
+    // No regex pattern matching - the LLM already understood the full message
     if (stateAttempts > 0) {
-        const firstWord = lastMsg.split(/[\s.,!]/)[0].toLowerCase()
-        const yesWords = ['yes', 'y', 'si', 'sí', 's', 'ok', 'yeah', 'yep', 'correct', 'correcto']
-        const saidYes = yesWords.includes(firstWord) || yesWords.some(w => lastMsg === w)
+        // The extraction.projectHint is set by the LLM based on understanding the FULL response in context
+        // "yes it is correct", "yeah that's right", "sí", etc. all become projectHint: "CONFIRMED"
+        const isConfirmed = extraction.projectHint === 'CONFIRMED'
+        console.log(`[ConfirmingAll] projectHint=${extraction.projectHint}, isConfirmed=${isConfirmed}`)
 
-        if (saidYes && projectId) {
-            // Check if user added more details after "yes"
-            let updatedExtraction = extraction
-            
-            // Capture anything after the confirmation word
-            const confirmationPattern = /^(?:yes|y|si|sí|s|ok|yeah|yep|correct|correcto)[\s.,!]*(.*)/i
-            const match = lastMsg.match(confirmationPattern)
-            
-            if (match && match[1] && match[1].trim().length > 0) {
-                const additionalText = match[1].trim()
-                console.log(`[ConfirmingAll] User added text: "${additionalText}"`)
-                
-                // Run LLM with existing extraction context - it will intelligently merge
-                const additionalExtraction = await withTimeout(
-                    extractWithLLM(additionalText, [], '', bucket.ai_response, extraction),
-                    15000,
-                    null
-                )
-                
-                if (additionalExtraction && additionalExtraction.hoursWorked) {
-                    // Add the hours together
-                    const totalHours = (extraction.hoursWorked || 0) + additionalExtraction.hoursWorked
-                    console.log(`[ConfirmingAll] Adding ${additionalExtraction.hoursWorked}h to existing ${extraction.hoursWorked}h = ${totalHours}h`)
-                    
-                    // Combine work types if different
-                    let combinedWorkType = extraction.workType || ''
-                    if (additionalExtraction.workType && additionalExtraction.workType !== extraction.workType) {
-                        combinedWorkType = combinedWorkType 
-                            ? `${combinedWorkType}, ${additionalExtraction.workType}` 
-                            : additionalExtraction.workType
-                    }
-                    
-                    // Combine summaries
-                    const currentSummary = extraction.summary || extraction.workType || ''
-                    const additionalSummary = additionalExtraction.summary || additionalExtraction.workType || additionalText
-                    const combinedSummary = currentSummary 
-                        ? `${currentSummary}. ${additionalSummary}` 
-                        : additionalSummary
-                    
-                    updatedExtraction = {
-                        ...extraction,
-                        hoursWorked: totalHours,
-                        workType: combinedWorkType || extraction.workType,
-                        summary: combinedSummary
-                    }
-                } else {
-                    // No additional hours found, just append to summary
-                    const currentSummary = extraction.summary || extraction.workType || ''
-                    updatedExtraction = {
-                        ...extraction,
-                        summary: currentSummary ? `${currentSummary}. ${additionalText}` : additionalText
-                    }
-                }
-            }
-
-            // Confirmed! Complete
+        if (isConfirmed && projectId) {
+            // Confirmed! Complete - no need to re-extract, just use existing extraction
             await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
             await supabase.from('members').update({
                 last_confirmed_project_id: projectId,
@@ -1090,17 +1102,20 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
             return {
                 nextState: 'complete',
                 response: null,
-                extraction: updatedExtraction,
+                extraction,
                 projectId,
             }
-        } else {
-            // User said no or provided correction - go to selecting project
+        } else if (extraction.projectHint === 'NO') {
+            // User said no - go to selecting project
             await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
             return {
                 nextState: 'selecting_project',
                 response: null,
                 extraction,
             }
+        } else {
+            // Unclear response - ask again
+            console.log(`[ConfirmingAll] Unclear response, asking again`)
         }
     }
 
@@ -1130,10 +1145,8 @@ async function handleConfirmingAll(ctx: StateContext): Promise<StateResult> {
 async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> {
     console.log('[State: ConfirmingProject]')
 
-    const { bucket, member, extraction, language, transcripts } = ctx
+    const { bucket, member, extraction, language } = ctx
     const stateAttempts = bucket.state_attempts || 0
-    // Use multimodal input: check BOTH text and transcripts for Y/N response
-    const lastMsg = getLastUserInput(bucket.raw_text || '', transcripts)
     const supabase = getSupabase()
     const msg = MESSAGES[language]
 
@@ -1156,19 +1169,14 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
         projectIsFresh = hoursDiff <= 8
     }
 
-    // If this is a response (we already asked)
+    // If this is a response - use LLM's projectHint to understand user intent in context
     if (stateAttempts > 0) {
-        const firstWord = lastMsg.split(/[\s.,!]/)[0].toLowerCase()
+        const isConfirmed = extraction.projectHint === 'CONFIRMED'
+        const isRejected = extraction.projectHint === 'NO'
+        console.log(`[ConfirmingProject] projectHint=${extraction.projectHint}, isConfirmed=${isConfirmed}, isRejected=${isRejected}, memberProjectId=${memberProjectId}`)
 
-        const yesWords = ['yes', 'y', 'si', 'sí', 'yeah', 'yep', 's', 'ok', 'sure']
-        const noWords = ['no', 'n', 'nope', 'nah']
-        const saidYes = yesWords.includes(firstWord) || yesWords.some(w => lastMsg === w)
-        const saidNo = noWords.includes(firstWord) || noWords.some(w => lastMsg === w)
-
-        console.log(`[ConfirmingProject] lastMsg="${lastMsg}", firstWord="${firstWord}", saidYes=${saidYes}, saidNo=${saidNo}, memberProjectId=${memberProjectId}`)
-
-        // If they said YES and we have a project ID (we already asked about it!)
-        if (saidYes && memberProjectId) {
+        // If they confirmed and we have a project ID
+        if (isConfirmed && memberProjectId) {
             // Confirmed - update and complete
             await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
             await supabase.from('members').update({
@@ -1182,7 +1190,7 @@ async function handleConfirmingProject(ctx: StateContext): Promise<StateResult> 
                 extraction,
                 projectId: memberProjectId,
             }
-        } else if (saidNo || stateAttempts >= 2) {
+        } else if (isRejected || stateAttempts >= 2) {
             // Show project list
             await supabase.from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
             return {
