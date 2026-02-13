@@ -342,7 +342,7 @@ Extract ALL signals from ALL messages to fill these slots:
    - Return as JSON number (if user says "three hours" → return 3)
    - "another X" or "X more" → return X (additional hours to add)
    - "actually X" or "make it X" → return X (correction)
-3. summary: Brief description of work
+3. summary: Brief description of work (ALWAYS in English, even if user speaks Spanish)
 4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
 5. responseLanguage: "en" unless user writes in Spanish → "es"
 6. isConsistent: TRUE if text matches image
