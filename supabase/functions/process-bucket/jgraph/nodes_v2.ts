@@ -342,7 +342,7 @@ Extract ALL signals from ALL messages to fill these slots:
    - Return as JSON number (if user says "three hours" → return 3)
    - "another X" or "X more" → return X (additional hours to add)
    - "actually X" or "make it X" → return X (correction)
-3. summary: Brief description of work (ALWAYS in English, even if user speaks Spanish)
+3. summary: Brief description of work
 4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
 5. responseLanguage: "en" unless user writes in Spanish → "es"
 6. isConsistent: TRUE if text matches image
@@ -460,6 +460,38 @@ function refineExtractionWithRegex(extraction: ExtractionResult, rawText: string
     }
 
     return extraction
+}
+
+// Translate text to English using LLM
+async function translateToEnglish(text: string): Promise<string> {
+    const groqApiKey = Deno.env.get('GROQ_API_KEY')
+    if (!groqApiKey) return text
+
+    try {
+        const response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${groqApiKey}`,
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                messages: [
+                    { role: 'system', content: 'Translate the following text to English. Return ONLY the translated text, nothing else.' },
+                    { role: 'user', content: text }
+                ],
+                temperature: 0.1,
+                max_tokens: 200,
+            }),
+        })
+
+        if (!response.ok) return text
+        const data = await response.json()
+        return data.choices?.[0]?.message?.content?.trim() || text
+    } catch (e) {
+        console.error('[Translate] Error:', e)
+        return text
+    }
 }
 
 // Create default extraction result
@@ -1319,9 +1351,17 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         projectName = proj?.name || 'Inbox'
     }
 
-    // Update bucket with AI summary and hours before completing
+    // Translate summary to English if needed before saving
+    let englishSummary = extraction.summary
+    if (extraction.summary && language === 'es') {
+        console.log(`[Complete] Translating summary to English: "${extraction.summary}"`)
+        englishSummary = await translateToEnglish(extraction.summary)
+        console.log(`[Complete] Translated: "${englishSummary}"`)
+    }
+
+    // Update bucket with English AI summary and hours before completing
     const updateData: any = {}
-    if (extraction.summary) updateData.summary = extraction.summary
+    if (englishSummary) updateData.summary = englishSummary
     if (extraction.hoursWorked !== null && extraction.hoursWorked !== undefined) {
         updateData.hours = extraction.hoursWorked
     }
@@ -1340,8 +1380,8 @@ async function handleComplete(ctx: StateContext): Promise<StateResult> {
         user_id: bucket.member_id,
         project_id: bucket.project_id,
         job: `${extraction.workType || 'work'} - ${finalHours || 0}h`,
-        scope_description: extraction.summary || extraction.workType,
-        labor: extraction.summary || `${extraction.workType || 'work'} for ${finalHours || 0}h`,
+        scope_description: englishSummary || extraction.workType,
+        labor: englishSummary || `${extraction.workType || 'work'} for ${finalHours || 0}h`,
         material: extraction.materials?.join(', ') || null,
         location: extraction.location || null,
         time: finalHours,  // Use final hours value
