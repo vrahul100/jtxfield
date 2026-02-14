@@ -66,13 +66,13 @@ export function WorkEntryCard({
             case 'open':
                 return 'bg-indigo-100 text-indigo-800 border-indigo-200';
             case 'submitted':
-                return 'bg-green-100 text-green-800 border-green-200';
+                return 'bg-emerald-500 text-white border-emerald-500 font-bold';
             case 'pending_review':
                 return 'bg-orange-100 text-orange-800 border-orange-200';
             case 'rejected':
                 return 'bg-red-200 text-red-900 border-red-300';
             default:
-                return 'bg-gray-100 text-gray-800 border-gray-200';
+                return 'bg-slate-200 text-slate-800 border-slate-200';
         }
     };
 
@@ -114,11 +114,12 @@ export function WorkEntryCard({
 
     return (
         <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${
-            isExpanded ? 'border-4 border-indigo-500' : 
-            bucket.potential_change ? 'border-2 border-red-500' : ''
+            isExpanded ? 'border-4 border-indigo-500' : ''
         }`}>
-            {/* Card Header - Status Color Bar */}
-            <div className={`h-2 ${getHeaderBgColor(bucket.status)}`}></div>
+            {/* Card Header - Status Color Bar (hidden for submitted) */}
+            {bucket.status !== 'submitted' && (
+                <div className={`h-2 ${getHeaderBgColor(bucket.status)}`}></div>
+            )}
             <div
                 className={`p-4 cursor-pointer ${isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                 onClick={onToggleExpand}
@@ -225,7 +226,7 @@ export function WorkEntryCard({
                                             e.stopPropagation();
                                             onToggleChange();
                                         }}
-                                        className={`flex items-center gap-1 text-left ${bucket.potential_change ? 'text-orange-600' : 'text-gray-500'}`}
+                                        className={`flex items-center gap-1 text-left px-2 py-0.5 rounded ${bucket.potential_change ? 'bg-orange-500 text-white font-bold' : 'text-gray-500'}`}
                                     >
                                         <AlertTriangle className="w-3.5 h-3.5" fill={bucket.potential_change ? 'currentColor' : 'none'} />
                                         <span className="text-md">

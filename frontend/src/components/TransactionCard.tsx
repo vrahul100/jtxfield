@@ -41,7 +41,7 @@ export function TransactionCard({
     onEdit
 }: TransactionCardProps) {
     const getStatusColor = (status: string) => {
-        if (status === 'COMPLETED') return 'bg-green-100 text-green-800 border-green-200';
+        if (status === 'COMPLETED') return 'bg-emerald-500 text-white border-emerald-500 font-bold';
         if (status === 'PENDING') return 'bg-orange-100 text-orange-800 border-orange-200';
         return 'bg-gray-100 text-gray-800 border-gray-200';
     };
@@ -90,11 +90,12 @@ export function TransactionCard({
 
     return (
         <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${
-            isExpanded ? 'border-4 border-indigo-500' : 
-            transaction.potential_change ? 'border-2 border-red-500' : ''
+            isExpanded ? 'border-4 border-indigo-500' : ''
         }`}>
-            {/* Card Header - Status Color Bar */}
-            <div className={`h-2 ${getHeaderBgColor(transaction.status)}`}></div>
+            {/* Card Header - Status Color Bar (hidden for completed) */}
+            {transaction.status !== 'COMPLETED' && (
+                <div className={`h-2 ${getHeaderBgColor(transaction.status)}`}></div>
+            )}
             <div
                 className={`p-4 cursor-pointer ${isExpanded ? 'bg-gray-50' : 'hover:bg-gray-50'}`}
                 onClick={onToggleExpand}
@@ -179,7 +180,7 @@ export function TransactionCard({
                         {/* Quick Indicators */}
                         <div className="flex items-center gap-3 mt-3">
                             {transaction.potential_change && (
-                                <div className="flex items-center gap-1 text-orange-600" title="Potential scope change">
+                                <div className="flex items-center gap-1 bg-orange-500 text-white font-bold px-2 py-0.5 rounded" title="Potential scope change">
                                     <AlertTriangle className="w-4 h-4" fill="currentColor" />
                                     <span className="text-md">Change</span>
                                 </div>
