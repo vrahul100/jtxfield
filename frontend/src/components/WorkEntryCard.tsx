@@ -221,18 +221,12 @@ export function WorkEntryCard({
                                 {/* Potential Change */}
                                 <div className="flex flex-col">
                                     <span className="text-xs font-medium text-gray-500 mb-0.5">Status</span>
-                                    <button
-                                        onClick={(e) => {
-                                            e.stopPropagation();
-                                            onToggleChange();
-                                        }}
-                                        className={`flex items-center gap-1 text-left px-2 py-0.5 rounded ${bucket.potential_change ? 'bg-orange-500 text-white font-bold' : 'text-gray-500'}`}
-                                    >
+                                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${bucket.potential_change ? 'bg-orange-500 text-white font-bold' : 'text-gray-500'}`}>
                                         <AlertTriangle className="w-3.5 h-3.5" fill={bucket.potential_change ? 'currentColor' : 'none'} />
                                         <span className="text-md">
                                             {bucket.potential_change ? 'Change Flagged' : 'No Issues'}
                                         </span>
-                                    </button>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -383,6 +377,21 @@ export function WorkEntryCard({
                         </button>
                     </>
                 )}
+                <button
+                    onClick={(e) => {
+                        e.stopPropagation();
+                        onToggleChange();
+                    }}
+                    className={`flex items-center gap-1 px-3 py-1.5 text-md rounded transition-colors ${
+                        bucket.potential_change 
+                            ? 'text-orange-600 bg-orange-50 hover:bg-orange-100' 
+                            : 'text-blue-500 hover:bg-blue-100'
+                    }`}
+                    title={bucket.potential_change ? 'Remove Flag' : 'Flag as Change'}
+                >
+                    <AlertTriangle className="w-4 h-4" strokeWidth={3} fill={bucket.potential_change ? 'currentColor' : 'none'} />
+                    {bucket.potential_change ? 'Unflag' : 'Flag'}
+                </button>
                 <button
                     onClick={(e) => {
                         e.stopPropagation();
