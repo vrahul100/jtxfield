@@ -168,6 +168,41 @@ Your message has been saved. An admin will add you to your project soon!`;
   // 6. EXTRACT MEDIA URLS (Worker will copy to storage async)
   const { imageUrls, audioUrls, messageSid } = extractMediaUrls(normalized, body);
 
+  // 6b. PRE-CHECK: Skip bucket creation for non-work text-only messages (greetings, etc.)
+  // Only applies when: no media attached AND no existing open bucket (not mid-conversation)
+  const hasMedia = imageUrls.length > 0 || audioUrls.length > 0;
+  if (!hasMedia && normalized.text.trim()) {
+    const inboxProjectId = await ensureInboxProject(sql, member.company_id);
+    const existingBucket = await findOpenBucket(sql, member.id, inboxProjectId);
+
+    if (!existingBucket) {
+      // No open bucket — check if this is a non-work message before creating one
+      const text = normalized.text.toLowerCase().trim();
+      const nonWorkPatterns = [
+        'hello', 'hi', 'hey', 'hola', 'buenos dias', 'buenas tardes', 'buenas noches',
+        'good morning', 'good afternoon', 'good evening', 'good night',
+        'thanks', 'thank you', 'gracias', 'ok', 'okay',
+        'how are you', 'como estas', 'que tal', 'sup', 'whats up', "what's up",
+        'bye', 'goodbye', 'adios', 'see you', 'later', 'nos vemos',
+        'test', 'testing', 'prueba',
+      ];
+      const isNonWork = nonWorkPatterns.some(p => text === p || text === p + '!' || text === p + '?')
+        || text.length < 4; // Very short messages like "hi", "yo"
+
+      if (isNonWork) {
+        console.log(`[WEBHOOK] Non-work message detected ("${normalized.text}"), skipping bucket creation`);
+        // Detect language from the input text itself
+        const esPatterns = ['hola', 'buenos dias', 'buenas tardes', 'buenas noches', 'gracias', 'como estas', 'que tal', 'adios', 'nos vemos', 'prueba', 'ola'];
+        const isSpanish = esPatterns.some(p => text === p || text.startsWith(p));
+        const greeting = isSpanish
+          ? '👋 ¡Hola! Envía fotos, notas de voz o texto describiendo tu trabajo para registrarlo.'
+          : '👋 Hi! Send photos, voice notes, or text describing your work to log it.';
+        return c.text(`<Response><Message>${greeting}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      }
+    }
+    // If existingBucket exists, let it flow through — user is mid-conversation
+  }
+
   // 7. USE TRANSACTION WITH ROW-LEVEL LOCK TO PREVENT RACE CONDITIONS
   // Lock the member row - this blocks concurrent requests for the same member
   // until this transaction completes
