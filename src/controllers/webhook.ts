@@ -14,6 +14,7 @@ import {
   appendToBucket,
   addToHoldingTank,
   ensureInboxProject,
+  findProjectByAlias,
   Member,
   Bucket
 } from '../services/bucketService.js'
@@ -162,6 +163,26 @@ Your message has been saved. An admin will add you to your project soon!`;
     return c.text(`<Response><Message>${pendingMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 
+  // 4. CHECK FOR PENDING CORRECTION CONFIRMATION (Y/Si/Yes)
+  const pendingCorrection = (member as any).pending_correction;
+  const upperText = normalized.text.trim().toUpperCase();
+  if (pendingCorrection && ['Y', 'YES', 'SI', 'SÍ'].includes(upperText)) {
+    console.log(`[WEBHOOK] Applying pending correction for member ${member.id}:`, JSON.stringify(pendingCorrection));
+    const resultMsg = await applyCorrection(sql, pendingCorrection, member.id);
+    // Clear pending correction
+    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
+    return c.text(`<Response><Message>${resultMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+  // If user sends N/No, cancel the pending correction
+  if (pendingCorrection && ['N', 'NO'].includes(upperText)) {
+    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
+    return c.text(`<Response><Message>↩️ Correction cancelled. Ticket #${pendingCorrection.bucket_id} unchanged.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+  // If there was a pending correction but user sent something else, clear it
+  if (pendingCorrection) {
+    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
+  }
+
   // NOTE: All project confirmation/selection is handled by Edge Function's resolveProjectNode
   // No interception needed here - messages flow directly to bucket processing
 
@@ -201,6 +222,78 @@ Your message has been saved. An admin will add you to your project soon!`;
       }
     }
     // If existingBucket exists, let it flow through — user is mid-conversation
+  }
+
+  // 6c. CHECK FOR TICKET CORRECTION (e.g. "#122 city hall")
+  // Only matches when message STARTS with # to avoid false positives on work descriptions
+  const ticketMatch = normalized.text.trim().match(/^#(\d+)/i);
+  if (ticketMatch) {
+    const ticketId = parseInt(ticketMatch[1], 10);
+    console.log(`[WEBHOOK] Detected ticket reference #${ticketId}`);
+
+    // Verify bucket exists and belongs to this member
+    const buckets = await sql`
+      SELECT id, member_id, project_id, status FROM buckets 
+      WHERE id = ${ticketId} 
+        AND created_at > NOW() - INTERVAL '30 days'
+      LIMIT 1
+    `;
+
+    if (buckets.length === 0) {
+      return c.text(`<Response><Message>❌ Ticket #${ticketId} not found.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+
+    if (buckets[0].member_id !== member.id) {
+      return c.text(`<Response><Message>❌ Ticket #${ticketId} doesn't belong to you.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+
+    // Parse what correction the user wants
+    const correction = await parseCorrectionIntent(normalized.text);
+    console.log(`[WEBHOOK] Correction intent:`, JSON.stringify(correction));
+
+    if (correction.action === 'unknown' || !correction.value) {
+      return c.text(`<Response><Message>❓ What would you like to change on Ticket #${ticketId}?\n\nExamples:\n• #${ticketId} City Mall\n• #${ticketId} 6 hours</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+
+    // Build the pending correction
+    const pendingData: any = {
+      bucket_id: ticketId,
+      action: correction.action,
+      value: correction.value,
+      created_at: new Date().toISOString(),
+    };
+
+    let confirmMsg = '';
+
+    if (correction.action === 'change_project') {
+      // Try to resolve project name to ID
+      const project = await findProjectByAlias(sql, member.company_id, correction.value);
+      if (project) {
+        pendingData.resolved_project_id = project.id;
+        confirmMsg = `📝 Ticket #${ticketId}: Change project to *${project.name}*?\n\nReply *Y* to confirm or *N* to cancel.`;
+      } else {
+        // List available projects so user can pick
+        const projects = await sql`
+          SELECT name FROM projects 
+          WHERE node_id = ${member.company_id} AND is_active = true AND is_inbox = false
+          ORDER BY name
+        `;
+        const projectList = projects.map((p: any, i: number) => `${i + 1}. ${p.name}`).join('\n');
+        return c.text(`<Response><Message>❓ Couldn't find project "${correction.value}".\n\nAvailable projects:\n${projectList}\n\nTry again: #${ticketId} [project name]</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      }
+    } else if (correction.action === 'change_hours') {
+      const hours = parseFloat(correction.value);
+      if (isNaN(hours) || hours <= 0 || hours > 24) {
+        return c.text(`<Response><Message>❌ Invalid hours: ${correction.value}. Please use a number between 1-24.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      }
+      confirmMsg = `📝 Ticket #${ticketId}: Change hours to *${hours}*?\n\nReply *Y* to confirm or *N* to cancel.`;
+    }
+
+    // Store pending correction on member
+    await sql`UPDATE members SET pending_correction = ${JSON.stringify(pendingData)} WHERE id = ${member.id}`;
+    console.log(`[WEBHOOK] Stored pending correction for member ${member.id}:`, JSON.stringify(pendingData));
+
+    return c.text(`<Response><Message>${confirmMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 
   // 7. USE TRANSACTION WITH ROW-LEVEL LOCK TO PREVENT RACE CONDITIONS
@@ -374,4 +467,145 @@ async function processMedia(normalized: any, body: any): Promise<{
   };
 }
 
-// NOTE: Project correction/selection functions removed - Edge Function's resolveProjectNode handles all project flows
+// ============================================================================
+// Ticket Correction Helpers
+// ============================================================================
+
+interface CorrectionIntent {
+  action: 'change_project' | 'change_hours' | 'unknown';
+  value: string | null;  // e.g. "City Mall" or "6"
+}
+
+/**
+ * Parse what correction the user wants using LLM
+ * e.g. "#122 city hall" → { action: 'change_project', value: 'city hall' }
+ */
+async function parseCorrectionIntent(text: string): Promise<CorrectionIntent> {
+  // Remove the ticket reference to get just the correction part
+  const correctionText = text.replace(/#\d+\s*/i, '').trim();
+
+  if (!correctionText) {
+    return { action: 'unknown', value: null };
+  }
+
+  // Try simple heuristics first
+  const hoursMatch = correctionText.match(/(\d+\.?\d*)\s*(hours?|hrs?|h|horas?)/i);
+  if (hoursMatch) {
+    return { action: 'change_hours', value: hoursMatch[1] };
+  }
+
+  // Use LLM for more nuanced interpretation
+  const Groq = (await import('groq-sdk')).default;
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) {
+    // Fallback: assume project change (most common correction)
+    return { action: 'change_project', value: correctionText };
+  }
+
+  try {
+    const groq = new Groq({ apiKey: groqApiKey });
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [{ role: 'user', content: `A construction worker sent a correction for an existing work ticket. They wrote: "${correctionText}"
+
+What do they want to change? Respond with ONLY valid JSON:
+{
+  "action": "change_project" or "change_hours",
+  "value": "the new value they want"
+}
+
+- If they mention a location/place/project name → change_project, value = the project name
+- If they mention hours/time → change_hours, value = the number
+- Default to change_project if unclear` }],
+      temperature: 0.1,
+      max_tokens: 100,
+    });
+
+    const responseText = completion.choices?.[0]?.message?.content || '';
+    const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]);
+      return {
+        action: parsed.action || 'change_project',
+        value: parsed.value || correctionText,
+      };
+    }
+  } catch (error) {
+    console.error('[Correction] LLM parse error:', error);
+  }
+
+  // Fallback: assume project change
+  return { action: 'change_project', value: correctionText };
+}
+
+/**
+ * Apply a confirmed correction to a bucket and its linked transaction
+ */
+async function applyCorrection(
+  sql: Sql,
+  correction: { bucket_id: number; action: string; value: string; resolved_project_id?: number },
+  memberId: number
+): Promise<string> {
+  const bucketId = correction.bucket_id;
+  console.log(`[Correction] Applying: action=${correction.action}, value=${correction.value}, projectId=${correction.resolved_project_id}, bucket=${bucketId}`);
+
+  if (correction.action === 'change_project') {
+    if (!correction.resolved_project_id) {
+      console.error(`[Correction] ❌ No resolved_project_id for change_project on bucket #${bucketId}`);
+      return `❌ Could not apply correction: project "${correction.value}" was not resolved to a valid project. Try again with #${bucketId} [project name].`;
+    }
+
+    // Get project name for confirmation message
+    const projects = await sql`SELECT name FROM projects WHERE id = ${correction.resolved_project_id}`;
+    if (projects.length === 0) {
+      return `❌ Project ID ${correction.resolved_project_id} no longer exists.`;
+    }
+    const projectName = projects[0].name;
+
+    // Update bucket
+    await sql`
+      UPDATE buckets SET project_id = ${correction.resolved_project_id}, updated_at = NOW()
+      WHERE id = ${bucketId}
+    `;
+
+    // Update linked transaction if exists
+    const txnResult = await sql`
+      UPDATE txns SET project_id = ${correction.resolved_project_id}
+      WHERE bucket_id = ${bucketId}
+    `;
+
+    console.log(`[Correction] ✅ Bucket #${bucketId} project → ${projectName} (ID: ${correction.resolved_project_id}), txns updated: ${txnResult.count}`);
+    return `✅ Ticket #${bucketId} updated! Project changed to *${projectName}*.`;
+
+  } else if (correction.action === 'change_hours') {
+    const hours = parseFloat(correction.value);
+    if (isNaN(hours) || hours <= 0 || hours > 24) {
+      return `❌ Invalid hours value: "${correction.value}". Please use a number between 1-24.`;
+    }
+
+    // Update bucket extracted_data hours
+    const buckets = await sql`SELECT extracted_data FROM buckets WHERE id = ${bucketId}`;
+    if (buckets[0]?.extracted_data) {
+      const extractedData = typeof buckets[0].extracted_data === 'string'
+        ? JSON.parse(buckets[0].extracted_data)
+        : buckets[0].extracted_data;
+      extractedData.hoursWorked = hours;
+      await sql`
+        UPDATE buckets SET extracted_data = ${JSON.stringify(extractedData)}, updated_at = NOW()
+        WHERE id = ${bucketId}
+      `;
+    }
+
+    // Update linked transaction
+    await sql`
+      UPDATE txns SET time = ${hours}
+      WHERE bucket_id = ${bucketId}
+    `;
+
+    console.log(`[Correction] ✅ Bucket #${bucketId} hours → ${hours}`);
+    return `✅ Ticket #${bucketId} updated! Hours changed to *${hours}*.`;
+  }
+
+  console.error(`[Correction] ❌ Unsupported action: "${correction.action}" for bucket #${bucketId}`);
+  return `❌ Could not apply correction: unsupported action "${correction.action}". Supported: change project, change hours.`;
+}
