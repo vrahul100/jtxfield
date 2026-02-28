@@ -164,7 +164,10 @@ Your message has been saved. An admin will add you to your project soon!`;
   }
 
   // 4. CHECK FOR PENDING CORRECTION CONFIRMATION (Y/Si/Yes)
-  const pendingCorrection = (member as any).pending_correction;
+  const rawPending = (member as any).pending_correction;
+  const pendingCorrection = rawPending
+    ? (typeof rawPending === 'string' ? JSON.parse(rawPending) : rawPending)
+    : null;
   const upperText = normalized.text.trim().toUpperCase();
   if (pendingCorrection && ['Y', 'YES', 'SI', 'SÍ'].includes(upperText)) {
     console.log(`[WEBHOOK] Applying pending correction for member ${member.id}:`, JSON.stringify(pendingCorrection));

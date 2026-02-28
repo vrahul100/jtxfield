@@ -277,7 +277,7 @@ async function analyzeImage(url: string): Promise<string> {
             body: JSON.stringify({
                 model: 'meta-llama/llama-4-scout-17b-16e-instruct',
                 messages: [
-                    { role: 'system', content: 'Describe this construction/work image. List: Type of work, Materials visible, Completion status.' },
+                    { role: 'system', content: 'Describe this construction/work photo. Focus on identifying the SPECIFIC TRADE or WORK TYPE visible (e.g. masonry, electrical, plumbing, painting, carpentry, concrete, rebar, HVAC, drain). List: 1) Trade/work type shown, 2) Materials visible, 3) Completion status. Be specific about what trade the work belongs to based on what you see.' },
                     {
                         role: 'user', content: [
                             { type: 'text', text: 'Analyze this work photo:' },
@@ -345,7 +345,11 @@ Extract ALL signals from ALL messages to fill these slots:
 3. summary: Brief description of work
 4. projectHint: "CONFIRMED" if user said Yes/Y/Si, "NO" if they rejected, or project name/number
 5. responseLanguage: "en" unless user writes in Spanish → "es"
-6. isConsistent: TRUE if text matches image
+6. isConsistent: Compare the WORK TYPE visible in the image with the WORK TYPE described in the text.
+   - Set FALSE if image shows one trade (e.g. masonry/bricks) but text claims a different trade (e.g. electrical/wiring)
+   - Set FALSE if image shows painting but text says plumbing, image shows concrete but text says carpentry, etc.
+   - Set TRUE only if the work type in the image reasonably matches the work type in the text, or if there is no image
+   - When FALSE, always provide inconsistencyReason explaining the mismatch (e.g. "Photo shows masonry/brickwork but text describes electrical wiring")
 7. isWorkRelated: TRUE for work content, FALSE for spam/unrelated
 
 **RETURN JSON ONLY:**
@@ -653,6 +657,71 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
             await supabase.from('buckets').update({
                 extracted_data: JSON.stringify(extraction)
             }).eq('id', bucketId)
+        }
+    }
+
+    // =========================================================================
+    // POST-EXTRACTION CONSISTENCY CROSS-CHECK
+    // When we have BOTH image analysis AND a workType, do a focused check
+    // This catches cases the all-in-one extraction misses
+    // =========================================================================
+    if (imageAnalysis && imageAnalysis.length > 10 && extraction.workType && extraction.isConsistent !== false) {
+        console.log(`[Consistency] Running cross-check: image analysis vs workType="${extraction.workType}"`)
+        const groqApiKey = Deno.env.get('GROQ_API_KEY')
+        if (groqApiKey) {
+            try {
+                const crossCheckResp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${groqApiKey}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                        messages: [{
+                            role: 'user',
+                            content: `IMAGE ANALYSIS: "${imageAnalysis}"
+
+CLAIMED WORK TYPE: "${extraction.workType}"
+
+Does the image show "${extraction.workType}" work? Answer ONLY with JSON:
+{"matches": true/false, "reason": "brief explanation"}
+
+RULES:
+- If image shows masonry/bricks/block work but claim is electrical/plumbing/painting → matches: false
+- If image shows painting but claim is electrical/masonry/plumbing → matches: false  
+- If image shows the actual claimed trade being performed → matches: true
+- Focus on what WORK is being DONE, not just background elements
+- Be strict: a brick wall background does NOT mean masonry work is being done; look at what the worker's hands/tools are doing`
+                        }],
+                        temperature: 0.1,
+                        max_tokens: 100,
+                        response_format: { type: 'json_object' },
+                    }),
+                })
+
+                if (crossCheckResp.ok) {
+                    const crossData = await crossCheckResp.json()
+                    const crossContent = crossData.choices?.[0]?.message?.content || ''
+                    try {
+                        const crossResult = JSON.parse(crossContent)
+                        console.log(`[Consistency] Cross-check result: matches=${crossResult.matches}, reason="${crossResult.reason}"`)
+                        if (crossResult.matches === false && crossResult.reason) {
+                            extraction.isConsistent = false
+                            extraction.inconsistencyReason = crossResult.reason
+                            console.log(`[Consistency] ⚠️ Overriding to inconsistent: ${crossResult.reason}`)
+                            
+                            await supabase.from('buckets').update({
+                                extracted_data: JSON.stringify(extraction)
+                            }).eq('id', bucketId)
+                        }
+                    } catch (parseErr) {
+                        console.error('[Consistency] Cross-check parse error:', parseErr)
+                    }
+                }
+            } catch (err) {
+                console.error('[Consistency] Cross-check error:', err)
+            }
         }
     }
 

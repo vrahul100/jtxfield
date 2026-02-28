@@ -34,6 +34,7 @@ export function Reports() {
     const [activeTab, setActiveTab] = useState<'project' | 'member'>('project');
     const [dateRange, setDateRange] = useState<string>('month');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
 
     const getDateRange = () => {
         const now = new Date();
@@ -61,6 +62,7 @@ export function Reports() {
 
     const fetchSummary = async () => {
         setLoading(true);
+        setRefreshing(true);
         try {
             const { startDate, endDate } = getDateRange();
             console.log('Fetching summary with dates:', startDate, endDate);
@@ -79,6 +81,7 @@ export function Reports() {
             console.error('Failed to fetch summary:', error);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -114,9 +117,17 @@ export function Reports() {
                         </select>
                         <button
                             onClick={() => setRefreshTrigger(prev => prev + 1)}
-                            className="btn-primary"
+                            disabled={refreshing}
+                            className="btn-primary flex items-center gap-2"
+                            style={refreshing ? { cursor: 'wait' } : {}}
                         >
-                            Refresh
+                            {refreshing && (
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                            )}
+                            {refreshing ? 'Loading...' : 'Refresh'}
                         </button>
                     </div>
                 </div>

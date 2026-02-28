@@ -60,6 +60,7 @@ export function Tickets() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         fetchProjects();
@@ -88,6 +89,7 @@ export function Tickets() {
     };
 
     const fetchBuckets = async () => {
+        setRefreshing(true);
         try {
             const params = new URLSearchParams();
             if (statusFilter !== 'all') params.append('status', statusFilter);
@@ -118,6 +120,7 @@ export function Tickets() {
             setBuckets([]);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -262,8 +265,19 @@ export function Tickets() {
             <div>
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
-                    <button onClick={fetchBuckets} className="btn-primary">
-                        Refresh
+                    <button
+                        onClick={fetchBuckets}
+                        disabled={refreshing}
+                        className="btn-primary flex items-center gap-2"
+                        style={refreshing ? { cursor: 'wait' } : {}}
+                    >
+                        {refreshing && (
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                        )}
+                        {refreshing ? 'Loading...' : 'Refresh'}
                     </button>
                 </div>
                 {/* Search and Filters */}

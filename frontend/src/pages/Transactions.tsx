@@ -44,6 +44,7 @@ export function Transactions() {
     const [projectFilter, setProjectFilter] = useState('all');
     const [statusFilter, setStatusFilter] = useState('all');
     const [changeFilter, setChangeFilter] = useState('all');
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         fetchProjects();
@@ -72,6 +73,7 @@ export function Transactions() {
 
     const fetchTransactions = async (isInitialLoad = false) => {
         if (isInitialLoad) setLoading(true);
+        setRefreshing(true);
         try {
             const params = new URLSearchParams();
             if (statusFilter !== 'all') params.append('status', statusFilter);
@@ -94,6 +96,7 @@ export function Transactions() {
             console.error('Failed to fetch transactions:', error);
         } finally {
             if (isInitialLoad) setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -185,8 +188,19 @@ export function Transactions() {
             <div>
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Timesheets</h1>
-                    <button onClick={() => fetchTransactions(true)} className="btn-primary">
-                        Refresh
+                    <button
+                        onClick={() => fetchTransactions(true)}
+                        disabled={refreshing}
+                        className="btn-primary flex items-center gap-2"
+                        style={refreshing ? { cursor: 'wait' } : {}}
+                    >
+                        {refreshing && (
+                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                            </svg>
+                        )}
+                        {refreshing ? 'Loading...' : 'Refresh'}
                     </button>
                 </div>
 

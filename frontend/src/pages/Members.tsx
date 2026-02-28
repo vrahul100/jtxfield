@@ -30,6 +30,7 @@ export function Members() {
     const [page, setPage] = useState(1);
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         setPage(1);
@@ -40,6 +41,7 @@ export function Members() {
     }, [filter, search, page]);
 
     const fetchMembers = async () => {
+        setRefreshing(true);
         try {
             const params = new URLSearchParams();
             if (filter !== 'all') params.append('status', filter);
@@ -65,6 +67,7 @@ export function Members() {
             setMembers([]);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -261,9 +264,17 @@ export function Members() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => fetchMembers()}
-                            className="btn-primary"
+                            disabled={refreshing}
+                            className="btn-primary flex items-center gap-2"
+                            style={refreshing ? { cursor: 'wait' } : {}}
                         >
-                            Refresh
+                            {refreshing && (
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                            )}
+                            {refreshing ? 'Loading...' : 'Refresh'}
                         </button>
                         <button
                             onClick={() => setShowAddForm(!showAddForm)}

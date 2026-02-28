@@ -18,12 +18,14 @@ export function Nodes() {
     const [formData, setFormData] = useState({
         name: '',
     });
+    const [refreshing, setRefreshing] = useState(false);
 
     useEffect(() => {
         fetchNodes();
     }, []);
 
     const fetchNodes = async () => {
+        setRefreshing(true);
         try {
             const response = await fetch('/api/nodes', {
                 credentials: 'include',
@@ -42,6 +44,7 @@ export function Nodes() {
             setNodes([]);
         } finally {
             setLoading(false);
+            setRefreshing(false);
         }
     };
 
@@ -117,9 +120,17 @@ export function Nodes() {
                     <div className="flex gap-2">
                         <button
                             onClick={() => fetchNodes()}
-                            className="btn-primary"
+                            disabled={refreshing}
+                            className="btn-primary flex items-center gap-2"
+                            style={refreshing ? { cursor: 'wait' } : {}}
                         >
-                            Refresh
+                            {refreshing && (
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                            )}
+                            {refreshing ? 'Loading...' : 'Refresh'}
                         </button>
                         <button
                             onClick={() => setShowForm(!showForm)}
