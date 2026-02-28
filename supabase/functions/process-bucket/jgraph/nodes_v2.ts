@@ -333,7 +333,7 @@ ${imageAnalysis || 'No images'}
 ## EXTRACTION RULES:
 Extract ALL signals from ALL messages to fill these slots:
 
-1. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
+1. workType: "electrical" | "plumbing" | "hvac" | "carpentry" | "roofing" | "masonry" | "painting" | "rebar" | "concrete" | "drain" | "general"
 2. hoursWorked: Find hours in text AND [Voice] transcripts.
    - Handle BOTH numeric AND word-based: "6.5 hours", "4h", "three hours", "dos horas"
    - ALWAYS convert words to numbers: one=1, two=2, three=3, four=4, five=5, six=6, seven=7, eight=8, nine=9, ten=10
@@ -599,6 +599,9 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // Check if we're in a confirmation state with existing work data
     const hasWorkData = extraction.workType && extraction.hoursWorked && extraction.hoursWorked > 0
     const isConfirmState = ['confirming_project', 'confirming_all', 'selecting_project'].includes(currentState)
+    // States that handle their own extraction logic — skip full re-extraction to prevent
+    // issues like hours doubling (raw_text accumulates duplicate messages)
+    const skipFullExtraction = ['clarifying_inconsistency', 'collecting_work', 'collecting_hours'].includes(currentState)
     
     // When in confirmation state with data, only extract from LATEST input (not all accumulated transcripts)
     // This lets the LLM understand the user's answer in context without re-processing old work data
@@ -633,8 +636,8 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                 extracted_data: JSON.stringify(extraction)
             }).eq('id', bucketId)
         }
-    } else {
-        // Not in confirmation state - run full extraction on all data
+    } else if (!skipFullExtraction) {
+        // Not in confirmation or clarification state - run full extraction on all data
         console.log(`[StateMachine] Running full LLM extraction (confirmState=${isConfirmState}, hasData=${hasWorkData})`)
         
         const llmExtraction = await withTimeout(
@@ -658,6 +661,8 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                 extracted_data: JSON.stringify(extraction)
             }).eq('id', bucketId)
         }
+    } else {
+        console.log(`[StateMachine] Skipping full extraction for state=${currentState} (state handles its own extraction)`)
     }
 
     // =========================================================================
@@ -684,15 +689,20 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
 CLAIMED WORK TYPE: "${extraction.workType}"
 
-Does the image show "${extraction.workType}" work? Answer ONLY with JSON:
+Does the image CLEARLY CONTRADICT the claimed work type "${extraction.workType}"? Answer ONLY with JSON:
 {"matches": true/false, "reason": "brief explanation"}
 
 RULES:
-- If image shows masonry/bricks/block work but claim is electrical/plumbing/painting → matches: false
-- If image shows painting but claim is electrical/masonry/plumbing → matches: false  
-- If image shows the actual claimed trade being performed → matches: true
-- Focus on what WORK is being DONE, not just background elements
-- Be strict: a brick wall background does NOT mean masonry work is being done; look at what the worker's hands/tools are doing`
+- DEFAULT to matches: true (give benefit of the doubt)
+- Only set matches: false for OBVIOUS contradictions, e.g.:
+  * Image clearly shows brickwork/masonry but claim is electrical wiring
+  * Image clearly shows painting but claim is plumbing
+- Set matches: true if:
+  * Image content could plausibly relate to the claimed work (e.g. a structure/roof visible + claim is roofing)
+  * Image is ambiguous, shows a general job site, or doesn't clearly show any specific trade
+  * Image shows the result/product of the claimed work, even without tools/workers visible
+- Do NOT require seeing workers, hands, or tools — photos of completed/in-progress structures count
+- When in doubt, matches: true`
                         }],
                         temperature: 0.1,
                         max_tokens: 100,
@@ -988,8 +998,15 @@ async function handleClarifyingInconsistency(ctx: StateContext): Promise<StateRe
         console.log(`[ClarifyingInconsistency] User clarified: "${lastMsg}"`)
 
         // Re-extract from the clarification text to get correct hours and work type
+        // IMPORTANT: Zero out hours/workType in the existing context so the LLM doesn't
+        // merge (add) them with the clarification values — prevents hours doubling
+        const cleanedExisting: ExtractionResult = {
+            ...extraction,
+            hoursWorked: null,   // Let LLM extract fresh from clarification text
+            workType: null,      // Let LLM extract fresh work type too
+        }
         const clarifiedExtraction = await withTimeout(
-            extractWithLLM(lastMsg, ctx.transcripts || [], ctx.imageAnalysis || '', bucket.ai_response, extraction),
+            extractWithLLM(lastMsg, ctx.transcripts || [], ctx.imageAnalysis || '', bucket.ai_response, cleanedExisting),
             15000,
             null
         )
