@@ -43,8 +43,15 @@ export async function processBucketMessage(sql: Sql, bucketId: number, messageSi
             // Extract transaction
             await extractTransactionFromBucket(sql, bucket.id);
 
+            // Fetch running totals
+            const todayRows = await sql`SELECT SUM(time) as total FROM txns WHERE user_id = ${bucket.member_id} AND created_at >= CURRENT_DATE`;
+            const weekRows = await sql`SELECT SUM(time) as total FROM txns WHERE user_id = ${bucket.member_id} AND created_at >= date_trunc('week', CURRENT_DATE)`;
+            const today = parseFloat(todayRows[0]?.total || '0').toFixed(1).replace(/\.0$/, '');
+            const week = parseFloat(weekRows[0]?.total || '0').toFixed(1).replace(/\.0$/, '');
+            const runningTotals = `\n\n⏱️ Today: ${today}h | This week: ${week}h`;
+
             const summaryLine = validation.summary ? `"${validation.summary}"\n\n` : '';
-            responseMsg = `${t(lang, 'ticket_submitted', { id: bucket.id })}\n\n${summaryLine}${t(lang, 'logged_to', { project: 'Inbox' })}`;
+            responseMsg = `${t(lang, 'ticket_submitted', { id: bucket.id })}\n\n${summaryLine}${t(lang, 'logged_to', { project: 'Inbox' })}${runningTotals}`;
 
             await completeBucket(sql, bucket.id);
         } else {

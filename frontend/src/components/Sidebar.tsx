@@ -9,7 +9,9 @@ import {
     Building2,
     Shield,
     ChartBar,
-    Menu
+    Menu,
+    Settings2,
+    FileText
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -78,6 +80,11 @@ export function Sidebar() {
                         <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Timesheets</span>
                     </NavLink>
 
+                    <NavLink to="/copackets" className={navLinkClass} title="Change Orders" onClick={() => isMobile && setIsCollapsed(true)}>
+                        <FileText className="w-5 h-5 flex-shrink-0" />
+                        <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Change Orders</span>
+                    </NavLink>
+
                     <NavLink to="/projects" className={navLinkClass} title="Projects" onClick={() => isMobile && setIsCollapsed(true)}>
                         <FolderKanban className="w-5 h-5 flex-shrink-0" />
                         <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Projects</span>
@@ -91,6 +98,11 @@ export function Sidebar() {
                     <NavLink to="/reports" className={navLinkClass} title="Reports" onClick={() => isMobile && setIsCollapsed(true)}>
                         <ChartBar className="w-5 h-5 flex-shrink-0" />
                         <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Reports</span>
+                    </NavLink>
+
+                    <NavLink to="/integrations" className={navLinkClass} title="Integrations" onClick={() => isMobile && setIsCollapsed(true)}>
+                        <Settings2 className="w-5 h-5 flex-shrink-0" />
+                        <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Integrations</span>
                     </NavLink>
 
                     {/* SU Only Links */}

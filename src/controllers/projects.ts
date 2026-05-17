@@ -71,7 +71,7 @@ export async function createProject(c: Context, sql: Sql) {
     try {
         const user: User = c.get('user');
         const body = await getRequestBody(c);
-        const { name, nodeId } = body;
+        const { name, nodeId, radius } = body;
 
         if (!name) {
             return c.json({ error: 'Project name is required' }, 400);
@@ -88,9 +88,11 @@ export async function createProject(c: Context, sql: Sql) {
             targetNodeId = nodeId;
         }
 
+        const radiusVal = radius !== undefined && radius !== '' ? parseInt(radius, 10) : null;
+
         const [project] = await sql`
-            INSERT INTO projects (node_id, name, is_active)
-            VALUES (${targetNodeId}, ${name}, true)
+            INSERT INTO projects (node_id, name, is_active, radius)
+            VALUES (${targetNodeId}, ${name}, true, ${radiusVal})
             RETURNING *
         `;
 
@@ -110,13 +112,19 @@ export async function updateProject(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const projectId = parseInt(c.req.param('id'));
         const body = await getRequestBody(c);
-        const { name, isActive, aliases, nodeId } = body;
+        const { name, isActive, aliases, nodeId, radius } = body;
 
         // Convert undefined to null for postgres
         const nameVal = name ?? null;
         const isActiveVal = isActive ?? null;
         const aliasesVal = aliases ?? null;
         const nodeIdVal = nodeId ?? null;
+        
+        let radiusUpdate = sql``;
+        if (radius !== undefined) {
+            const radiusVal = radius === '' || radius === null ? null : parseInt(radius, 10);
+            radiusUpdate = sql`, radius = ${radiusVal}`;
+        }
 
         // SU can change node_id, OM cannot
         const [project] = await sql`
@@ -124,6 +132,7 @@ export async function updateProject(c: Context, sql: Sql) {
             SET name = COALESCE(${nameVal}, name),
                 is_active = COALESCE(${isActiveVal}, is_active),
                 aliases = COALESCE(${aliasesVal}, aliases)
+                ${radiusUpdate}
                 ${user.role === 'SU' && nodeIdVal ? sql`, node_id = ${nodeIdVal}` : sql``}
             WHERE id = ${projectId}
             ${user.role === 'OM' ? sql`AND node_id = ${user.nodeId}` : sql``}

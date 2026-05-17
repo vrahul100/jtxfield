@@ -9,6 +9,7 @@ import {
     ChevronDown,
     ChevronUp
 } from 'lucide-react';
+import { Link } from 'react-router-dom';
 
 interface ConversationMessage {
     role: 'user' | 'assistant';
@@ -38,6 +39,10 @@ interface Bucket {
     hours: number | null;
     created_at: string;
     updated_at?: string;
+    node_rate?: number;
+    type?: string;
+    wa_sent_timestamp?: string;
+    wa_received_timestamp?: string;
 }
 
 interface WorkEntryCardProps {
@@ -49,6 +54,9 @@ interface WorkEntryCardProps {
     onReject: () => void;
     onToggleChange: () => void;
     onUpdateHours?: (hours: number | null) => void;
+    selectable?: boolean;
+    selected?: boolean;
+    onSelectToggle?: () => void;
 }
 
 export function WorkEntryCard({
@@ -59,7 +67,10 @@ export function WorkEntryCard({
     onSubmit,
     onReject,
     onToggleChange,
-    onUpdateHours
+    onUpdateHours,
+    selectable,
+    selected,
+    onSelectToggle
 }: WorkEntryCardProps) {
     const getStatusColor = (status: string) => {
         switch (status) {
@@ -109,8 +120,22 @@ export function WorkEntryCard({
         });
     };
 
+    const getTimeIntegrity = () => {
+        if (!bucket.wa_sent_timestamp || !bucket.wa_received_timestamp) {
+            return { status: 'verified', label: 'Verified', color: 'text-green-600 bg-green-50' };
+        }
+        const sent = new Date(bucket.wa_sent_timestamp).getTime();
+        const received = new Date(bucket.wa_received_timestamp).getTime();
+        const diffHours = Math.abs(received - sent) / (1000 * 60 * 60);
+
+        if (diffHours > 24) return { status: 'red', label: 'Delayed (>24h)', color: 'text-red-700 bg-red-100 font-medium' };
+        if (diffHours > 4) return { status: 'yellow', label: 'Delayed (>4h)', color: 'text-yellow-700 bg-yellow-100 font-medium' };
+        return { status: 'verified', label: 'Verified', color: 'text-green-600 bg-green-50' };
+    };
+
     const hasAttachments = bucket.image_urls || bucket.audio_urls;
     const showActions = ['pending_review', 'processing', 'open', 'flagged'].includes(bucket.status);
+    const integrity = getTimeIntegrity();
 
     return (
         <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${
@@ -128,7 +153,17 @@ export function WorkEntryCard({
                     <div className="flex-1 min-w-0">
                         <div className="flex justify-between items-start gap-2 mb-2">
                             <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-md font-mono text-gray-500">#{bucket.id}</span>
+                                {selectable && (
+                                    <div className="mr-1 flex items-center" onClick={(e) => e.stopPropagation()}>
+                                        <input 
+                                            type="checkbox" 
+                                            checked={selected} 
+                                            onChange={onSelectToggle}
+                                            className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                        />
+                                    </div>
+                                )}
+                                <Link to={`/tickets/${bucket.id}`} className="text-md font-mono text-indigo-600 hover:text-indigo-800 hover:underline">#{bucket.id}</Link>
                                 <span className={`px-2 py-0.5 text-md font-semibold rounded border ${getStatusColor(bucket.status)}`}>
                                     {bucket.status?.toUpperCase().replace('_', ' ')}
                                 </span>
@@ -184,16 +219,6 @@ export function WorkEntryCard({
                                     </div>
                                 )}
                                 
-                                {/* AI Confidence */}
-                                <div className="flex flex-col">
-                                    <span className="text-xs font-medium text-gray-500 mb-0.5">AI Confidence</span>
-                                    <div className="flex items-center gap-1">
-                                        <Circle className={`w-3 h-3 fill-current ${getConfidenceColor(bucket.clarity_score)}`} />
-                                        <span className="text-md text-gray-600">
-                                            {bucket.clarity_score ? `${Math.round(bucket.clarity_score * 100)}%` : 'N/A'}
-                                        </span>
-                                    </div>
-                                </div>
                                 
                                 {/* Hours */}
                                 <div className="flex flex-col">
@@ -210,7 +235,7 @@ export function WorkEntryCard({
                                                 onUpdateHours(val);
                                             }}
                                             onClick={(e) => e.stopPropagation()}
-                                            className="w-20 px-2 py-0.5 text-md border rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"
+                                            className="w-16 px-1 py-0.5 text-md border rounded focus:ring-1 focus:ring-blue-500 focus:outline-none"
                                             placeholder="0"
                                         />
                                     ) : (
@@ -218,14 +243,42 @@ export function WorkEntryCard({
                                     )}
                                 </div>
 
+                                {/* Labor $ */}
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-medium text-gray-500 mb-0.5">Labor $</span>
+                                    <span className="text-md text-gray-700">
+                                        {bucket.type === 'non_scope' ? 'N/A' : (bucket.hours ? `$${(bucket.hours * (bucket.node_rate || 85)).toFixed(2)}` : 'N/A')}
+                                    </span>
+                                </div>
+
+                                {/* Billable $ */}
+                                <div className="flex flex-col">
+                                    <span className="text-xs font-medium text-gray-500 mb-0.5">Billable $</span>
+                                    <span className="text-md font-medium text-green-700">
+                                        {bucket.type === 'non_scope' ? 'Non-billable' : (bucket.hours ? `$${((bucket.hours * (bucket.node_rate || 85)) * 1.20).toFixed(2)}` : 'N/A')}
+                                    </span>
+                                </div>
+
                                 {/* Potential Change */}
                                 <div className="flex flex-col">
                                     <span className="text-xs font-medium text-gray-500 mb-0.5">Status</span>
-                                    <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${bucket.potential_change ? 'bg-orange-500 text-white font-bold' : 'text-gray-500'}`}>
-                                        <AlertTriangle className="w-3.5 h-3.5" fill={bucket.potential_change ? 'currentColor' : 'none'} />
-                                        <span className="text-md">
-                                            {bucket.potential_change ? 'Change Flagged' : 'No Issues'}
-                                        </span>
+                                    <div className="flex gap-2">
+                                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded ${bucket.potential_change ? 'bg-orange-500 text-white font-bold' : 'text-green-600 bg-green-50'}`}>
+                                            {bucket.potential_change ? (
+                                                <>
+                                                    <AlertTriangle className="w-3.5 h-3.5" fill="currentColor" />
+                                                    <span className="text-md">Flagged</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Check className="w-3.5 h-3.5" strokeWidth={3} />
+                                                    <span className="text-md">Verified</span>
+                                                </>
+                                            )}
+                                        </div>
+                                        <div className={`flex items-center gap-1 px-2 py-0.5 rounded text-sm ${integrity.color}`}>
+                                            {integrity.label}
+                                        </div>
                                     </div>
                                 </div>
                             </div>

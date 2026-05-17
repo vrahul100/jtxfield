@@ -1,8 +1,21 @@
+import { useState, useEffect } from 'react';
 import { useAuth } from '../hooks/useAuth';
-import { LogOut, Zap, Building } from 'lucide-react';
+import { LogOut, Zap, Building, DollarSign } from 'lucide-react';
 
 export function Header() {
     const { user, logout } = useAuth();
+    const [weeklyBillable, setWeeklyBillable] = useState<number | null>(null);
+
+    useEffect(() => {
+        if (user) {
+            fetch('/api/reports/header-stats')
+                .then(r => r.json())
+                .then(d => {
+                    if (d.weeklyBillable !== undefined) setWeeklyBillable(d.weeklyBillable);
+                })
+                .catch(console.error);
+        }
+    }, [user]);
 
     const handleLogout = async () => {
         try {
@@ -29,7 +42,15 @@ export function Header() {
 
                 {/* Right side - User info & logout */}
                 {user && (
-                    <div className="flex items-center gap-2 md:gap-5">
+                    <div className="flex items-center gap-2 md:gap-5 flex-shrink-0">
+                        {/* Weekly Billable */}
+                        {weeklyBillable !== null && (
+                            <div className="hidden lg:flex items-center gap-1 px-3 py-1.5 bg-green-50 border border-green-200 rounded-lg text-green-700 font-semibold mr-1">
+                                <DollarSign className="w-4 h-4" />
+                                <span>{weeklyBillable.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                <span className="text-xs text-green-600 font-normal ml-1">This Week</span>
+                            </div>
+                        )}
                         {/* Hide user text info on mobile */}
                         <div className="text-right hidden md:block">
                             <div className="text-base font-semibold text-slate-900">{user.fullName || user.email}</div>

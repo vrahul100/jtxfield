@@ -23,6 +23,7 @@
   "devDependencies": {
     "@types/aws-lambda": "^8.10.159",
     "@types/node": "^24.10.1",
+    "@types/pdfkit": "^0.17.6",
     "autoprefixer": "^10.4.23",
     "csv-parse": "^6.1.0",
     "drizzle-kit": "^0.31.7",
@@ -44,6 +45,7 @@
     "drizzle-orm": "^0.44.7",
     "groq-sdk": "^0.37.0",
     "hono": "^4.10.7",
+    "pdfkit": "^0.18.0",
     "postgres": "^3.4.7",
     "react-router-dom": "^7.11.0",
     "twilio": "^5.11.1",

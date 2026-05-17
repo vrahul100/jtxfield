@@ -5,6 +5,7 @@ import { sql } from 'drizzle-orm';
 export const nodes = pgTable('nodes', {
     id: serial('id').primaryKey(),
     name: text('name').notNull(),
+    companyCode: varchar('company_code', { length: 10 }).unique(),
     defaultHourlyRate: decimal('default_hourly_rate', { precision: 10, scale: 2 }).default('85.00'),
     createdAt: timestamp('created_at').defaultNow(),
 }, (table) => {
@@ -36,6 +37,7 @@ export const members = pgTable('members', {
     // Last confirmed project logic
     lastConfirmedProjectId: integer('last_confirmed_project_id').references((): any => projects.id),
     projectConfirmedAt: timestamp('project_confirmed_at'),
+    pendingCorrection: text('pending_correction'),
 
     createdAt: timestamp('created_at').defaultNow(),
 }, (table) => {
@@ -55,6 +57,7 @@ export const projects = pgTable('projects', {
     nodeId: integer('node_id').references(() => nodes.id).notNull(),
     name: text('name').notNull(),
     aliases: text('aliases'), // JSON array of project name variations for fuzzy matching
+    radius: integer('radius'), // Enforcement radius in meters
     isInbox: boolean('is_inbox').default(false), // Permanent "Inbox" project per node
     isActive: boolean('is_active').default(true),
     createdAt: timestamp('created_at').defaultNow(),
@@ -76,6 +79,8 @@ export const buckets = pgTable('buckets', {
     memberId: integer('member_id').references(() => members.id).notNull(),
     nodeId: integer('node_id').references(() => nodes.id).notNull(),
     projectId: integer('project_id').references(() => projects.id),
+
+    type: varchar('type', { length: 30 }).default('regular'), // regular | change_order | non_scope
 
     // Message data (accumulated)
     source: varchar('source', { length: 20 }).notNull(), // 'sms' | 'whatsapp'
@@ -102,8 +107,30 @@ export const buckets = pgTable('buckets', {
 
     // Twilio tracking
     messageSids: text('message_sids'),   // JSON array of Twilio message SIDs
+    waSentTimestamp: timestamp('wa_sent_timestamp'),
+    waReceivedTimestamp: timestamp('wa_received_timestamp'),
     potentialChange: boolean('potential_change').default(false),
     hours: decimal('hours', { precision: 10, scale: 2 }), // Extracted hours for editing
+
+    // Flags & auditing
+    flagCategory: varchar('flag_category', { length: 50 }),
+    flagReason: text('flag_reason'),
+    flagResolution: varchar('flag_resolution', { length: 50 }),
+    coPacketId: integer('co_packet_id'),
+
+    // Location
+    latitude: decimal('latitude', { precision: 10, scale: 7 }),
+    longitude: decimal('longitude', { precision: 10, scale: 7 }),
+    address: text('address'),
+
+    // Legacy DB columns missing from schema
+    summary: text('summary'),
+    extractionJson: text('extraction_json'),
+    conversationHistory: text('conversation_history'),
+    clarityScore: integer('clarity_score'),
+    lastQuestionType: varchar('last_question_type', { length: 50 }),
+    conversationState: varchar('conversation_state', { length: 50 }),
+    stateAttempts: integer('state_attempts').default(0),
 
     createdAt: timestamp('created_at').defaultNow(),
     updatedAt: timestamp('updated_at').defaultNow(),
@@ -130,6 +157,8 @@ export const txns = pgTable('txns', {
     evidence: text('evidence'),          // JSON array of media URLs (images + audio)
 
     scopeDescription: text('scope_description'),
+    location: text('location'),
+    estimatedRevenue: decimal('estimated_revenue', { precision: 10, scale: 2 }),
     time: decimal('time', { precision: 10, scale: 2 }),
     labor: text('labor'),
     material: text('material'),
@@ -224,3 +253,70 @@ export const sessions = pgTable('sessions', {
         })
     ]
 });
+
+// 10. CO PACKETS
+export const coPackets = pgTable('co_packets', {
+    id: serial('id').primaryKey(),
+    nodeId: integer('node_id').references(() => nodes.id).notNull(),
+    title: text('title').notNull(),
+    gcContact: text('gc_contact'),
+    status: varchar('status', { length: 20 }).default('draft').notNull(), // draft, submitted, approved, rejected, paid
+    coverNote: text('cover_note'),
+    markup: decimal('markup', { precision: 5, scale: 2 }),
+    pdfUrl: text('pdf_url'),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
+});
+
+// 11. WEEKLY TIMESHEETS
+export const weeklyTimesheets = pgTable('weekly_timesheets', {
+    id: serial('id').primaryKey(),
+    memberId: integer('member_id').references(() => members.id).notNull(),
+    nodeId: integer('node_id').references(() => nodes.id).notNull(),
+    weekStartDate: timestamp('week_start_date').notNull(),
+    totalHours: decimal('total_hours', { precision: 10, scale: 2 }).default('0'),
+    billableHours: decimal('billable_hours', { precision: 10, scale: 2 }).default('0'),
+    nonScopeHours: decimal('non_scope_hours', { precision: 10, scale: 2 }).default('0'),
+    status: varchar('status', { length: 20 }).default('pending').notNull(), // pending, approved
+    approvedBy: integer('approved_by').references(() => users.id),
+    createdAt: timestamp('created_at').defaultNow(),
+    updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
+});
+
+// 12. INTEGRATION INTEREST
+export const integrationInterest = pgTable('integration_interest', {
+    id: serial('id').primaryKey(),
+    companyName: text('company_name'),
+    userEmail: varchar('user_email', { length: 255 }),
+    integrationName: varchar('integration_name', { length: 100 }),
+    notes: text('notes'),
+    createdAt: timestamp('created_at').defaultNow(),
+}, (table) => {
+    return [
+        pgPolicy("Enable full access for service_role", {
+            for: "all",
+            to: "service_role",
+            using: sql`true`,
+            withCheck: sql`true`
+        })
+    ]
+});
+

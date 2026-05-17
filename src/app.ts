@@ -7,13 +7,15 @@ import { handleTwilioWebhook } from './controllers/webhook.js'
 import { createAdminRoutes } from './controllers/admin.js'
 import { getInbox, bulkAssign, addAlias } from './controllers/inbox.js'
 import { login, logout, checkSession } from './controllers/auth.js'
-import { getWorklog, approveBucket, updateBucket, rejectBucket } from './controllers/worklog.js'
+import { getWorklog, getWorklogById, approveBucket, updateBucket, rejectBucket } from './controllers/worklog.js'
 import { getMembers, approveMember, inviteMember, updateMember, deleteMember, resendConfirmation } from './controllers/members.js'
 import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
 import { getNodes, createNode, updateNode, deleteNode } from './controllers/nodes.js'
 import { getUsersList, createNewUser, updateUserInfo, deleteUser } from './controllers/users.js'
-import { getSummaryReport } from './controllers/reports.js'
+import { getSummaryReport, getHeaderStats } from './controllers/reports.js'
 import { getTransactions, updateTransaction } from './controllers/transactions.js'
+import { submitIntegrationInterest } from './controllers/integrations.js'
+import { getCOPackets, createCOPacket, generateCOPacketPDF } from './controllers/copackets.js'
 import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 
 export const createApp = (sql: Sql) => {
@@ -51,6 +53,7 @@ export const createApp = (sql: Sql) => {
     app.get('/api/auth/session', (c) => checkSession(c, sql))
 
     app.get('/api/worklog', requireOM(sql), (c) => getWorklog(c, sql))
+    app.get('/api/worklog/:id', requireOM(sql), (c) => getWorklogById(c, sql))
     app.post('/api/worklog/:id/approve', requireOM(sql), (c) => approveBucket(c, sql))
     app.post('/api/worklog/:id/reject', requireOM(sql), (c) => rejectBucket(c, sql))
     app.put('/api/worklog/:id', requireOM(sql), (c) => updateBucket(c, sql))
@@ -93,9 +96,18 @@ export const createApp = (sql: Sql) => {
 
     // 9. REPORTS API (OM & SU)
     app.get('/api/reports/summary', requireOM(sql), (c) => getSummaryReport(c, sql))
+    app.get('/api/reports/header-stats', requireOM(sql), (c) => getHeaderStats(c, sql))
 
     // 10. ADMIN API (legacy)
     app.route('/admin', createAdminRoutes(sql))
+
+    // 11. INTEGRATIONS API
+    app.post('/api/integrations/interest', requireOM(sql), (c) => submitIntegrationInterest(c, sql))
+
+    // 12. CO PACKETS API
+    app.get('/api/copackets', requireOM(sql), (c) => getCOPackets(c, sql))
+    app.post('/api/copackets', requireOM(sql), (c) => createCOPacket(c, sql))
+    app.post('/api/copackets/:id/generate', requireOM(sql), (c) => generateCOPacketPDF(c, sql))
 
     return app
 }

@@ -7,6 +7,7 @@ interface Project {
     name: string;
     description: string;
     aliases: string | null;  // JSON string from database
+    radius: number | null;
     nodeId: number;
     node_id?: number;
     nodeName?: string;
@@ -54,6 +55,7 @@ export function Projects() {
         name: '',
         description: '',
         aliases: '',
+        radius: '',
         isActive: true,
         nodeId: '',
     });
@@ -130,6 +132,7 @@ export function Projects() {
             name: formData.name,
             description: formData.description,
             aliases: formData.aliases.split(',').map(a => a.trim()).filter(Boolean),
+            radius: formData.radius,
             isActive: formData.isActive,
         };
 
@@ -164,6 +167,7 @@ export function Projects() {
             name: project.name,
             description: project.description || '',
             aliases: parseAliases(project.aliases).join(', '),
+            radius: project.radius ? project.radius.toString() : '',
             isActive: getIsActive(project),
             nodeId: getNodeId(project).toString(),
         });
@@ -192,7 +196,7 @@ export function Projects() {
     };
 
     const resetForm = () => {
-        setFormData({ name: '', description: '', aliases: '', isActive: true, nodeId: '' });
+        setFormData({ name: '', description: '', aliases: '', radius: '', isActive: true, nodeId: '' });
         setEditingId(null);
         setShowForm(false);
     };
@@ -292,6 +296,22 @@ export function Projects() {
                                     Alternative names workers might use to refer to this project
                                 </p>
                             </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Geofence Radius (meters)
+                                </label>
+                                <input
+                                    type="number"
+                                    min="0"
+                                    value={formData.radius}
+                                    onChange={(e) => setFormData({ ...formData, radius: e.target.value })}
+                                    className="input-field"
+                                    placeholder="e.g. 50"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Distance from center where work can be logged
+                                </p>
+                            </div>
                             <div className="flex items-center">
                                 <input
                                     type="checkbox"
@@ -377,7 +397,10 @@ export function Projects() {
                                         </div>
                                     )}
                                     {user?.role === 'SU' && (project.node_name || project.nodeName) && (
-                                        <p className="text-sm text-gray-500">Node: {project.node_name || project.nodeName}</p>
+                                        <p className="text-sm text-gray-500 mb-2">Node: {project.node_name || project.nodeName}</p>
+                                    )}
+                                    {project.radius !== null && project.radius !== undefined && (
+                                        <p className="text-sm text-gray-500 mb-2">📍 Radius: {project.radius}m</p>
                                     )}
                                 </div>
                                 <div className="flex gap-2">

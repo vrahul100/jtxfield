@@ -163,6 +163,25 @@ Your message has been saved. An admin will add you to your project soon!`;
     return c.text(`<Response><Message>${pendingMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 
+  // 3c. CHECK FOR TOTAL KEYWORDS
+  if (messageText === 'TOTAL' || messageText === 'TOTAL HOY') {
+    const lang = getLang(member);
+    const isToday = messageText === 'TOTAL HOY';
+    const timeFilter = isToday
+      ? sql`created_at >= CURRENT_DATE`
+      : sql`created_at >= date_trunc('week', CURRENT_DATE)`;
+
+    const rows = await sql`SELECT SUM(time) as total FROM txns WHERE user_id = ${member.id} AND ${timeFilter}`;
+    const hours = parseFloat(rows[0]?.total || '0').toFixed(1).replace(/\.0$/, '');
+
+    const tWeek = isToday ? (lang === 'es' ? 'hoy' : 'today') : (lang === 'es' ? 'esta semana' : 'this week');
+    const msg = lang === 'es'
+        ? `⏱️ Has registrado *${hours} horas* ${tWeek}.`
+        : `⏱️ You have logged *${hours} hours* ${tWeek}.`;
+    
+    return c.text(`<Response><Message>${msg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+
   // 4. CHECK FOR PENDING CORRECTION CONFIRMATION (Y/Si/Yes)
   const rawPending = (member as any).pending_correction;
   const pendingCorrection = rawPending

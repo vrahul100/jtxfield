@@ -102,3 +102,25 @@ export async function getSummaryReport(c: Context, sql: Sql) {
         return c.json({ error: 'Failed to fetch summary report' }, 500);
     }
 }
+
+/**
+ * GET /api/reports/header-stats
+ * Get header stats (e.g. running billable $ for current week)
+ */
+export async function getHeaderStats(c: Context, sql: Sql) {
+    try {
+        const user: User = c.get('user');
+        
+        const result = await sql`
+            SELECT COALESCE(SUM(estimated_revenue), 0)::float as weekly_billable
+            FROM txns
+            WHERE created_at >= date_trunc('week', CURRENT_DATE)
+            ${user.role === 'OM' ? sql`AND company_id = ${user.nodeId}` : sql``}
+        `;
+        
+        return c.json({ weeklyBillable: result[0]?.weekly_billable || 0 });
+    } catch (error: any) {
+        console.error('[Reports] Header stats error:', error);
+        return c.json({ error: 'Failed to fetch header stats' }, 500);
+    }
+}

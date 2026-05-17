@@ -9,6 +9,9 @@ import { Transactions } from './pages/Transactions';
 import { Reports } from './pages/Reports';
 import { Nodes } from './pages/Nodes';
 import { Users } from './pages/Users';
+import { Integrations } from './pages/Integrations';
+import { COPackets } from './pages/COPackets';
+import { TicketDetail } from './pages/TicketDetail';
 import './index.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -52,6 +55,14 @@ function App() {
                         }
                     />
                     <Route
+                        path="/tickets/:id"
+                        element={
+                            <ProtectedRoute>
+                                <TicketDetail />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
                         path="/projects"
                         element={
                             <ProtectedRoute>
@@ -88,6 +99,22 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Users />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/integrations"
+                        element={
+                            <ProtectedRoute>
+                                <Integrations />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/copackets"
+                        element={
+                            <ProtectedRoute>
+                                <COPackets />
                             </ProtectedRoute>
                         }
                     />

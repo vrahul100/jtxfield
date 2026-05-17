@@ -61,6 +61,10 @@ export function Tickets() {
     const [totalPages, setTotalPages] = useState(1);
     const [total, setTotal] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
+    
+    const [selectionMode, setSelectionMode] = useState(false);
+    const [selectedTickets, setSelectedTickets] = useState<number[]>([]);
+    const [creatingPacket, setCreatingPacket] = useState(false);
 
     useEffect(() => {
         fetchProjects();
@@ -250,6 +254,47 @@ export function Tickets() {
         ];
     };
 
+    const handleCreatePacket = async () => {
+        if (!selectedTickets.length) return;
+        setCreatingPacket(true);
+        const title = prompt('Enter a title for the CO Packet:', `CO Packet - ${new Date().toLocaleDateString()}`);
+        if (!title) {
+            setCreatingPacket(false);
+            return;
+        }
+
+        try {
+            const res = await fetch('/api/copackets', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    title,
+                    bucketIds: selectedTickets
+                })
+            });
+            if (res.ok) {
+                const data = await res.json();
+                
+                try {
+                    await fetch(`/api/copackets/${data.packet.id}/generate`, { method: 'POST' });
+                } catch(e) {
+                    console.error('PDF gen failed');
+                }
+                
+                alert(`Packet created successfully.`);
+                setSelectionMode(false);
+                setSelectedTickets([]);
+                fetchBuckets();
+            } else {
+                alert('Failed to create CO Packet');
+            }
+        } catch (e) {
+            alert('Error creating CO Packet');
+        } finally {
+            setCreatingPacket(false);
+        }
+    };
+
     if (loading) {
         return (
             <Layout>
@@ -265,20 +310,32 @@ export function Tickets() {
             <div>
                 <div className="flex justify-between items-center mb-6">
                     <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
-                    <button
-                        onClick={fetchBuckets}
-                        disabled={refreshing}
-                        className="btn-primary flex items-center gap-2"
-                        style={refreshing ? { cursor: 'wait' } : {}}
-                    >
-                        {refreshing && (
-                            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                            </svg>
+                    <div className="flex gap-2">
+                        {selectionMode ? (
+                            <>
+                                <button className="btn-secondary" onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}>Cancel</button>
+                                <button className="btn-primary" disabled={selectedTickets.length === 0 || creatingPacket} onClick={handleCreatePacket}>
+                                    {creatingPacket ? 'Creating...' : `Create CO Packet (${selectedTickets.length})`}
+                                </button>
+                            </>
+                        ) : (
+                            <button className="btn-secondary" onClick={() => setSelectionMode(true)}>Select for CO Packet</button>
                         )}
-                        {refreshing ? 'Loading...' : 'Refresh'}
-                    </button>
+                        <button
+                            onClick={fetchBuckets}
+                            disabled={refreshing}
+                            className="btn-primary flex items-center gap-2"
+                            style={refreshing ? { cursor: 'wait' } : {}}
+                        >
+                            {refreshing && (
+                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                </svg>
+                            )}
+                            {refreshing ? 'Loading...' : 'Refresh'}
+                        </button>
+                    </div>
                 </div>
                 {/* Search and Filters */}
                 <div className="card p-4 mb-6">
@@ -379,6 +436,9 @@ export function Tickets() {
                             onReject={() => handleReject(bucket.id)}
                             onToggleChange={() => handleTogglePotentialChange(bucket.id, bucket.potential_change)}
                             onUpdateHours={(hours) => handleUpdateHours(bucket.id, hours)}
+                            selectable={selectionMode}
+                            selected={selectedTickets.includes(bucket.id)}
+                            onSelectToggle={() => setSelectedTickets(prev => prev.includes(bucket.id) ? prev.filter(id => id !== bucket.id) : [...prev, bucket.id])}
                         />
                     ))}
                 </div>

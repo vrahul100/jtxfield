@@ -73,21 +73,23 @@ cd frontend && npm run dev
 
 ### For Field Workers (Zero-App)
 - **WhatsApp/SMS Integration:** Send work updates via text + photos + voice notes
-- **AI Data Extraction:** Automatic extraction of work type, hours, materials, location
+- **AI Data Extraction (Llama 3.2):** Automatic extraction of work type, hours, materials, and automated consistency checks
+- **Natural Language Ticket Corrections:** Workers can edit past tickets intuitively (e.g., "#122 change hours to 6", "#122 city mall"). AI infers intent and triggers a confirmation flow
+- **Self-Service Onboarding:** Automated workflow for workers texting "JOIN JTX" or "JOIN" 
+- **Orphan/Pending Flow:** Messages from unknown numbers are securely saved in a holding tank and unlock automatically once claimed by a manager
 - **Smart Project Routing:** Fuzzy matching with aliases, falls back to Inbox
-- **Soft Confirmations:** "✅ (Tag: East Wing School) Logged to: Inbox"
-- **Consistency Checks:** AI verifies image matches description
-- **Multi-Language:** Support for English, Spanish, etc.
+- **Multilingual Context:** Per-message language context. Responds accurately in Spanish or English based on input
 
 ### For Office Managers (Web Dashboard)
-- **Ticket View:** Filter/sort all buckets (open, closed, completed)
-- **Members Management:** Approve orphan workers, add new members
-- **Projects CRUD:** Create, update, delete projects with aliases
+- **Tickets (Work Captured):** Filter, sort, and dive into individual tickets (open, closed, completed)
+- **Members Management:** Approve orphan workers, view active workers, and handle assignments
+- **Projects CRUD:** Create, update, delete projects with their aliases
 - **Inbox Workflow:** 
   - View entries grouped by suspected project tag
   - Bulk assign tagged items to projects
-  - Auto-learn aliases for future routing
-- **Revenue Recovery:** No work falls through cracks
+  - Auto-learn aliases for frictionless future routing
+- **Transactions Management:** View finalized hours and completed billable work logs
+- **Reports & Analytics:** Dashboard insights into recovered revenue, hours by project, and worker productivity
 
 ### For Super Users (Admin)
 - **All OM Features** across all nodes

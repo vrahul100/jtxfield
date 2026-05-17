@@ -102,19 +102,23 @@ export async function getWorklog(c: Context, sql: Sql) {
                 b.transcripts,
                 b.ai_response,
                 b.status,
+                b.type,
                 b.clarity_score,
                 b.extracted_data,
                 b.potential_change,
                 b.hours,
                 b.created_at,
                 b.updated_at,
+                b.wa_sent_timestamp,
+                b.wa_received_timestamp,
                 b.node_id,
                 b.project_id,
                 b.member_id,
                 p.name as project_name,
                 m.full_name as member_name,
                 m.phone_number as member_phone,
-                n.name as node_name
+                n.name as node_name,
+                n.default_hourly_rate as node_rate
             FROM buckets b
             LEFT JOIN projects p ON b.project_id = p.id
             LEFT JOIN members m ON b.member_id = m.id
@@ -133,6 +137,50 @@ export async function getWorklog(c: Context, sql: Sql) {
         });
     } catch (error: any) {
         console.error('[Tickets] Error:', error);
+        return c.json({ error: 'Internal server error' }, 500);
+    }
+}
+
+/**
+ * GET /api/worklog/:id
+ * Get single worklog/ticket details by ID
+ */
+export async function getWorklogById(c: Context, sql: Sql) {
+    try {
+        const user: User = c.get('user');
+        const bucketId = parseInt(c.req.param('id'));
+
+        let conditions = [`b.id = ${bucketId}`];
+        if (user.role === 'OM') {
+            conditions.push(`b.node_id = ${user.nodeId}`);
+        }
+
+        const [bucket] = await sql.unsafe(`
+            SELECT 
+                b.*,
+                p.name as project_name,
+                m.full_name as member_name,
+                m.phone_number as member_phone,
+                n.name as node_name,
+                n.default_hourly_rate as node_rate,
+                t.location,
+                t.material,
+                t.labor
+            FROM buckets b
+            LEFT JOIN projects p ON b.project_id = p.id
+            LEFT JOIN members m ON b.member_id = m.id
+            LEFT JOIN nodes n ON b.node_id = n.id
+            LEFT JOIN txns t ON b.id = t.bucket_id
+            WHERE ${conditions.join(' AND ')}
+        `);
+
+        if (!bucket) {
+            return c.json({ error: 'Bucket not found' }, 404);
+        }
+
+        return c.json({ bucket });
+    } catch (error: any) {
+        console.error('[Tickets] GetById error:', error);
         return c.json({ error: 'Internal server error' }, 500);
     }
 }
@@ -240,6 +288,36 @@ export async function updateBucket(c: Context, sql: Sql) {
         await sql.unsafe(query, values);
 
         console.log(`[Tickets] Bucket #${bucketId} updated by user ${user.id}`);
+
+        // Notification logic for hours change
+        if (hours !== undefined && parseFloat(hours) !== parseFloat(bucket.hours || '0')) {
+            try {
+                const [member] = await sql`SELECT phone_number, language_preference FROM members WHERE id = ${bucket.member_id}`;
+                if (member && member.phone_number) {
+                    const todayRes = await sql`
+                        SELECT COALESCE(SUM(hours), 0) as today_hours
+                        FROM buckets
+                        WHERE member_id = ${bucket.member_id}
+                        AND DATE(created_at) = CURRENT_DATE
+                        AND status != 'rejected'
+                        AND id != ${bucketId}
+                    `;
+                    const newTotal = parseFloat(todayRes[0].today_hours) + parseFloat(hours);
+                    
+                    import('../services/twilio.js').then(({ sendTwilioMessage }) => {
+                        const msg = member.language_preference === 'es' 
+                            ? `⚠️ Ticket #${bucketId}: las horas fueron ajustadas a ${hours}h por el manager. Total de hoy: ${newTotal}h.`
+                            : `⚠️ Ticket #${bucketId}: hours adjusted to ${hours}h by manager. Today revised: ${newTotal}h.`;
+                        
+                        sendTwilioMessage(member.phone_number, msg).catch(err => {
+                            console.error('[Tickets] Failed to notify worker:', err);
+                        });
+                    });
+                }
+            } catch (err) {
+                console.error('[Tickets] Notification error:', err);
+            }
+        }
 
         return c.json({ success: true });
     } catch (error: any) {
