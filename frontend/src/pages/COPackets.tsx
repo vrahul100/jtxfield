@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { FileText, Download, Clock } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 
 interface COPacket {
     id: number;

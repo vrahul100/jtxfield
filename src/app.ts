@@ -16,6 +16,7 @@ import { getSummaryReport, getHeaderStats } from './controllers/reports.js'
 import { getTransactions, updateTransaction } from './controllers/transactions.js'
 import { submitIntegrationInterest } from './controllers/integrations.js'
 import { getCOPackets, createCOPacket, generateCOPacketPDF } from './controllers/copackets.js'
+import { getTimesheets, getTimesheetDetails, approveTimesheet, exportTimesheetsCSV } from './controllers/timesheets.js'
 import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 
 export const createApp = (sql: Sql) => {
@@ -108,6 +109,12 @@ export const createApp = (sql: Sql) => {
     app.get('/api/copackets', requireOM(sql), (c) => getCOPackets(c, sql))
     app.post('/api/copackets', requireOM(sql), (c) => createCOPacket(c, sql))
     app.post('/api/copackets/:id/generate', requireOM(sql), (c) => generateCOPacketPDF(c, sql))
+
+    // 13. TIMESHEETS API
+    app.get('/api/timesheets', requireOM(sql), (c) => getTimesheets(c, sql))
+    app.get('/api/timesheets/export/csv', requireOM(sql), (c) => exportTimesheetsCSV(c, sql))
+    app.get('/api/timesheets/:memberId/details', requireOM(sql), (c) => getTimesheetDetails(c, sql))
+    app.post('/api/timesheets/approve', requireOM(sql), (c) => approveTimesheet(c, sql))
 
     return app
 }

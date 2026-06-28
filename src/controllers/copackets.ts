@@ -87,7 +87,7 @@ export async function generateCOPacketPDF(c: Context, sql: Sql) {
         
         // Generate PDF using PDFKit
         const doc = new PDFDocument({ margin: 50 });
-        const fileName = \`co_packet_\${packetId}_\${Date.now()}.pdf\`;
+        const fileName = `co_packet_${packetId}_${Date.now()}.pdf`;
         
         const pdfDir = path.join(process.cwd(), 'frontend', 'public', 'pdfs');
         if (!fs.existsSync(pdfDir)) fs.mkdirSync(pdfDir, { recursive: true });
@@ -96,11 +96,11 @@ export async function generateCOPacketPDF(c: Context, sql: Sql) {
         const stream = fs.createWriteStream(pdfPath);
         doc.pipe(stream);
         
-        doc.fontSize(20).text(\`Change Order Packet: \${packet.title}\`, { align: 'center' });
+        doc.fontSize(20).text(`Change Order Packet: ${packet.title}`, { align: 'center' });
         doc.moveDown();
-        doc.fontSize(12).text(\`Date: \${new Date().toLocaleDateString()}\`);
-        if (packet.gc_contact) doc.text(\`GC Contact: \${packet.gc_contact}\`);
-        if (packet.cover_note) doc.text(\`Cover Note: \${packet.cover_note}\`);
+        doc.fontSize(12).text(`Date: ${new Date().toLocaleDateString()}`);
+        if (packet.gc_contact) doc.text(`GC Contact: ${packet.gc_contact}`);
+        if (packet.cover_note) doc.text(`Cover Note: ${packet.cover_note}`);
         doc.moveDown();
         
         doc.fontSize(16).text('Included Work Tickets:');
@@ -109,22 +109,22 @@ export async function generateCOPacketPDF(c: Context, sql: Sql) {
         let totalHours = 0;
         
         for (const t of tickets) {
-            doc.fontSize(12).text(\`Ticket ID: #\${t.id} - Worker: \${t.member_name || 'Unknown'}\`);
-            doc.fontSize(10).text(\`Project: \${t.project_name || 'Unknown'}\`);
-            doc.text(\`Description: \${t.summary || t.transcripts || 'No description'}\`);
-            doc.text(\`Hours: \${t.hours || 0}\`);
+            doc.fontSize(12).text(`Ticket ID: #${t.id} - Worker: ${t.member_name || 'Unknown'}`);
+            doc.fontSize(10).text(`Project: ${t.project_name || 'Unknown'}`);
+            doc.text(`Description: ${t.summary || t.transcripts || 'No description'}`);
+            doc.text(`Hours: ${t.hours || 0}`);
             doc.moveDown();
             totalHours += parseFloat(t.hours || '0');
         }
         
         doc.moveDown();
-        doc.fontSize(14).text(\`Total Hours: \${totalHours.toFixed(2)}\`);
+        doc.fontSize(14).text(`Total Hours: ${totalHours.toFixed(2)}`);
         
         doc.end();
         
         await new Promise((resolve) => stream.on('finish', resolve));
         
-        const pdfUrl = \`/pdfs/\${fileName}\`;
+        const pdfUrl = `/pdfs/${fileName}`;
         
         const [updated] = await sql`
             UPDATE co_packets SET pdf_url = ${pdfUrl}, status = 'submitted' WHERE id = ${packetId} RETURNING *

@@ -1,6 +1,5 @@
 import {
     Paperclip,
-    Circle,
     Check,
     X,
     AlertTriangle,
@@ -99,13 +98,6 @@ export function WorkEntryCard({
             default:
                 return 'bg-gray-200';
         }
-    };
-
-    const getConfidenceColor = (score: number | null | undefined) => {
-        if (score === null || score === undefined) return 'text-gray-400';
-        if (score >= 0.7) return 'text-green-600';
-        if (score >= 0.4) return 'text-yellow-600';
-        return 'text-red-600';
     };
 
     const formatDate = (dateString: string) => {

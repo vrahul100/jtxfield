@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
-import { ChevronLeft, MapPin, Clock, FileText, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
+import { MapPin, CheckCircle, AlertTriangle, ArrowLeft } from 'lucide-react';
 
 export function TicketDetail() {
     const { id } = useParams();

@@ -5,7 +5,7 @@ import { Login } from './pages/Login';
 import { Tickets } from './pages/Tickets';
 import { Members } from './pages/Members';
 import { Projects } from './pages/Projects';
-import { Transactions } from './pages/Transactions';
+import { Timesheets } from './pages/Timesheets';
 import { Reports } from './pages/Reports';
 import { Nodes } from './pages/Nodes';
 import { Users } from './pages/Users';
@@ -71,10 +71,10 @@ function App() {
                         }
                     />
                     <Route
-                        path="/transactions"
+                        path="/timesheets"
                         element={
                             <ProtectedRoute>
-                                <Transactions />
+                                <Timesheets />
                             </ProtectedRoute>
                         }
                     />

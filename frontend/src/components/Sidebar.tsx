@@ -5,13 +5,13 @@ import {
     ClipboardList,
     Users,
     FolderKanban,
-    Receipt,
     Building2,
     Shield,
     ChartBar,
     Menu,
     Settings2,
-    FileText
+    FileText,
+    Clock
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -75,8 +75,8 @@ export function Sidebar() {
                         <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Work Captured</span>
                     </NavLink>
 
-                    <NavLink to="/transactions" className={navLinkClass} title="Timesheets" onClick={() => isMobile && setIsCollapsed(true)}>
-                        <Receipt className="w-5 h-5 flex-shrink-0" />
+                    <NavLink to="/timesheets" className={navLinkClass} title="Timesheets" onClick={() => isMobile && setIsCollapsed(true)}>
+                        <Clock className="w-5 h-5 flex-shrink-0" />
                         <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Timesheets</span>
                     </NavLink>
 
