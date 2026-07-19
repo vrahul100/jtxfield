@@ -12,8 +12,37 @@ import dotenv from 'dotenv';
 import { createUser } from '../src/services/auth.js';
 
 dotenv.config();
-const sql = postgres(process.env.DATABASE_URL!, {
-    ssl: 'require',
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+    console.error('❌ Error: DATABASE_URL is not set in environment or .env file');
+    process.exit(1);
+}
+
+const isLocal = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
+
+if (isLocal) {
+    try {
+        const url = new URL(DATABASE_URL);
+        const dbName = url.pathname.substring(1);
+        if (dbName && dbName !== 'postgres') {
+            url.pathname = '/postgres';
+            const tempSql = postgres(url.toString(), { ssl: false });
+            const dbExists = await tempSql`SELECT 1 FROM pg_database WHERE datname = ${dbName}`;
+            if (dbExists.length === 0) {
+                console.log(`📡 Local database "${dbName}" not found. Creating it...`);
+                await tempSql.unsafe(`CREATE DATABASE "${dbName}"`);
+                console.log(`✅ Local database "${dbName}" created!`);
+            }
+            await tempSql.end();
+        }
+    } catch (e: any) {
+        console.warn(`⚠️ Warning while checking local database: ${e.message}`);
+    }
+}
+
+const sql = postgres(DATABASE_URL, {
+    ssl: isLocal ? false : 'require',
     connection: {
         application_name: 'jtxfield-seed',
     },

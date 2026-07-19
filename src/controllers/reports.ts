@@ -112,10 +112,11 @@ export async function getHeaderStats(c: Context, sql: Sql) {
         const user: User = c.get('user');
         
         const result = await sql`
-            SELECT COALESCE(SUM(estimated_revenue), 0)::float as weekly_billable
-            FROM txns
-            WHERE created_at >= date_trunc('week', CURRENT_DATE)
-            ${user.role === 'OM' ? sql`AND company_id = ${user.nodeId}` : sql``}
+            SELECT COALESCE(SUM(t.time * n.default_hourly_rate), 0)::float as weekly_billable
+            FROM txns t
+            JOIN nodes n ON t.company_id = n.id
+            WHERE t.created_at >= date_trunc('week', CURRENT_DATE)
+            ${user.role === 'OM' ? sql`AND t.company_id = ${user.nodeId}` : sql``}
         `;
         
         return c.json({ weeklyBillable: result[0]?.weekly_billable || 0 });

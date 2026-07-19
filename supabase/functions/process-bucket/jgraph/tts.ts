@@ -85,7 +85,7 @@ export async function generateAudioResponse(
         const supabase = createClient(supabaseUrl, supabaseKey)
 
         // Log environment info for debugging
-        const isDev = supabaseUrl.includes('jbojgxyqexgcooduavhx')
+        const isDev = false
         const envLabel = isDev ? 'DEV' : 'PROD'
         console.log(`[TTS] 🔧 Environment: ${envLabel} | Bucket: ${storageBucket}`)
 

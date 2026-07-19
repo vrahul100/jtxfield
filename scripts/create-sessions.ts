@@ -20,7 +20,31 @@ if (!DATABASE_URL) {
     process.exit(1);
 }
 
-const sql = postgres(DATABASE_URL);
+const isLocal = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
+
+if (isLocal) {
+    try {
+        const url = new URL(DATABASE_URL);
+        const dbName = url.pathname.substring(1);
+        if (dbName && dbName !== 'postgres') {
+            url.pathname = '/postgres';
+            const tempSql = postgres(url.toString(), { ssl: false });
+            const dbExists = await tempSql`SELECT 1 FROM pg_database WHERE datname = ${dbName}`;
+            if (dbExists.length === 0) {
+                console.log(`📡 Local database "${dbName}" not found. Creating it...`);
+                await tempSql.unsafe(`CREATE DATABASE "${dbName}"`);
+                console.log(`✅ Local database "${dbName}" created!`);
+            }
+            await tempSql.end();
+        }
+    } catch (e: any) {
+        console.warn(`⚠️ Warning while checking local database: ${e.message}`);
+    }
+}
+
+const sql = postgres(DATABASE_URL, {
+    ssl: isLocal ? false : 'require'
+});
 
 async function migrate() {
     console.log('🚀 Creating sessions table...');

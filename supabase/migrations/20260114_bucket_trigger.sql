@@ -11,7 +11,7 @@ CREATE EXTENSION IF NOT EXISTS pg_net;
 
 -- Create the trigger function with logging
 -- NOTE: Update URL and Bearer token for each environment:
---   DEV:  https://jbojgxyqexgcooduavhx.supabase.co/functions/v1/process-bucket
+ 
 --   PROD: https://gevdamoroboqxpacbdkk.supabase.co/functions/v1/process-bucket
 CREATE OR REPLACE FUNCTION notify_bucket_processing()
 RETURNS TRIGGER AS $$

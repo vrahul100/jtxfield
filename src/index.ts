@@ -14,9 +14,12 @@ const isVercel = process.env.VERCEL === '1';
 // Log environment for debugging
 console.log(`[Server] Starting up. Env: ${process.env.NODE_ENV}, Vercel: ${isVercel}`);
 
-const sql = postgres(process.env.DATABASE_URL!, {
-  // Force SSL on Vercel, or if production/remote
-  ssl: isVercel || process.env.NODE_ENV === 'production' || process.env.DEPLOY_MODE === 'remote' ? 'require' : false,
+const dbUrl = process.env.DATABASE_URL!;
+const isLocalDb = dbUrl.includes('localhost') || dbUrl.includes('127.0.0.1');
+
+const sql = postgres(dbUrl, {
+  // Force SSL on Vercel, or if production/remote, unless we are connecting to a local DB
+  ssl: !isLocalDb && (isVercel || process.env.NODE_ENV === 'production' || process.env.DEPLOY_MODE === 'remote') ? 'require' : false,
   prepare: false, // Disable prepared statements for Supabase Transaction Pooler (port 6543)
   idle_timeout: 1, // Close idle connections quickly in serverless
   max: 1 // Max 1 connection per lambda to avoid exhausting pool

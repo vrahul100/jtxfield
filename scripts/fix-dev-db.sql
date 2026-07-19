@@ -1,6 +1,5 @@
 -- Run this in Supabase SQL Editor to add missing columns and verify trigger
--- DEV: https://supabase.com/dashboard/project/jbojgxyqexgcooduavhx/sql
-
+ 
 -- 1. Add missing columns
 ALTER TABLE buckets ADD COLUMN IF NOT EXISTS potential_change text;
 ALTER TABLE buckets ADD COLUMN IF NOT EXISTS extracted_data text;

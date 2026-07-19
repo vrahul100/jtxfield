@@ -9,16 +9,44 @@ import postgres from 'postgres';
 import dotenv from 'dotenv';
 
 dotenv.config();
-const sql = postgres(process.env.DATABASE_URL!);
 
-// Detect environment for logging
-const dbUrl = process.env.DATABASE_URL || '';
-const isDev = dbUrl.includes('jbojgxyqexgcooduavhx');
-const envLabel = isDev ? 'DEV' : 'PROD';
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+    console.error('❌ Error: DATABASE_URL is not set in environment or .env file');
+    process.exit(1);
+}
+
+const isLocal = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
+
+if (isLocal) {
+    try {
+        const url = new URL(DATABASE_URL);
+        const dbName = url.pathname.substring(1);
+        if (dbName && dbName !== 'postgres') {
+            url.pathname = '/postgres';
+            const tempSql = postgres(url.toString(), { ssl: false });
+            const dbExists = await tempSql`SELECT 1 FROM pg_database WHERE datname = ${dbName}`;
+            if (dbExists.length === 0) {
+                console.log(`📡 Local database "${dbName}" not found. Creating it...`);
+                await tempSql.unsafe(`CREATE DATABASE "${dbName}"`);
+                console.log(`✅ Local database "${dbName}" created!`);
+            }
+            await tempSql.end();
+        }
+    } catch (e: any) {
+        console.warn(`⚠️ Warning while checking local database: ${e.message}`);
+    }
+}
+
+const sql = postgres(DATABASE_URL, {
+    ssl: isLocal ? false : 'require'
+});
+
+const envLabel = isLocal ? 'LOCAL' : 'PROD';
 
 async function run() {
     console.log(`🚀 Running migration on ${envLabel} environment...\n`);
-
+    console.log('Running migration on: ', DATABASE_URL);
     // ========================================================================
     // 1. MEMBERS TABLE EXTENSIONS
     // ========================================================================
@@ -105,6 +133,10 @@ async function run() {
         { name: 'suspected_project_name', type: 'text' },
         { name: 'conversation_history', type: 'text' },
         { name: 'clarity_score', type: 'integer' },
+        { name: 'type', type: "varchar(30) DEFAULT 'regular'" },
+        { name: 'wa_sent_timestamp', type: 'timestamp' },
+        { name: 'wa_received_timestamp', type: 'timestamp' },
+        { name: 'hours', type: 'numeric(10, 2)' },
     ];
     for (const col of bucketColumns) {
         await addColumn('buckets', col.name, col.type);
@@ -158,16 +190,27 @@ async function run() {
             CREATE TABLE IF NOT EXISTS "users" (
                 "id" serial PRIMARY KEY NOT NULL,
                 "email" varchar(255) NOT NULL UNIQUE,
-                "password_hash" varchar(255) NOT NULL,
-                "role" varchar(20) DEFAULT 'OM' NOT NULL,
+                "password_hash" text NOT NULL,
+                "role" varchar(10) NOT NULL,
                 "node_id" integer,
-                "name" varchar(255),
-                "created_at" timestamp DEFAULT now()
+                "full_name" varchar(100),
+                "is_active" boolean DEFAULT true,
+                "created_at" timestamp DEFAULT now(),
+                "updated_at" timestamp DEFAULT now()
             )
         `;
         console.log('  ✅ OK\n');
     } catch (e: any) {
         console.log('  ⚠️', e.message, '\n');
+    }
+
+    // Migrate existing users table if it was created with old fields (name instead of full_name)
+    try {
+        await sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "full_name" varchar(100)`;
+        await sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_active" boolean DEFAULT true`;
+        await sql`ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "updated_at" timestamp DEFAULT now()`;
+    } catch (e: any) {
+        console.log('  ⚠️ Users migration warning:', e.message, '\n');
     }
 
     // ========================================================================

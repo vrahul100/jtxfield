@@ -11,7 +11,38 @@ import dotenv from 'dotenv';
 import { readFileSync } from 'fs';
 
 dotenv.config();
-const sql = postgres(process.env.DATABASE_URL!);
+
+const DATABASE_URL = process.env.DATABASE_URL;
+if (!DATABASE_URL) {
+    console.error('❌ Error: DATABASE_URL is not set in environment or .env file');
+    process.exit(1);
+}
+
+const isLocal = DATABASE_URL.includes('localhost') || DATABASE_URL.includes('127.0.0.1');
+
+if (isLocal) {
+    try {
+        const url = new URL(DATABASE_URL);
+        const dbName = url.pathname.substring(1);
+        if (dbName && dbName !== 'postgres') {
+            url.pathname = '/postgres';
+            const tempSql = postgres(url.toString(), { ssl: false });
+            const dbExists = await tempSql`SELECT 1 FROM pg_database WHERE datname = ${dbName}`;
+            if (dbExists.length === 0) {
+                console.log(`📡 Local database "${dbName}" not found. Creating it...`);
+                await tempSql.unsafe(`CREATE DATABASE "${dbName}"`);
+                console.log(`✅ Local database "${dbName}" created!`);
+            }
+            await tempSql.end();
+        }
+    } catch (e: any) {
+        console.warn(`⚠️ Warning while checking local database: ${e.message}`);
+    }
+}
+
+const sql = postgres(DATABASE_URL, {
+    ssl: isLocal ? false : 'require'
+});
 
 async function runAllMigrations() {
     console.log('🚀 Running ALL migrations on Supabase...\n');
@@ -32,14 +63,30 @@ async function runAllMigrations() {
         console.log(`→ Running ${file}...`);
         try {
             const sqlContent = readFileSync(`drizzle/${file}`, 'utf-8');
-            await sql.unsafe(sqlContent);
+            const statements = sqlContent.split('--> statement-breakpoint');
+            
+            for (const stmt of statements) {
+                const trimmed = stmt.trim();
+                if (!trimmed) continue;
+                
+                try {
+                    await sql.unsafe(trimmed);
+                } catch (e: any) {
+                    if (
+                        e.message.includes('already exists') || 
+                        e.message.includes('already a member') || 
+                        e.message.includes('does not exist') ||
+                        e.message.includes('duplicate')
+                    ) {
+                        // Safe to ignore for idempotency
+                    } else {
+                        console.log(`  ⚠️ Statement error: ${e.message}`);
+                    }
+                }
+            }
             console.log(`  ✅ OK`);
         } catch (e: any) {
-            if (e.message.includes('already exists')) {
-                console.log(`  ⏭️ Already applied`);
-            } else {
-                console.log(`  ⚠️ ${e.message}`);
-            }
+            console.log(`  ⚠️ ${e.message}`);
         }
     }
 

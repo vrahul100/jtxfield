@@ -2,7 +2,10 @@ import postgres from 'postgres';
 import dotenv from 'dotenv';
 dotenv.config();
 
-const directUrl = 'postgresql://postgres.jbojgxyqexgcooduavhx:chNPNeEW6Gn1xIr4@aws-1-us-west-1.pooler.supabase.com:6543/postgres?pgbouncer=true';
+const directUrl = process.env.DATABASE_URL;
+if (!directUrl) {
+    throw new Error('DATABASE_URL is not defined in the environment variables.');
+}
 const sql = postgres(directUrl, { ssl: 'require', prepare: false });
 
 async function run() {
