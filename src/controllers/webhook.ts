@@ -516,6 +516,12 @@ async function parseCorrectionIntent(text: string): Promise<CorrectionIntent> {
     return { action: 'change_hours', value: hoursMatch[1] };
   }
 
+  // Heuristic: If correctionText is just a valid integer/decimal number, assume it's hours
+  const isNumber = /^\d+\.?\d*$/.test(correctionText);
+  if (isNumber) {
+    return { action: 'change_hours', value: correctionText };
+  }
+
   // Use LLM for more nuanced interpretation
   const Groq = (await import('groq-sdk')).default;
   const groqApiKey = process.env.GROQ_API_KEY;
@@ -605,18 +611,23 @@ async function applyCorrection(
       return `❌ Invalid hours value: "${correction.value}". Please use a number between 1-24.`;
     }
 
-    // Update bucket extracted_data hours
+    // Update bucket extracted_data and hours
     const buckets = await sql`SELECT extracted_data FROM buckets WHERE id = ${bucketId}`;
+    let extractedData = {};
     if (buckets[0]?.extracted_data) {
-      const extractedData = typeof buckets[0].extracted_data === 'string'
+      extractedData = typeof buckets[0].extracted_data === 'string'
         ? JSON.parse(buckets[0].extracted_data)
         : buckets[0].extracted_data;
-      extractedData.hoursWorked = hours;
-      await sql`
-        UPDATE buckets SET extracted_data = ${JSON.stringify(extractedData)}, updated_at = NOW()
-        WHERE id = ${bucketId}
-      `;
     }
+    (extractedData as any).hoursWorked = hours;
+
+    await sql`
+      UPDATE buckets SET 
+        extracted_data = ${JSON.stringify(extractedData)}, 
+        hours = ${hours},
+        updated_at = NOW()
+      WHERE id = ${bucketId}
+    `;
 
     // Update linked transaction
     await sql`
