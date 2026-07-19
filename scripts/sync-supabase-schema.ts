@@ -51,12 +51,18 @@ async function runAllMigrations() {
     const sqlMigrations = [
         '0000_careless_centennial.sql',
         '0001_lonely_triton.sql',
+        '0002_superb_molten_man.sql',
         '0003_add_pending_node_id.sql',
+        '0003_sturdy_molecule_man.sql',
         '0004_add_conversation_history.sql',
+        '0004_tense_maginty.sql',
+        '0005_fluffy_spot.sql',
         '0005_simplify_txns.sql',
         '0006_add_extracted_data.sql',
+        '0006_needy_deadpool.sql',
         '0007_add_clarity_score.sql',
         '0008_add_summary.sql',
+        '0009_add_potential_change.sql',
     ];
 
     for (const file of sqlMigrations) {

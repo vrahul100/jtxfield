@@ -38,7 +38,7 @@ async function migrate() {
     try {
         // 1. Enable pg_net extension
         console.log('  - Enabling pg_net extension...');
-        await sql`CREATE EXTENSION IF NOT EXISTS pg_net WITH SCHEMA net;`;
+        await sql`CREATE EXTENSION IF NOT EXISTS pg_net;`;
 
         // 2. Create the trigger function using EXACT Supabase documentation syntax
         console.log('  - Creating trigger function...');

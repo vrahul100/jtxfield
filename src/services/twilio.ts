@@ -44,28 +44,16 @@ export async function sendTwilioMessage(
 ): Promise<{ success: boolean; sid?: string; error?: string }> {
     const config = getConfig();
 
-    const toNumber = source === 'whatsapp' ? `whatsapp:${to}` : to;
-    const fromNumber = source === 'whatsapp' ? config.fromWhatsApp : config.fromNumber;
-
     if (!config.accountSid || !config.authToken) {
         console.warn('[Twilio] Missing credentials - message not sent');
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('\n📱 [TWILIO MOCK FALLBACK] 📥 Message would be sent to:', toNumber);
-            console.log('💬 Body:\n', body);
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-            return { success: true, sid: 'mock_sid_' + Math.random().toString(36).substring(7) };
-        }
         return { success: false, error: 'Missing Twilio credentials' };
     }
 
+    const toNumber = source === 'whatsapp' ? `whatsapp:${to}` : to;
+    const fromNumber = source === 'whatsapp' ? config.fromWhatsApp : config.fromNumber;
+
     if (!fromNumber) {
         console.warn(`[Twilio] Missing ${source} from number`);
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('\n📱 [TWILIO MOCK FALLBACK] 📥 Message would be sent to:', toNumber);
-            console.log('💬 Body:\n', body);
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-            return { success: true, sid: 'mock_sid_' + Math.random().toString(36).substring(7) };
-        }
         return { success: false, error: `Missing ${source} from number` };
     }
 
@@ -95,12 +83,6 @@ export async function sendTwilioMessage(
         
         if (!response.ok) {
             console.error('[Twilio] API Error:', data);
-            if (process.env.NODE_ENV !== 'production') {
-                console.log('\n📱 [TWILIO MOCK FALLBACK] 📥 Message would be sent to:', toNumber);
-                console.log('💬 Body:\n', body);
-                console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-                return { success: true, sid: 'mock_sid_' + Math.random().toString(36).substring(7) };
-            }
             return { success: false, error: data.message || 'Twilio API error' };
         }
 
@@ -108,12 +90,6 @@ export async function sendTwilioMessage(
         return { success: true, sid: data.sid };
     } catch (error) {
         console.error('[Twilio] Send error:', error);
-        if (process.env.NODE_ENV !== 'production') {
-            console.log('\n📱 [TWILIO MOCK FALLBACK] 📥 Message would be sent to:', toNumber);
-            console.log('💬 Body:\n', body);
-            console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-            return { success: true, sid: 'mock_sid_' + Math.random().toString(36).substring(7) };
-        }
         return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
     }
 }

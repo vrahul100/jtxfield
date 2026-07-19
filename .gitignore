@@ -12,7 +12,7 @@ drizzle/meta
 .idea/workspace.xml
 .idea/usage.statistics.xml
 .idea/shelf
-
+supabase/.temp/
 # deps
 node_modules/
 
