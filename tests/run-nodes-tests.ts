@@ -193,7 +193,7 @@ async function extractWithLLM(rawText: string, transcripts: string[], imageAnaly
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                model: 'meta-llama/openai/gpt-oss-20b',
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.1,
                 response_format: { type: 'json_object' },

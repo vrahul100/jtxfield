@@ -69,9 +69,9 @@ export async function getMembers(c: Context, sql: Sql) {
         let conditions: string[] = [];
 
         if (user.role === 'OM') {
-            conditions.push(`m.company_id = ${user.nodeId}`);
+            conditions.push(`(m.company_id = ${user.nodeId} OR m.pending_node_id = ${user.nodeId})`);
         } else if (nodeId) {
-            conditions.push(`m.company_id = ${parseInt(nodeId)}`);
+            conditions.push(`(m.company_id = ${parseInt(nodeId)} OR m.pending_node_id = ${parseInt(nodeId)})`);
         }
 
         if (status) {
@@ -97,7 +97,7 @@ export async function getMembers(c: Context, sql: Sql) {
         const members = await sql.unsafe(`
             SELECT m.*, n.name as node_name
             FROM members m
-            LEFT JOIN nodes n ON m.company_id = n.id
+            LEFT JOIN nodes n ON COALESCE(m.company_id, m.pending_node_id) = n.id
             ${whereClause}
             ORDER BY m.created_at DESC
             LIMIT ${limit} OFFSET ${offset}
@@ -371,7 +371,8 @@ export async function resendConfirmation(c: Context, sql: Sql) {
         const member = members[0];
 
         // OM can only resend for their node
-        if (user.role === 'OM' && member.company_id !== user.nodeId) {
+        const targetNodeId = member.company_id || member.pending_node_id;
+        if (user.role === 'OM' && targetNodeId !== user.nodeId) {
             return c.json({ error: 'Forbidden' }, 403);
         }
 
@@ -382,10 +383,16 @@ export async function resendConfirmation(c: Context, sql: Sql) {
 
         // Send confirmation message
         try {
-            await sendConfirmationMessage(member.phone_number, member.full_name);
-            console.log(`[Members] Resent confirmation to ${member.phone_number}`);
+            if (member.pending_node_id) {
+                const nodes = await sql`SELECT name FROM nodes WHERE id = ${member.pending_node_id}`;
+                const nodeName = nodes.length > 0 ? nodes[0].name : 'our team';
+                await sendInvitationMessage(member.phone_number, member.full_name, nodeName);
+            } else {
+                await sendConfirmationMessage(member.phone_number, member.full_name);
+            }
+            console.log(`[Members] Resent confirmation/invitation to ${member.phone_number}`);
         } catch (err) {
-            console.error('[Members] Failed to resend confirmation:', err);
+            console.error('[Members] Failed to resend confirmation/invitation:', err);
             return c.json({ error: 'Failed to send confirmation message' }, 500);
         }
 

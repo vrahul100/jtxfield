@@ -1112,7 +1112,7 @@ async function analyzeImage(url: string, groqApiKey: string): Promise<string> {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'meta-llama/llama-4-scout-17b-16e-instruct',
+                model: 'meta-llama/openai/gpt-oss-20b',
                 messages: [
                     { role: 'system', content: 'Describe this construction/work image. List: Type of work, Materials visible, Completion status.' },
                     {

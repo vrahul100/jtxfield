@@ -64,7 +64,7 @@ export async function parseChangeOrder(
             },
             { role: "user", content: userContent }
         ],
-        model: "meta-llama/llama-4-scout-17b-16e-instruct",
+        model: "meta-llama/openai/gpt-oss-20b",
         temperature: 0.1,
         response_format: { type: "json_object" }
     });
