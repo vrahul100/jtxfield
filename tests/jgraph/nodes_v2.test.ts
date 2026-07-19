@@ -174,7 +174,7 @@ describe('State Handler: handleInitial', () => {
         }
 
         const hasWork = !!extraction.workType
-        const hasHours = extraction.hoursWorked && extraction.hoursWorked > 0
+        const hasHours = !!(extraction.hoursWorked && extraction.hoursWorked > 0)
 
         expect(hasWork).toBe(false)
         expect(hasHours).toBe(false)

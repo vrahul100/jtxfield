@@ -607,9 +607,8 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // Check if we're in a confirmation state with existing work data
     const hasWorkData = extraction.workType && extraction.hoursWorked && extraction.hoursWorked > 0
     const isConfirmState = ['confirming_project', 'confirming_all', 'selecting_project'].includes(currentState)
-    // States that handle their own extraction logic — skip full re-extraction to prevent
-    // issues like hours doubling (raw_text accumulates duplicate messages)
-    const skipFullExtraction = ['clarifying_inconsistency', 'collecting_work', 'collecting_hours'].includes(currentState)
+    // We only skip full extraction for clarifying_inconsistency which has its own custom re-extraction logic
+    const skipFullExtraction = ['clarifying_inconsistency'].includes(currentState)
     
     // When in confirmation state with data, only extract from LATEST input (not all accumulated transcripts)
     // This lets the LLM understand the user's answer in context without re-processing old work data
@@ -1085,16 +1084,44 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
 
     // If this is a response (attempts > 0), try to extract
     if (stateAttempts > 0 && lastMsg) {
-        // Simple extraction from response
-        const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)?/i)
-        const hours = hoursMatch ? parseFloat(hoursMatch[1]) : extraction.hoursWorked
-        const workType = lastMsg.replace(/\d+(?:\.\d+)?\s*(?:hours?|hrs?|h)?/gi, '').trim() || extraction.workType || 'work'
+        // 1. Try values already extracted by the LLM
+        let hours = extraction.hoursWorked
+        let workType = extraction.workType
 
-        if (hours && hours > 0) {
+        // 2. Simple regex heuristic fallback if LLM missed it
+        if (!hours || hours <= 0) {
+            const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)?/i)
+            if (hoursMatch) {
+                hours = parseFloat(hoursMatch[1])
+                extraction.hoursWorked = hours
+            }
+        }
+        if (!workType || workType === 'work' || workType === 'general') {
+            const parsedWork = lastMsg.replace(/\d+(?:\.\d+)?\s*(?:hours?|hrs?|h)?/gi, '').trim()
+            if (parsedWork && parsedWork.length > 3) {
+                workType = parsedWork
+                extraction.workType = workType
+            }
+        }
+
+        const hasWork = workType && workType !== 'work' && workType !== 'general'
+        const hasHours = hours && hours > 0
+
+        if (hasWork && hasHours) {
+            await getSupabase().from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
+            const hasProject = !!extraction.projectHint || !!ctx.member?.last_confirmed_project_id
             return {
-                nextState: 'confirming_project',
+                nextState: hasProject ? 'confirming_all' : 'confirming_project',
                 response: null,
-                extraction: { ...extraction, workType, hoursWorked: hours, summary: lastMsg },
+                extraction,
+            }
+        } else if (hasWork) {
+            // We got the work classification, transition to collecting hours
+            await getSupabase().from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
+            return {
+                nextState: 'collecting_hours',
+                response: null,
+                extraction,
             }
         }
     }
@@ -1136,14 +1163,25 @@ async function handleCollectingHours(ctx: StateContext): Promise<StateResult> {
 
     // If this is a response, try to extract hours
     if (stateAttempts > 0 && lastMsg) {
-        const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h|horas?)?/i)
-        const hours = hoursMatch ? parseFloat(hoursMatch[1]) : null
+        // 1. Try LLM extracted hours
+        let hours = extraction.hoursWorked
+
+        // 2. Simple regex heuristic fallback if LLM missed it
+        if (!hours || hours <= 0) {
+            const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h|horas?)?/i)
+            if (hoursMatch) {
+                hours = parseFloat(hoursMatch[1])
+                extraction.hoursWorked = hours
+            }
+        }
 
         if (hours && hours > 0) {
+            await getSupabase().from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
+            const hasProject = !!extraction.projectHint || !!ctx.member?.last_confirmed_project_id
             return {
-                nextState: 'confirming_project',
+                nextState: hasProject ? 'confirming_all' : 'confirming_project',
                 response: null,
-                extraction: { ...extraction, hoursWorked: hours },
+                extraction,
             }
         }
     }

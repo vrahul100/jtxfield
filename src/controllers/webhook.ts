@@ -247,8 +247,13 @@ Your message has been saved. An admin will add you to your project soon!`;
   }
 
   // 6c. CHECK FOR TICKET CORRECTION (e.g. "#122 city hall")
-  // Only matches when message STARTS with # to avoid false positives on work descriptions
-  const ticketMatch = normalized.text.trim().match(/^#(\d+)/i);
+  // Matches if message STARTS with #, or if it CONTAINS # along with update keywords
+  const ticketStartMatch = normalized.text.trim().match(/^#(\d+)/i);
+  const ticketAnyMatch = normalized.text.trim().match(/#(\d+)/i);
+  const hasUpdateKeyword = /update|change|correct|fix|modify|photo|image|audio|evidence|add/i.test(normalized.text);
+  
+  const ticketMatch = ticketStartMatch || (ticketAnyMatch && hasUpdateKeyword ? ticketAnyMatch : null);
+
   if (ticketMatch) {
     const ticketId = parseInt(ticketMatch[1], 10);
     console.log(`[WEBHOOK] Detected ticket reference #${ticketId}`);
@@ -269,8 +274,19 @@ Your message has been saved. An admin will add you to your project soon!`;
       return c.text(`<Response><Message>❌ Ticket #${ticketId} doesn't belong to you.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
 
-    // Parse what correction the user wants
-    const correction = await parseCorrectionIntent(normalized.text);
+    // 6. EXTRACT MEDIA URLS FOR EVIDENCE ATTACHMENT
+    const { imageUrls: newImages, audioUrls: newAudios } = extractMediaUrls(normalized, body);
+    const hasMedia = newImages.length > 0 || newAudios.length > 0;
+
+    let correction;
+    if (hasMedia) {
+      correction = { 
+        action: 'add_evidence' as const, 
+        value: JSON.stringify({ imageUrls: newImages, audioUrls: newAudios }) 
+      };
+    } else {
+      correction = await parseCorrectionIntent(normalized.text);
+    }
     console.log(`[WEBHOOK] Correction intent:`, JSON.stringify(correction));
 
     if (correction.action === 'unknown' || !correction.value) {
@@ -287,7 +303,9 @@ Your message has been saved. An admin will add you to your project soon!`;
 
     let confirmMsg = '';
 
-    if (correction.action === 'change_project') {
+    if (correction.action === 'add_evidence') {
+      confirmMsg = `📝 Ticket #${ticketId}: Add the attached photo/media as evidence to this ticket?\n\nReply *Y* to confirm or *N* to cancel.`;
+    } else if (correction.action === 'change_project') {
       // Try to resolve project name to ID
       const project = await findProjectByAlias(sql, member.company_id, correction.value);
       if (project) {
@@ -317,6 +335,7 @@ Your message has been saved. An admin will add you to your project soon!`;
 
     return c.text(`<Response><Message>${confirmMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
+
 
   // 7. USE TRANSACTION WITH ROW-LEVEL LOCK TO PREVENT RACE CONDITIONS
   // Lock the member row - this blocks concurrent requests for the same member
@@ -637,8 +656,45 @@ async function applyCorrection(
 
     console.log(`[Correction] ✅ Bucket #${bucketId} hours → ${hours}`);
     return `✅ Ticket #${bucketId} updated! Hours changed to *${hours}*.`;
+  } else if (correction.action === 'add_evidence') {
+    const { imageUrls: newImages, audioUrls: newAudios } = JSON.parse(correction.value);
+
+    // 1. Update bucket media
+    const buckets = await sql`SELECT image_urls, audio_urls FROM buckets WHERE id = ${bucketId}`;
+    if (buckets.length > 0) {
+      const bucket = buckets[0];
+      const existingImages = bucket.image_urls ? (typeof bucket.image_urls === 'string' ? JSON.parse(bucket.image_urls) : bucket.image_urls) : [];
+      const existingAudios = bucket.audio_urls ? (typeof bucket.audio_urls === 'string' ? JSON.parse(bucket.audio_urls) : bucket.audio_urls) : [];
+
+      const mergedImages = Array.from(new Set([...existingImages, ...newImages]));
+      const mergedAudios = Array.from(new Set([...existingAudios, ...newAudios]));
+
+      await sql`
+        UPDATE buckets SET 
+          image_urls = ${JSON.stringify(mergedImages)}, 
+          audio_urls = ${JSON.stringify(mergedAudios)},
+          updated_at = NOW()
+        WHERE id = ${bucketId}
+      `;
+    }
+
+    // 2. Update linked transaction evidence list
+    const txns = await sql`SELECT evidence FROM txns WHERE bucket_id = ${bucketId}`;
+    if (txns.length > 0) {
+      const txn = txns[0];
+      const existingEvidence = txn.evidence ? (typeof txn.evidence === 'string' ? JSON.parse(txn.evidence) : txn.evidence) : [];
+      const mergedEvidence = Array.from(new Set([...existingEvidence, ...newImages, ...newAudios]));
+
+      await sql`
+        UPDATE txns SET evidence = ${JSON.stringify(mergedEvidence)}
+        WHERE bucket_id = ${bucketId}
+      `;
+    }
+
+    console.log(`[Correction] ✅ Added evidence to bucket #${bucketId}`);
+    return `✅ Ticket #${bucketId} updated! New photo/media added as evidence.`;
   }
 
   console.error(`[Correction] ❌ Unsupported action: "${correction.action}" for bucket #${bucketId}`);
-  return `❌ Could not apply correction: unsupported action "${correction.action}". Supported: change project, change hours.`;
+  return `❌ Could not apply correction: unsupported action "${correction.action}". Supported: change project, change hours, add evidence.`;
 }
