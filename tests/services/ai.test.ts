@@ -61,7 +61,7 @@ describe('AI Service', () => {
                     ]
                 }
             ],
-            model: "meta-llama/openai/gpt-oss-20b",
+            model: "openai/gpt-oss-20b",
             temperature: 0.1,
             response_format: { type: "json_object" }
         })

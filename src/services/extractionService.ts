@@ -172,7 +172,7 @@ export async function extractMessageInfo(
 
         // Use vision model if images provided
         const model = images.length > 0
-            ? 'meta-llama/openai/gpt-oss-20b'
+            ? 'openai/gpt-oss-20b'
             : 'llama-3.3-70b-versatile';
 
         console.log(`[EXTRACTION] Using model: ${model} (${images.length} images)`);

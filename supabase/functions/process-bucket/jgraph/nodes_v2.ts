@@ -283,7 +283,7 @@ async function analyzeImage(url: string): Promise<string> {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'meta-llama/openai/gpt-oss-20b',
+                model: 'openai/gpt-oss-20b',
                 messages: [
                     { role: 'system', content: 'Describe this construction/work photo. Focus on identifying the SPECIFIC TRADE or WORK TYPE visible (e.g. masonry, electrical, plumbing, painting, carpentry, concrete, rebar, HVAC, drain). List: 1) Trade/work type shown, 2) Materials visible, 3) Completion status. Be specific about what trade the work belongs to based on what you see.' },
                     {
@@ -395,7 +395,7 @@ async function extractWithLLM(rawText: string, transcripts: string[], imageAnaly
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'meta-llama/openai/gpt-oss-20b',
+                model: 'openai/gpt-oss-20b',
                 messages: [{ role: 'user', content: prompt }],
                 temperature: 0.1,
                 response_format: { type: 'json_object' },
@@ -487,7 +487,7 @@ async function translateToEnglish(text: string): Promise<string> {
                 'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-                model: 'meta-llama/openai/gpt-oss-20b',
+                model: 'openai/gpt-oss-20b',
                 messages: [
                     { role: 'system', content: 'Translate the following text to English. Return ONLY the translated text, nothing else.' },
                     { role: 'user', content: text }
@@ -690,7 +690,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        model: 'meta-llama/openai/gpt-oss-20b',
+                        model: 'openai/gpt-oss-20b',
                         messages: [{
                             role: 'user',
                             content: `IMAGE ANALYSIS: "${imageAnalysis}"
