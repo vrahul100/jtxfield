@@ -9,16 +9,23 @@ interface LayoutProps {
 
 export function Layout({ children }: LayoutProps) {
     return (
-        <div className="min-h-screen bg-slate-100 flex flex-col">
+        <div className="h-screen bg-slate-100 flex flex-col overflow-hidden">
             <Header />
-            <div className="flex pt-20 flex-1">
+            <div className="flex pt-20 flex-1 overflow-hidden">
                 <Sidebar />
-                {/* Responsive margin: ml-0 on mobile (sidebar overlays), ml-64 on desktop */}
-                <main className="flex-1 ml-0 md:ml-64 p-8 pb-20 transition-all duration-300">
-                    <PipelineStepper />
-                    {children}
+                {/* Main container: full remaining height, column layout, frozen */}
+                <main className="flex-1 ml-0 md:ml-64 flex flex-col overflow-hidden transition-all duration-300">
+                    {/* Fixed stepper banner container at the top of content area */}
+                    <div className="px-8 pt-6 pb-2 flex-shrink-0 bg-slate-100">
+                        <PipelineStepper />
+                    </div>
+                    {/* Only the inner content scrolls */}
+                    <div className="flex-1 overflow-y-auto px-8 pb-20">
+                        {children}
+                    </div>
                 </main>
             </div>
+
 
             {/* Footer - Responsive left margin */}
             <footer className="fixed bottom-0 left-0 md:left-64 right-0 bg-gray-50 border-t border-slate-200 py-2 px-8 text-center z-10 transition-all duration-300">
