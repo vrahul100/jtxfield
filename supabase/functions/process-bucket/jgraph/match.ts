@@ -62,31 +62,6 @@ function scoreMatch(hintNorm: string, hintTokens: string[], name: string): numbe
     return sum / hintTokens.length
 }
 
-// Deterministic yes/no detection — do NOT leave affirm/reject at a confirmation to the LLM.
-const YES = new Set(['y', 'yes', 'yeah', 'yep', 'yup', 'ya', 'ok', 'okay', 'correct', 'right', 'si', 'sure', 'confirm', 'confirmed', 'good', 'perfect'])
-const NO = new Set(['n', 'no', 'nope', 'nah', 'wrong', 'incorrect', 'nada'])
-
-export function detectYesNo(text: string): 'yes' | 'no' | null {
-    // Fold accents so "sí" → "si".
-    const clean = text.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-        .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim()
-    const toks = clean.split(' ').filter(Boolean)
-    if (!toks.length) return null
-
-    // Short message: any clear yes/no token wins (as long as it isn't contradicted).
-    if (toks.length <= 3) {
-        const yes = toks.some(t => YES.has(t))
-        const no = toks.some(t => NO.has(t))
-        if (yes && !no) return 'yes'
-        if (no && !yes) return 'no'
-        return null
-    }
-    // Long message: only trust a leading yes/no.
-    if (YES.has(toks[0])) return 'yes'
-    if (NO.has(toks[0])) return 'no'
-    return null
-}
-
 export const FUZZY_THRESHOLD = 0.6
 
 export function fuzzyFindProject(hint: string, projects: ProjectOption[]): ProjectOption | null {

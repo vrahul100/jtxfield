@@ -258,30 +258,32 @@ export function Members() {
 
     return (
         <Layout>
-            <div>
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Members</h1>
-                    <div className="flex gap-2">
-                        <button
-                            onClick={() => fetchMembers()}
-                            disabled={refreshing}
-                            className="btn-primary flex items-center gap-2"
-                            style={refreshing ? { cursor: 'wait' } : {}}
-                        >
-                            {refreshing && (
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
-                            )}
-                            {refreshing ? 'Loading...' : 'Refresh'}
-                        </button>
-                        <button
-                            onClick={() => setShowAddForm(!showAddForm)}
-                            className="btn-primary"
-                        >
-                            {showAddForm ? 'Cancel' : '+ Invite Member'}
-                        </button>
+            <div className="relative">
+                <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-3 mb-4">
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-3xl font-bold text-gray-900">Members</h1>
+                        <div className="flex gap-2">
+                            <button
+                                onClick={() => fetchMembers()}
+                                disabled={refreshing}
+                                className="btn-primary flex items-center gap-2"
+                                style={refreshing ? { cursor: 'wait' } : {}}
+                            >
+                                {refreshing && (
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                )}
+                                {refreshing ? 'Loading...' : 'Refresh'}
+                            </button>
+                            <button
+                                onClick={() => setShowAddForm(!showAddForm)}
+                                className="btn-primary"
+                            >
+                                {showAddForm ? 'Cancel' : '+ Invite Member'}
+                            </button>
+                        </div>
                     </div>
                 </div>
 

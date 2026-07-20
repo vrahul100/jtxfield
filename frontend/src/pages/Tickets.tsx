@@ -307,36 +307,39 @@ export function Tickets() {
 
     return (
         <Layout>
-            <div>
-                <div className="flex justify-between items-center mb-6">
-                    <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
-                    <div className="flex gap-2">
-                        {selectionMode ? (
-                            <>
-                                <button className="btn-secondary" onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}>Cancel</button>
-                                <button className="btn-primary" disabled={selectedTickets.length === 0 || creatingPacket} onClick={handleCreatePacket}>
-                                    {creatingPacket ? 'Creating...' : `Create CO Packet (${selectedTickets.length})`}
-                                </button>
-                            </>
-                        ) : (
-                            <button className="btn-secondary" onClick={() => setSelectionMode(true)}>Select for CO Packet</button>
-                        )}
-                        <button
-                            onClick={fetchBuckets}
-                            disabled={refreshing}
-                            className="btn-primary flex items-center gap-2"
-                            style={refreshing ? { cursor: 'wait' } : {}}
-                        >
-                            {refreshing && (
-                                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                </svg>
+            <div className="relative">
+                <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-3 mb-4">
+                    <div className="flex justify-between items-center">
+                        <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
+                        <div className="flex gap-2">
+                            {selectionMode ? (
+                                <>
+                                    <button className="btn-secondary" onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}>Cancel</button>
+                                    <button className="btn-primary" disabled={selectedTickets.length === 0 || creatingPacket} onClick={handleCreatePacket}>
+                                        {creatingPacket ? 'Creating...' : `Create CO Packet (${selectedTickets.length})`}
+                                    </button>
+                                </>
+                            ) : (
+                                <button className="btn-secondary" onClick={() => setSelectionMode(true)}>Select for CO Packet</button>
                             )}
-                            {refreshing ? 'Loading...' : 'Refresh'}
-                        </button>
+                            <button
+                                onClick={fetchBuckets}
+                                disabled={refreshing}
+                                className="btn-primary flex items-center gap-2"
+                                style={refreshing ? { cursor: 'wait' } : {}}
+                            >
+                                {refreshing && (
+                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
+                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                                    </svg>
+                                )}
+                                {refreshing ? 'Loading...' : 'Refresh'}
+                            </button>
+                        </div>
                     </div>
                 </div>
+
                 {/* Search and Filters */}
                 <div className="card p-4 mb-6">
                     <div className="mb-4">

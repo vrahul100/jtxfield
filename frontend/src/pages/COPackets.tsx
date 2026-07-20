@@ -53,28 +53,31 @@ export function COPackets() {
 
     return (
         <Layout>
-            <div className="flex justify-between items-center mb-6">
-                <h1 className="text-3xl font-bold text-gray-900">Change Order Packets</h1>
-                <button onClick={fetchPackets} className="btn-secondary">Refresh</button>
-            </div>
+            <div className="relative">
+                <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-2 mb-4">
+                    <div className="flex justify-between items-center mb-4">
+                        <h1 className="text-3xl font-bold text-gray-900">Change Order Packets</h1>
+                        <button onClick={fetchPackets} className="btn-secondary">Refresh</button>
+                    </div>
 
-            <div className="mb-6 flex gap-2 border-b border-gray-200">
-                {['all', 'draft', 'submitted', 'approved', 'rejected', 'paid'].map(status => (
-                    <button
-                        key={status}
-                        className={`px-4 py-2 border-b-2 font-medium capitalize ${
-                            statusFilter === status 
-                            ? 'border-indigo-600 text-indigo-600' 
-                            : 'border-transparent text-gray-500 hover:text-gray-700'
-                        }`}
-                        onClick={() => setStatusFilter(status)}
-                    >
-                        {status}
-                    </button>
-                ))}
-            </div>
+                    <div className="mb-0 flex gap-2 border-b border-gray-200">
+                        {['all', 'draft', 'submitted', 'approved', 'rejected', 'paid'].map(status => (
+                            <button
+                                key={status}
+                                className={`px-4 py-2 border-b-2 font-medium capitalize ${
+                                    statusFilter === status 
+                                    ? 'border-indigo-600 text-indigo-600' 
+                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                                }`}
+                                onClick={() => setStatusFilter(status)}
+                            >
+                                {status}
+                            </button>
+                        ))}
+                    </div>
+                </div>
 
-            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {filteredPackets.map(packet => (
                     <div key={packet.id} className="card p-6 border border-gray-200">
                         <div className="flex justify-between items-start mb-4">
@@ -110,6 +113,7 @@ export function COPackets() {
                         No packets found in this status.
                     </div>
                 )}
+            </div>
             </div>
         </Layout>
     );

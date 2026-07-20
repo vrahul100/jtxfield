@@ -215,9 +215,10 @@ Your message has been saved. An admin will add you to your project soon!`;
   const commandFromVoice = !normalized.text.trim() && !!voiceTranscript;
   const intentText = wordsToDigits((normalized.text.trim() || voiceTranscript || '').trim());
 
-  // 4b. PENDING CORRECTION CONFIRMATION — works by text OR voice ("yes"/"sí"/"no")
+  // 4b. PENDING CORRECTION CONFIRMATION — the LLM reads the reply's meaning (text or voice),
+  //     so "yes", "sí", "yeah do it", "no leave it" all work without keyword lists.
   if (pendingCorrection) {
-    const yn = spokenYesNo(intentText);
+    const yn = await interpretYesNo(intentText);
     if (yn === 'yes') {
       console.log(`[WEBHOOK] Applying pending correction for member ${member.id}:`, JSON.stringify(pendingCorrection));
       const resultMsg = await applyCorrection(sql, pendingCorrection, member.id);
@@ -542,27 +543,6 @@ function twilioAuthHeader(url: string): Record<string, string> {
   return {};
 }
 
-// Deterministic yes/no from text OR a voice transcript. Mirrors the engine's detectYesNo
-// so spoken confirmations ("yes", "sí", "no") apply the same as typed ones.
-const YES_WORDS = new Set(['y', 'yes', 'yeah', 'yep', 'yup', 'ya', 'ok', 'okay', 'correct', 'right', 'si', 'sure', 'confirm', 'confirmed', 'good', 'perfect', 'affirmative']);
-const NO_WORDS = new Set(['n', 'no', 'nope', 'nah', 'wrong', 'incorrect', 'cancel', 'nada']);
-function spokenYesNo(text: string): 'yes' | 'no' | null {
-  const clean = (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
-  const toks = clean.split(' ').filter(Boolean);
-  if (!toks.length) return null;
-  if (toks.length <= 3) {
-    const yes = toks.some(t => YES_WORDS.has(t));
-    const no = toks.some(t => NO_WORDS.has(t));
-    if (yes && !no) return 'yes';
-    if (no && !yes) return 'no';
-    return null;
-  }
-  if (YES_WORDS.has(toks[0])) return 'yes';
-  if (NO_WORDS.has(toks[0])) return 'no';
-  return null;
-}
-
 // Convert spoken number words (0–99) to digits so transcripts like "ticket eleven" /
 // "ten hours" parse the same as "ticket 11" / "10 hours".
 const NUM_ONES: Record<string, number> = {
@@ -599,6 +579,36 @@ function matchTicketReference(text: string): number | null {
   const hashAny = t.match(/#(\d+)/);
   if (hashAny && hasUpdateKeyword) return parseInt(hashAny[1], 10);
   return null;
+}
+
+// Interpret a reply to a Yes/No confirmation by MEANING — any phrasing or language, no
+// keyword lists. Works identically for typed text and voice transcripts. Cost: one small
+// call on the cheapest model, and only on the (rare) correction-confirmation turn.
+async function interpretYesNo(text: string): Promise<'yes' | 'no' | 'unclear'> {
+  const t = (text || '').trim();
+  if (!t) return 'unclear';
+  const groqApiKey = process.env.GROQ_API_KEY;
+  if (!groqApiKey) return 'unclear';
+  try {
+    const Groq = (await import('groq-sdk')).default;
+    const groq = new Groq({ apiKey: groqApiKey });
+    const completion = await groq.chat.completions.create({
+      model: 'llama-3.1-8b-instant',
+      messages: [{
+        role: 'user',
+        content: `A worker was asked to confirm a change (Yes/No). They replied: "${t}"\nIs this an affirmation, a rejection, or unclear? Answer with exactly one word: yes, no, or unclear.`,
+      }],
+      temperature: 0,
+      max_tokens: 3,
+    });
+    const out = (completion.choices?.[0]?.message?.content || '').toLowerCase();
+    if (out.includes('yes')) return 'yes';
+    if (out.includes('no')) return 'no';
+    return 'unclear';
+  } catch (error) {
+    console.error('[Correction] interpretYesNo error:', error);
+    return 'unclear';
+  }
 }
 
 interface CorrectionIntent {

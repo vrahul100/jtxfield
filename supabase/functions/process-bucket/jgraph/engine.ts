@@ -15,7 +15,7 @@ import {
     type WorkRecord,
 } from './record.ts'
 import { interpretTurn } from './interpret.ts'
-import { detectYesNo, fuzzyFindProject, resolveProjectRef, type ProjectOption } from './match.ts'
+import { fuzzyFindProject, resolveProjectRef, type ProjectOption } from './match.ts'
 import { composeReply, composeSuccess } from './reply.ts'
 import {
     analyzeImage,
@@ -105,18 +105,14 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         projects,
     })
 
-    // --- Deterministic reinforcement: the LLM is unreliable on the two highest-stakes,
-    //     lowest-variance signals — a bare yes/no at confirmation, and project names.
-    //     Handle those in code so a model wobble can't stall the flow. ---
+    // --- Confirmation intent (yes/no/correct/reject) comes from the LLM interpreter itself
+    //     (interp.confirm / interp.rejectField) — no keyword matching. Audio is already folded
+    //     in because the transcript is passed to interpretTurn above. This adds NO LLM cost:
+    //     interpretTurn is the one call we already make each turn. ---
     const latestRaw = transcript || userText || ''
-    if (record.lastAsked === 'confirm') {
-        const yn = detectYesNo(latestRaw)
-        if (yn === 'yes') { interp.confirm = true; interp.rejectField = null }
-        else if (yn === 'no') { interp.confirm = false; interp.rejectField = interp.rejectField ?? 'all' }
-    }
 
-    // --- Resolve project: LLM hint first, then a deterministic fuzzy match on the raw text
-    //     (only in project-relevant turns, to avoid false positives on the first message) ---
+    // --- Resolve project: LLM hint first, then fuzzy-match the raw text against the real
+    //     project list (dynamic data, not hardcoded) on project-relevant turns. ---
     let projectRef: ProjectRef | null = resolveProjectRef(interp, projects, record.lastAsked)
     if (!projectRef && (record.lastAsked === 'confirm' || record.lastAsked === 'fix' || record.lastAsked === 'project')) {
         const m = fuzzyFindProject(latestRaw, projects)

@@ -2,16 +2,13 @@ import { useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
-    ClipboardList,
     Users,
     FolderKanban,
     Building2,
     Shield,
     ChartBar,
     Menu,
-    Settings2,
-    FileText,
-    Clock
+    Settings2
 } from 'lucide-react';
 
 export function Sidebar() {

@@ -128,18 +128,21 @@ export function Timesheets() {
 
     return (
         <Layout>
-            <div className="mb-6 flex justify-between items-end">
-                <div>
-                    <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
-                        <Calendar className="w-8 h-8 text-indigo-600" />
-                        Timesheets
-                    </h1>
-                    <p className="text-gray-500 mt-2">Aggregate verified buckets into payroll-ready weekly timesheets.</p>
+            <div className="relative">
+                <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-2 mb-4">
+                    <div className="flex justify-between items-end">
+                        <div>
+                            <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-2">
+                                <Calendar className="w-8 h-8 text-indigo-600" />
+                                Timesheets
+                            </h1>
+                            <p className="text-gray-500 mt-2">Aggregate verified buckets into payroll-ready weekly timesheets.</p>
+                        </div>
+                        <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-2">
+                            <Download className="w-4 h-4" /> Export Approved (CSV)
+                        </button>
+                    </div>
                 </div>
-                <button onClick={handleExportCSV} className="btn-secondary flex items-center gap-2">
-                    <Download className="w-4 h-4" /> Export Approved (CSV)
-                </button>
-            </div>
 
             <div className="card overflow-hidden">
                 <table className="w-full text-left">
@@ -212,6 +215,7 @@ export function Timesheets() {
                         })}
                     </tbody>
                 </table>
+            </div>
             </div>
         </Layout>
     );
