@@ -94,11 +94,11 @@ export function Sidebar() {
                         </div>
                     )}
 
-                    <div className="bg-slate-50 rounded-xl p-2 border border-slate-800/80 shadow-inner relative space-y-2">
-                        {/* Connecting Line */}
+                    <div className="bg-slate-500 rounded-xl p-2 border border-slate-800/80 shadow-inner relative space-y-2">
+                        {/* Connecting Line
                         {!isCollapsed && (
                             <div className="absolute left-[27px] top-6 bottom-6 w-[2px] bg-slate-800 z-0" />
-                        )}
+                        )} */}
 
                         {pipelineSteps.map((step) => {
                             const state = getStepState(step.path);

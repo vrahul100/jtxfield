@@ -34,7 +34,7 @@ export function PipelineStepper() {
     ];
 
     return (
-        <div className="bg-slate-50 rounded-xl border border-slate-700/80 shadow-lg p-3.5 mb-4">
+        <div className="bg-slate-100 rounded-xl border border-slate-700/80 shadow-lg p-3.5 mb-4">
             <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
                 {steps.map((step, idx) => {
                     const isActive = path === step.path;
