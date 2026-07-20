@@ -49,7 +49,6 @@ export function Tickets() {
     const [projects, setProjects] = useState<Project[]>([]);
     const [loading, setLoading] = useState(true);
 
-    const [expandedBucketIds, setExpandedBucketIds] = useState<number[]>([]);
     const [editingBucket, setEditingBucket] = useState<Bucket | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [projectFilter, setProjectFilter] = useState<string>('all');
@@ -65,6 +64,7 @@ export function Tickets() {
     const [selectionMode, setSelectionMode] = useState(false);
     const [selectedTickets, setSelectedTickets] = useState<number[]>([]);
     const [creatingPacket, setCreatingPacket] = useState(false);
+    const [selectedBucketId, setSelectedBucketId] = useState<number | null>(null);
 
     useEffect(() => {
         fetchProjects();
@@ -128,12 +128,7 @@ export function Tickets() {
         }
     };
 
-    const toggleExpand = (id: number) => {
-        // Accordion behavior: only one card open at a time
-        setExpandedBucketIds(prev => 
-            prev.includes(id) ? [] : [id]
-        );
-    };
+
 
     const handleEdit = (bucket: Bucket) => {
         setEditingBucket(bucket);
@@ -295,6 +290,33 @@ export function Tickets() {
         }
     };
 
+    const getStatusColors = (status: string) => {
+        switch (status) {
+            case 'open':
+                return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+            case 'submitted':
+                return 'bg-emerald-500 text-white border-emerald-500 font-bold';
+            case 'pending_review':
+                return 'bg-orange-100 text-orange-800 border-orange-200';
+            case 'rejected':
+                return 'bg-red-200 text-red-900 border-red-300';
+            default:
+                return 'bg-slate-200 text-slate-800 border-slate-200';
+        }
+    };
+
+    const formatDate = (dateString: string) => {
+        if (!dateString) return 'N/A';
+        const date = new Date(dateString);
+        if (isNaN(date.getTime())) return 'N/A';
+        return date.toLocaleString('en-US', {
+            month: 'numeric',
+            day: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
     if (loading) {
         return (
             <Layout>
@@ -307,8 +329,8 @@ export function Tickets() {
 
     return (
         <Layout>
-            <div className="relative">
-                <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-3 mb-4">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                <div className="flex-shrink-0 pt-1 pb-2 mb-2">
                     <div className="flex justify-between items-center">
                         <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
                         <div className="flex gap-2">
@@ -341,147 +363,239 @@ export function Tickets() {
                 </div>
 
                 {/* Search and Filters */}
-                <div className="card p-4 mb-6">
-                    <div className="mb-4">
-                        <input
-                            type="text"
-                            placeholder="Search by member, project, or message..."
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            className="input-field w-full"
-                        />
-                    </div>
-                    <div className="flex gap-4 flex-wrap">
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Status
-                            </label>
+                <div className="card p-2 px-3 mb-3 flex-shrink-0">
+                    <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
+                        <div className="flex-1 min-w-[200px]">
+                            <input
+                                type="text"
+                                placeholder="Search by member, project, or message..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="input-field w-full py-1.5 px-3 text-sm"
+                            />
+                        </div>
+                        <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="input-field"
+                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
                             >
-                                <option value="all">All</option>
+                                <option value="all">All Statuses</option>
                                 <option value="open">Open</option>
                                 <option value="pending_review">Pending Review</option>
                                 <option value="submitted">Submitted</option>
                                 <option value="rejected">Rejected</option>
                             </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Project
-                            </label>
+
                             <select
                                 value={projectFilter}
                                 onChange={(e) => setProjectFilter(e.target.value)}
-                                className="input-field"
+                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200 max-w-full lg:max-w-[160px] truncate"
                             >
                                 <option value="all">All Projects</option>
                                 {projects.map(p => (
                                     <option key={p.id} value={p.id}>{p.name}</option>
                                 ))}
                             </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Sort By
-                            </label>
+
                             <select
                                 value={sortBy}
                                 onChange={(e) => setSortBy(e.target.value)}
-                                className="input-field"
+                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
                             >
-                                <option value="created_at">Date Created</option>
-                                <option value="updated_at">Date Updated</option>
+                                <option value="created_at">Sort: Created Date</option>
+                                <option value="updated_at">Sort: Updated Date</option>
                             </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                Order
-                            </label>
+
                             <select
                                 value={sortOrder}
                                 onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                                className="input-field"
+                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
                             >
-                                <option value="desc">Newest First</option>
-                                <option value="asc">Oldest First</option>
+                                <option value="desc">Order: Newest First</option>
+                                <option value="asc">Order: Oldest First</option>
                             </select>
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-700 mb-1">
-                                ⚠️ Change
-                            </label>
+
                             <select
                                 value={changeFilter}
                                 onChange={(e) => setChangeFilter(e.target.value)}
-                                className="input-field"
+                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
                             >
-                                <option value="all">All</option>
-                                <option value="true">Flagged</option>
-                                <option value="false">Not Flagged</option>
+                                <option value="all">All Changes</option>
+                                <option value="true">⚠️ Flagged</option>
+                                <option value="false">✓ Not Flagged</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                {/* Cards Grid */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                    {buckets.map((bucket) => (
-                        <WorkEntryCard
-                            key={bucket.id}
-                            bucket={bucket}
-                            isExpanded={expandedBucketIds.includes(bucket.id)}
-                            onToggleExpand={() => toggleExpand(bucket.id)}
-                            onEdit={() => handleEdit(bucket)}
-                            onSubmit={() => handleSubmit(bucket.id)}
-                            onReject={() => handleReject(bucket.id)}
-                            onToggleChange={() => handleTogglePotentialChange(bucket.id, bucket.potential_change)}
-                            onUpdateHours={(hours) => handleUpdateHours(bucket.id, hours)}
-                            selectable={selectionMode}
-                            selected={selectedTickets.includes(bucket.id)}
-                            onSelectToggle={() => setSelectedTickets(prev => prev.includes(bucket.id) ? prev.filter(id => id !== bucket.id) : [...prev, bucket.id])}
-                        />
-                    ))}
-                </div>
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 items-stretch overflow-hidden">
+                    {/* Left Panel: Table List */}
+                    <div className={`transition-all duration-300 flex flex-col min-h-0 card overflow-hidden ${selectedBucketId ? 'w-full lg:w-7/12' : 'w-full'}`}>
+                        {/* Scrollable Table Container */}
+                        <div className="flex-1 min-h-0 overflow-y-auto">
+                            <table className="w-full text-left border-collapse">
+                                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                                    <tr>
+                                        {selectionMode && <th className="p-3 w-10 text-center"></th>}
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-16">ID</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Worker</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-28">Date</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Summary</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-20 text-center">Hours</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-16 text-center">Flag</th>
+                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24 text-center">Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-slate-100 bg-white">
+                                    {buckets.map((bucket) => {
+                                        const isSelected = selectedBucketId === bucket.id;
+                                        const dateStr = formatDate(bucket.created_at);
 
-                {buckets.length === 0 && (
-                    <div className="card p-8 text-center text-gray-500">
-                        <p className="text-lg">No work entries found.</p>
-                        <p className="text-sm mt-2">Try adjusting your filters or search query.</p>
-                    </div>
-                )}               
-
-                {/* Pagination */}
-                {totalPages > 1 && (
-                    <div className="flex justify-between items-center mt-6">
-                        <span className="text-xs text-gray-600">
-                            Showing {buckets.length} of {total} work entries
-                        </span>
-                        <div className="flex gap-2">
-                            <button
-                                onClick={() => setPage(p => Math.max(1, p - 1))}
-                                disabled={page === 1}
-                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                            >
-                                <SquareChevronLeft className="w-6 h-6" strokeWidth={3} />
-                                Previous
-                            </button>
-                            <span className="px-3 py-1 text-xs">
-                                Page {page} of {totalPages}
-                            </span>
-                            <button
-                                onClick={() => setPage(p => Math.min(totalPages, p + 1))}
-                                disabled={page === totalPages}
-                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                            >
-                                Next
-                                <SquareChevronRight className="w-6 h-6" strokeWidth={3} />
-                            </button>
+                                        return (
+                                            <tr
+                                                key={bucket.id}
+                                                onClick={() => setSelectedBucketId(bucket.id)}
+                                                className={`hover:bg-slate-50 cursor-pointer transition-colors ${
+                                                    isSelected ? 'bg-indigo-50/70 hover:bg-indigo-50/90' : ''
+                                                }`}
+                                            >
+                                                {selectionMode && (
+                                                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                        <input
+                                                            type="checkbox"
+                                                            checked={selectedTickets.includes(bucket.id)}
+                                                            onChange={() => setSelectedTickets(prev => prev.includes(bucket.id) ? prev.filter(id => id !== bucket.id) : [...prev, bucket.id])}
+                                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                        />
+                                                    </td>
+                                                )}
+                                                <td className="p-3 font-mono text-xs font-bold text-indigo-600">
+                                                    #{bucket.id}
+                                                </td>
+                                                <td className="p-3 text-sm text-slate-700 whitespace-nowrap">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="bg-slate-200 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0">
+                                                            {bucket.member_name ? 
+                                                                bucket.member_name.split(' ').map(n => n[0]).join('').toUpperCase() :
+                                                                'U'
+                                                            }
+                                                        </span>
+                                                        <span className="truncate max-w-[80px] font-medium">
+                                                            {bucket.member_name || 'Unknown'}
+                                                        </span>
+                                                    </div>
+                                                </td>
+                                                <td className="p-3 text-xs text-slate-500 whitespace-nowrap">
+                                                    {dateStr}
+                                                </td>
+                                                <td className="p-3 text-sm text-slate-700 font-medium truncate max-w-[120px]">
+                                                    {bucket.project_name || 'No Project'}
+                                                </td>
+                                                <td className="p-3 text-xs text-slate-600 italic truncate max-w-[200px]">
+                                                    {bucket.summary || bucket.raw_text || '-'}
+                                                </td>
+                                                <td className="p-3 text-sm font-semibold text-slate-900 text-center whitespace-nowrap">
+                                                    {bucket.hours !== null ? `${bucket.hours} h` : '-'}
+                                                </td>
+                                                <td className="p-3 text-center">
+                                                    {bucket.potential_change ? (
+                                                        <span className="text-orange-600 text-base" title="Flagged Potential Change">⚠️</span>
+                                                    ) : (
+                                                        <span className="text-emerald-500 text-sm font-bold" title="Verified">✓</span>
+                                                    )}
+                                                </td>
+                                                <td className="p-3 text-center whitespace-nowrap">
+                                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold tracking-wide uppercase ${getStatusColors(bucket.status)}`}>
+                                                        {bucket.status.replace('_', ' ')}
+                                                    </span>
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
                         </div>
+
+                        {buckets.length === 0 && (
+                            <div className="p-8 text-center text-gray-500">
+                                <p className="text-lg">No work entries found.</p>
+                                <p className="text-sm mt-2">Try adjusting your filters or search query.</p>
+                            </div>
+                        )}
+
+                        {/* Pagination Bar - Fixed at bottom of table card */}
+                        {totalPages > 1 && (
+                            <div className="flex-shrink-0 border-t border-slate-200 bg-white p-2.5 px-4 flex justify-between items-center z-10">
+                                <span className="text-xs text-gray-600">
+                                    Showing {buckets.length} of {total} work entries
+                                </span>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setPage(p => Math.max(1, p - 1))}
+                                        disabled={page === 1}
+                                        className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
+                                    >
+                                        <SquareChevronLeft className="w-4 h-4" strokeWidth={3} />
+                                        Previous
+                                    </button>
+                                    <span className="px-2.5 py-1 text-xs font-medium">
+                                        Page {page} of {totalPages}
+                                    </span>
+                                    <button
+                                        onClick={() => setPage(p => Math.min(totalPages, p + 1))}
+                                        disabled={page === totalPages}
+                                        className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
+                                    >
+                                        Next
+                                        <SquareChevronRight className="w-4 h-4" strokeWidth={3} />
+                                    </button>
+                                </div>
+                            </div>
+                        )}
                     </div>
-                )}
+
+                    {/* Right Panel: Detail Drawer */}
+                    {selectedBucketId && (
+                        (() => {
+                            const selectedBucket = buckets.find(b => b.id === selectedBucketId);
+                            if (!selectedBucket) return null;
+
+                            return (
+                                <div className="w-full lg:w-5/12 min-h-0 flex flex-col border border-slate-200 bg-white rounded-xl shadow-lg overflow-hidden">
+                                    <div className="flex justify-between items-center px-4 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
+                                        <div className="flex items-center gap-2">
+                                            <span className="font-bold text-slate-800 font-mono text-lg">Ticket #{selectedBucket.id}</span>
+                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getStatusColors(selectedBucket.status)}`}>
+                                                {selectedBucket.status.replace('_', ' ')}
+                                            </span>
+                                        </div>
+                                        <button 
+                                            onClick={() => setSelectedBucketId(null)} 
+                                            className="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none p-1"
+                                        >
+                                            &times;
+                                        </button>
+                                    </div>
+                                    <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
+                                        <WorkEntryCard
+                                            bucket={selectedBucket}
+                                            isExpanded={true}
+                                            onToggleExpand={() => {}}
+                                            onEdit={() => handleEdit(selectedBucket)}
+                                            onSubmit={() => handleSubmit(selectedBucket.id)}
+                                            onReject={() => handleReject(selectedBucket.id)}
+                                            onToggleChange={() => handleTogglePotentialChange(selectedBucket.id, selectedBucket.potential_change)}
+                                            onUpdateHours={(hours) => handleUpdateHours(selectedBucket.id, hours)}
+                                            selectable={false}
+                                        />
+                                    </div>
+                                </div>
+                            );
+                        })()
+                    )}
+                </div>
             </div>
 
             <EditModal

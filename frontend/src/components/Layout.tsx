@@ -19,8 +19,8 @@ export function Layout({ children }: LayoutProps) {
                     <div className="px-8 pt-6 pb-2 flex-shrink-0 bg-slate-100">
                         <PipelineStepper />
                     </div>
-                    {/* Only the inner content scrolls */}
-                    <div className="flex-1 overflow-y-auto px-8 pb-20">
+                    {/* Inner content container */}
+                    <div className="flex-1 flex flex-col min-h-0 px-8 pb-10 overflow-hidden">
                         {children}
                     </div>
                 </main>

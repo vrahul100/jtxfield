@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useLocation } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import {
     Users,
@@ -13,8 +13,25 @@ import {
 
 export function Sidebar() {
     const { user } = useAuth();
+    const location = useLocation();
+    const path = location.pathname;
     const [isCollapsed, setIsCollapsed] = useState(false);
     const [isMobile, setIsMobile] = useState(false);
+
+    const pipelineSteps = [
+        { path: '/tickets', stepNum: 1, label: 'Daily Logs', sub: 'Review & Classify' },
+        { path: '/timesheets', stepNum: 2, label: 'Timesheets', sub: 'Verify Payroll' },
+        { path: '/copackets', stepNum: 3, label: 'Change Orders', sub: 'GC Billing' },
+    ];
+
+    const getStepState = (targetPath: string) => {
+        const order = ['/tickets', '/timesheets', '/copackets'];
+        const currentIdx = order.indexOf(path);
+        const targetIdx = order.indexOf(targetPath);
+        if (targetPath === path) return 'active';
+        if (currentIdx !== -1 && targetIdx < currentIdx) return 'passed';
+        return 'pending';
+    };
 
     // Detect mobile and auto-collapse
     useEffect(() => {
@@ -37,11 +54,7 @@ export function Sidebar() {
             : 'text-slate-400 hover:bg-slate-800 hover:text-white'
         }`;
 
-    const pipelineLinkClass = ({ isActive }: { isActive: boolean }) =>
-        `flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all relative z-10 ${isActive
-            ? 'bg-indigo-950/40 border border-indigo-500/30 text-white font-semibold shadow-sm'
-            : 'text-slate-400 border border-transparent hover:bg-slate-800/40 hover:text-white'
-        }`;
+
 
     return (
         <>
@@ -75,71 +88,61 @@ export function Sidebar() {
                     {/* Pipeline Section */}
                     {!isCollapsed && (
                         <div className="px-3">
-                            <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
+                            <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
                                 Field Pipeline
                             </span>
                         </div>
                     )}
 
-                    <div className="relative space-y-2">
+                    <div className="bg-slate-50 rounded-xl p-2 border border-slate-800/80 shadow-inner relative space-y-2">
                         {/* Connecting Line */}
                         {!isCollapsed && (
                             <div className="absolute left-[27px] top-6 bottom-6 w-[2px] bg-slate-800 z-0" />
                         )}
 
-                        <NavLink to="/tickets" className={pipelineLinkClass} title="Daily Logs" onClick={() => isMobile && setIsCollapsed(true)}>
-                            {({ isActive }) => (
-                                <>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-xs font-bold transition-all flex-shrink-0 ${
-                                        isActive
-                                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
-                                    }`}>
-                                        1
-                                    </div>
-                                    <div className={`flex flex-col min-w-0 ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>
-                                        <span className="text-sm font-semibold truncate">Daily Logs</span>
-                                        <span className="text-[10px] text-slate-500 font-normal truncate">Review & Classify</span>
-                                    </div>
-                                </>
-                            )}
-                        </NavLink>
+                        {pipelineSteps.map((step) => {
+                            const state = getStepState(step.path);
+                            const isActive = state === 'active';
+                            const isPassed = state === 'passed';
 
-                        <NavLink to="/timesheets" className={pipelineLinkClass} title="Timesheets" onClick={() => isMobile && setIsCollapsed(true)}>
-                            {({ isActive }) => (
-                                <>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-xs font-bold transition-all flex-shrink-0 ${
+                            return (
+                                <NavLink
+                                    key={step.path}
+                                    to={step.path}
+                                    title={step.label}
+                                    onClick={() => isMobile && setIsCollapsed(true)}
+                                    className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all relative z-10 ${
                                         isActive
-                                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30'
+                                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/40'
+                                            : isPassed
+                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-md shadow-emerald-600/30'
+                                            : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700 opacity-70 hover:opacity-100'
+                                    }`}
+                                >
+                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-xs font-extrabold transition-all flex-shrink-0 ${
+                                        isActive
+                                            ? 'bg-white text-indigo-700 border-white shadow-sm'
+                                            : isPassed
+                                            ? 'bg-white text-emerald-700 border-white shadow-sm'
                                             : 'bg-slate-800 border-slate-700 text-slate-400'
                                     }`}>
-                                        2
+                                        {step.stepNum}
                                     </div>
                                     <div className={`flex flex-col min-w-0 ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>
-                                        <span className="text-sm font-semibold truncate">Timesheets</span>
-                                        <span className="text-[10px] text-slate-500 font-normal truncate">Verify Payroll</span>
+                                        <span className={`text-sm font-bold truncate ${
+                                            isActive || isPassed ? 'text-white' : 'text-slate-200'
+                                        }`}>
+                                            {step.label}
+                                        </span>
+                                        <span className={`text-[10px] truncate ${
+                                            isActive ? 'text-indigo-100 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
+                                        }`}>
+                                            {step.sub}
+                                        </span>
                                     </div>
-                                </>
-                            )}
-                        </NavLink>
-
-                        <NavLink to="/copackets" className={pipelineLinkClass} title="Change Orders" onClick={() => isMobile && setIsCollapsed(true)}>
-                            {({ isActive }) => (
-                                <>
-                                    <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-xs font-bold transition-all flex-shrink-0 ${
-                                        isActive
-                                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/30'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
-                                    }`}>
-                                        3
-                                    </div>
-                                    <div className={`flex flex-col min-w-0 ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>
-                                        <span className="text-sm font-semibold truncate">Change Orders</span>
-                                        <span className="text-[10px] text-slate-500 font-normal truncate">GC Billing</span>
-                                    </div>
-                                </>
-                            )}
-                        </NavLink>
+                                </NavLink>
+                            );
+                        })}
                     </div>
 
                     {/* Management Section */}
