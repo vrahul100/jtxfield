@@ -14,15 +14,16 @@ function getGroq(): Groq {
     return groq;
 }
 
-export async function transcribeAudio(audioUrl: string, contentType: string): Promise<string> {
+export async function transcribeAudio(audioUrl: string, contentType: string, headers?: Record<string, string>): Promise<string> {
     const tempFilePath = path.join(os.tmpdir(), `upload-${Date.now()}.mp3`);
 
     try {
         console.log(`🎙️ Transcribing audio from: ${audioUrl}`);
 
-        // Download the Audio File (Groq SDK doesn't support URL parameter reliably)
+        // Download the Audio File (Groq SDK doesn't support URL parameter reliably).
+        // headers carries Twilio Basic auth when fetching a raw Twilio media URL.
         console.log(`📥 Downloading audio file...`);
-        const response = await fetch(audioUrl);
+        const response = await fetch(audioUrl, headers ? { headers } : undefined);
         if (!response.ok || !response.body) {
             throw new Error(`Failed to fetch audio: ${response.statusText}`);
         }

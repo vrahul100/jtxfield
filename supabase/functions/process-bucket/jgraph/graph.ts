@@ -1,11 +1,12 @@
-// graph.ts - Simple State Machine Runner
-// Uses nodes_v2 for clean state handling
+// graph.ts - Entry point for the conversation brain.
+// Uses the hybrid slot-filling engine (see DESIGN.md).
 
-import { runStateMachine } from './nodes_v2.ts'
+import { runStateMachine } from './engine.ts'
 
 export interface BrainState {
     status: string
     action: string
+    response?: string | null
 }
 
 // Run the brain for a bucket

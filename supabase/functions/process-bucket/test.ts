@@ -26,7 +26,7 @@ for (const v of requiredVars) {
 }
 
 // Import the state machine
-import { runStateMachine } from "./jgraph/nodes_v2.ts";
+import { runStateMachine } from "./jgraph/engine.ts";
 
 // Get bucket ID from command line
 const bucketId = parseInt(Deno.args[0]);

@@ -182,38 +182,62 @@ Your message has been saved. An admin will add you to your project soon!`;
     return c.text(`<Response><Message>${msg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
   }
 
-  // 4. CHECK FOR PENDING CORRECTION CONFIRMATION (Y/Si/Yes)
+  // 4. LOAD PENDING CORRECTION (confirmed by text OR voice, just below)
   const rawPending = (member as any).pending_correction;
   const pendingCorrection = rawPending
     ? (typeof rawPending === 'string' ? JSON.parse(rawPending) : rawPending)
     : null;
-  const upperText = normalized.text.trim().toUpperCase();
-  if (pendingCorrection && ['Y', 'YES', 'SI', 'SÍ'].includes(upperText)) {
-    console.log(`[WEBHOOK] Applying pending correction for member ${member.id}:`, JSON.stringify(pendingCorrection));
-    const resultMsg = await applyCorrection(sql, pendingCorrection, member.id);
-    // Clear pending correction
-    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
-    return c.text(`<Response><Message>${resultMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-  }
-  // If user sends N/No, cancel the pending correction
-  if (pendingCorrection && ['N', 'NO'].includes(upperText)) {
-    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
-    return c.text(`<Response><Message>↩️ Correction cancelled. Ticket #${pendingCorrection.bucket_id} unchanged.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
-  }
-  // If there was a pending correction but user sent something else, clear it
-  if (pendingCorrection) {
-    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
-  }
 
-  // NOTE: All project confirmation/selection is handled by Edge Function's resolveProjectNode
-  // No interception needed here - messages flow directly to bucket processing
-
-  // 6. EXTRACT MEDIA URLS (Worker will copy to storage async)
+  // 5. EXTRACT MEDIA URLS (Worker will copy to storage async)
   const { imageUrls, audioUrls, messageSid } = extractMediaUrls(normalized, body);
+  const hasMedia = imageUrls.length > 0 || audioUrls.length > 0;
+
+  // 5a. Transcribe a standalone voice note up front so it can be interpreted at the webhook
+  //     level — a spoken confirmation of a pending correction ("yes"/"no"), or a spoken
+  //     command ("change ticket 11 to 10 hours"). Skipped for a mid-conversation answer
+  //     (open bucket, no pending correction) — the engine transcribes those. The transcript
+  //     is reused on the new bucket below, so we never transcribe twice.
+  let voiceTranscript = '';
+  if (audioUrls.length > 0 && !normalized.text.trim()) {
+    let shouldTranscribe = !!pendingCorrection;
+    if (!shouldTranscribe) {
+      const inboxId = await ensureInboxProject(sql, member.company_id);
+      shouldTranscribe = !(await findOpenBucket(sql, member.id, inboxId));
+    }
+    if (shouldTranscribe) {
+      voiceTranscript = await transcribeAudio(audioUrls[0], 'audio/ogg', twilioAuthHeader(audioUrls[0]));
+      console.log(`[WEBHOOK] Standalone voice transcript: "${voiceTranscript}"`);
+    }
+  }
+
+  // Text used for command/confirmation detection: typed text, else the voice transcript.
+  // Spoken numbers normalized to digits ("ten hours" → "10 hours").
+  const commandFromVoice = !normalized.text.trim() && !!voiceTranscript;
+  const intentText = wordsToDigits((normalized.text.trim() || voiceTranscript || '').trim());
+
+  // 4b. PENDING CORRECTION CONFIRMATION — works by text OR voice ("yes"/"sí"/"no")
+  if (pendingCorrection) {
+    const yn = spokenYesNo(intentText);
+    if (yn === 'yes') {
+      console.log(`[WEBHOOK] Applying pending correction for member ${member.id}:`, JSON.stringify(pendingCorrection));
+      const resultMsg = await applyCorrection(sql, pendingCorrection, member.id);
+      await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
+      return c.text(`<Response><Message>${resultMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+    if (yn === 'no') {
+      await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
+      return c.text(`<Response><Message>↩️ Correction cancelled. Ticket #${pendingCorrection.bucket_id} unchanged.</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+    // Anything else → abandon the pending correction and let the message flow normally.
+    await sql`UPDATE members SET pending_correction = NULL WHERE id = ${member.id}`;
+  }
+
+  // NOTE: All conversation confirmation/selection is handled by the Edge Function engine,
+  // which transcribes voice notes itself — so a spoken "yes"/"no" at the work-confirmation
+  // step is already multimodal.
 
   // 6b. PRE-CHECK: Skip bucket creation for non-work text-only messages (greetings, etc.)
   // Only applies when: no media attached AND no existing open bucket (not mid-conversation)
-  const hasMedia = imageUrls.length > 0 || audioUrls.length > 0;
   if (!hasMedia && normalized.text.trim()) {
     const inboxProjectId = await ensureInboxProject(sql, member.company_id);
     const existingBucket = await findOpenBucket(sql, member.id, inboxProjectId);
@@ -246,17 +270,10 @@ Your message has been saved. An admin will add you to your project soon!`;
     // If existingBucket exists, let it flow through — user is mid-conversation
   }
 
-  // 6c. CHECK FOR TICKET CORRECTION (e.g. "#122 city hall")
-  // Matches if message STARTS with #, or if it CONTAINS # along with update keywords
-  const ticketStartMatch = normalized.text.trim().match(/^#(\d+)/i);
-  const ticketAnyMatch = normalized.text.trim().match(/#(\d+)/i);
-  const hasUpdateKeyword = /update|change|correct|fix|modify|photo|image|audio|evidence|add/i.test(normalized.text);
-  
-  const ticketMatch = ticketStartMatch || (ticketAnyMatch && hasUpdateKeyword ? ticketAnyMatch : null);
-
-  if (ticketMatch) {
-    const ticketId = parseInt(ticketMatch[1], 10);
-    console.log(`[WEBHOOK] Detected ticket reference #${ticketId}`);
+  // 6c. CHECK FOR TICKET CORRECTION — typed "#122 city hall" OR spoken "change ticket 11 to 10 hours"
+  const ticketId = matchTicketReference(intentText);
+  if (ticketId !== null) {
+    console.log(`[WEBHOOK] Detected ticket reference #${ticketId} (fromVoice=${commandFromVoice})`);
 
     // Verify bucket exists and belongs to this member
     const buckets = await sql`
@@ -276,16 +293,18 @@ Your message has been saved. An admin will add you to your project soon!`;
 
     // 6. EXTRACT MEDIA URLS FOR EVIDENCE ATTACHMENT
     const { imageUrls: newImages, audioUrls: newAudios } = extractMediaUrls(normalized, body);
-    const hasMedia = newImages.length > 0 || newAudios.length > 0;
+    // Attached media is evidence ONLY when it isn't itself the spoken command. A voice note
+    // that says "change ticket 11 to 10 hours" is a command to parse, not evidence to attach.
+    const attachAsEvidence = (newImages.length > 0 || newAudios.length > 0) && !commandFromVoice;
 
     let correction;
-    if (hasMedia) {
-      correction = { 
-        action: 'add_evidence' as const, 
-        value: JSON.stringify({ imageUrls: newImages, audioUrls: newAudios }) 
+    if (attachAsEvidence) {
+      correction = {
+        action: 'add_evidence' as const,
+        value: JSON.stringify({ imageUrls: newImages, audioUrls: newAudios }),
       };
     } else {
-      correction = await parseCorrectionIntent(normalized.text);
+      correction = await parseCorrectionIntent(intentText);
     }
     console.log(`[WEBHOOK] Correction intent:`, JSON.stringify(correction));
 
@@ -371,11 +390,12 @@ Your message has been saved. An admin will add you to your project soon!`;
         rawText: normalized.text,
         imageUrls,
         audioUrls,
-        transcripts: [],
+        // Reuse the transcript we already computed for command detection (avoids a 2nd Whisper call)
+        transcripts: voiceTranscript ? [voiceTranscript] : [],
         messageSid,
       });
     }
-    
+
     console.log(`[WEBHOOK] Transaction complete, releasing row lock for member ${member.id}`);
   });
 
@@ -512,6 +532,75 @@ async function processMedia(normalized: any, body: any): Promise<{
 // Ticket Correction Helpers
 // ============================================================================
 
+// Basic-auth header for fetching a raw Twilio media URL (needed before the copy worker runs).
+function twilioAuthHeader(url: string): Record<string, string> {
+  const sid = process.env.TWILIO_ACCOUNT_SID || '';
+  const token = process.env.TWILIO_AUTH_TOKEN || '';
+  if (sid && token && url.includes('twilio.com')) {
+    return { Authorization: 'Basic ' + Buffer.from(`${sid}:${token}`).toString('base64') };
+  }
+  return {};
+}
+
+// Deterministic yes/no from text OR a voice transcript. Mirrors the engine's detectYesNo
+// so spoken confirmations ("yes", "sí", "no") apply the same as typed ones.
+const YES_WORDS = new Set(['y', 'yes', 'yeah', 'yep', 'yup', 'ya', 'ok', 'okay', 'correct', 'right', 'si', 'sure', 'confirm', 'confirmed', 'good', 'perfect', 'affirmative']);
+const NO_WORDS = new Set(['n', 'no', 'nope', 'nah', 'wrong', 'incorrect', 'cancel', 'nada']);
+function spokenYesNo(text: string): 'yes' | 'no' | null {
+  const clean = (text || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  const toks = clean.split(' ').filter(Boolean);
+  if (!toks.length) return null;
+  if (toks.length <= 3) {
+    const yes = toks.some(t => YES_WORDS.has(t));
+    const no = toks.some(t => NO_WORDS.has(t));
+    if (yes && !no) return 'yes';
+    if (no && !yes) return 'no';
+    return null;
+  }
+  if (YES_WORDS.has(toks[0])) return 'yes';
+  if (NO_WORDS.has(toks[0])) return 'no';
+  return null;
+}
+
+// Convert spoken number words (0–99) to digits so transcripts like "ticket eleven" /
+// "ten hours" parse the same as "ticket 11" / "10 hours".
+const NUM_ONES: Record<string, number> = {
+  zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9,
+  ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16,
+  seventeen: 17, eighteen: 18, nineteen: 19,
+};
+const NUM_TENS: Record<string, number> = {
+  twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90,
+};
+function wordsToDigits(text: string): string {
+  return text
+    // "twenty two" → 22 (tens optionally followed by ones)
+    .replace(
+      /\b(twenty|thirty|forty|fifty|sixty|seventy|eighty|ninety)(?:[\s-](one|two|three|four|five|six|seven|eight|nine))?\b/gi,
+      (_m, tens: string, ones?: string) => String(NUM_TENS[tens.toLowerCase()] + (ones ? NUM_ONES[ones.toLowerCase()] : 0)),
+    )
+    // standalone ones / teens
+    .replace(
+      /\b(zero|one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen)\b/gi,
+      (_m, w: string) => String(NUM_ONES[w.toLowerCase()]),
+    );
+}
+
+// Detect a ticket reference: "#11", "ticket 11", "ticket #11", "ticket number 11", or a
+// "#11" that appears alongside an update keyword. Returns the ticket id or null.
+function matchTicketReference(text: string): number | null {
+  const t = text.trim();
+  const hashStart = t.match(/^#(\d+)/);
+  if (hashStart) return parseInt(hashStart[1], 10);
+  const ticketWord = t.match(/\bticket\s*#?\s*(?:number|no\.?|num)?\s*(\d+)/i);
+  if (ticketWord) return parseInt(ticketWord[1], 10);
+  const hasUpdateKeyword = /update|change|correct|fix|modify|photo|image|audio|evidence|add/i.test(t);
+  const hashAny = t.match(/#(\d+)/);
+  if (hashAny && hasUpdateKeyword) return parseInt(hashAny[1], 10);
+  return null;
+}
+
 interface CorrectionIntent {
   action: 'change_project' | 'change_hours' | 'unknown';
   value: string | null;  // e.g. "City Mall" or "6"
@@ -522,8 +611,15 @@ interface CorrectionIntent {
  * e.g. "#122 city hall" → { action: 'change_project', value: 'city hall' }
  */
 async function parseCorrectionIntent(text: string): Promise<CorrectionIntent> {
-  // Remove the ticket reference to get just the correction part
-  const correctionText = text.replace(/#\d+\s*/i, '').trim();
+  // Strip the ticket reference and leading command verbs to leave just the change, e.g.
+  // "change ticket 11 to 10 hours" → "to 10 hours"; "#11 city hall" → "city hall".
+  const correctionText = text
+    .replace(/#\d+/gi, ' ')
+    .replace(/\bticket\s*#?\s*(?:number|no\.?|num)?\s*\d+/gi, ' ')
+    .replace(/^\s*(?:please\s+)?(?:can you\s+)?(?:change|update|correct|fix|modify|set|make)\b/i, ' ')
+    .replace(/^\s*(?:it\s+)?to\b/i, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
 
   if (!correctionText) {
     return { action: 'unknown', value: null };

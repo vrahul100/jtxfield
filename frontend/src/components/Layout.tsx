@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { Header } from './Header';
 import { Sidebar } from './Sidebar';
+import { PipelineStepper } from './PipelineStepper';
 
 interface LayoutProps {
     children: ReactNode;
@@ -14,9 +15,11 @@ export function Layout({ children }: LayoutProps) {
                 <Sidebar />
                 {/* Responsive margin: ml-0 on mobile (sidebar overlays), ml-64 on desktop */}
                 <main className="flex-1 ml-0 md:ml-64 p-8 pb-20 transition-all duration-300">
+                    <PipelineStepper />
                     {children}
                 </main>
             </div>
+
             {/* Footer - Responsive left margin */}
             <footer className="fixed bottom-0 left-0 md:left-64 right-0 bg-gray-50 border-t border-slate-200 py-2 px-8 text-center z-10 transition-all duration-300">
                 <div className="flex flex-col md:flex-row justify-between items-center text-xs text-slate-500 italic">
