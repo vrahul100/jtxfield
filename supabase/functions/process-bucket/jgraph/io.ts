@@ -45,16 +45,17 @@ function extractJsonObject(text: string | null | undefined): any | null {
 // One chat completion. reasoning_effort:'low' is critical for gpt-oss models: without it
 // they spend the token budget on hidden reasoning and emit empty content, which trips
 // Groq's json_object validator (json_validate_failed with empty failed_generation).
-async function groqChat(messages: any[], maxTokens: number, jsonMode: boolean): Promise<string | null> {
+async function groqChat(messages: any[], maxTokens: number, jsonMode: boolean, model: string = GROQ_MODEL): Promise<string | null> {
     const apiKey = Deno.env.get('GROQ_API_KEY')
     if (!apiKey) return null
     const body: any = {
-        model: GROQ_MODEL,
+        model,
         messages,
         temperature: 0.1,
         max_tokens: maxTokens,
-        reasoning_effort: 'low',
     }
+    // reasoning_effort only applies to the gpt-oss reasoning models; instruct models reject it.
+    if (model.includes('gpt-oss')) body.reasoning_effort = 'low'
     if (jsonMode) body.response_format = { type: 'json_object' }
 
     const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
@@ -72,10 +73,11 @@ async function groqChat(messages: any[], maxTokens: number, jsonMode: boolean): 
 
 export async function groqJson(
     prompt: string,
-    opts: { system?: string; maxTokens?: number } = {},
+    opts: { system?: string; maxTokens?: number; model?: string } = {},
 ): Promise<any | null> {
     if (!Deno.env.get('GROQ_API_KEY')) return null
     const maxTokens = opts.maxTokens ?? 1500
+    const model = opts.model ?? GROQ_MODEL
 
     const messages: any[] = []
     if (opts.system) messages.push({ role: 'system', content: opts.system })
@@ -83,14 +85,14 @@ export async function groqJson(
 
     try {
         // Attempt 1: strict JSON mode.
-        const first = extractJsonObject(await groqChat(messages, maxTokens, true))
+        const first = extractJsonObject(await groqChat(messages, maxTokens, true, model))
         if (first) return first
 
         // Attempt 2: plain call + manual extraction. More reliable when json_object mode
         // returns empty content for a reasoning model.
         console.log('[groqJson] JSON mode empty/invalid — retrying without response_format')
         const retryMessages = [...messages, { role: 'user', content: 'Return ONLY a single valid JSON object, no prose.' }]
-        return extractJsonObject(await groqChat(retryMessages, maxTokens, false))
+        return extractJsonObject(await groqChat(retryMessages, maxTokens, false, model))
     } catch (e) {
         console.error('[groqJson] Error:', e)
         return null

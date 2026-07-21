@@ -12,10 +12,11 @@ import {
     setInboxProject,
     slotOf,
     type ProjectRef,
+    type Slot,
     type WorkRecord,
 } from './record.ts'
 import { interpretTurn } from './interpret.ts'
-import { fuzzyFindProject, resolveProjectRef, type ProjectOption } from './match.ts'
+import { detectFixFieldOnly, fuzzyFindProject, parseHoursReply, resolveProjectReply, resolveProjectRef, type ProjectOption } from './match.ts'
 import { composeReply, composeSuccess } from './reply.ts'
 import {
     analyzeImage,
@@ -90,35 +91,74 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
     }
 
-    // --- Latest user input (text line + newest transcript) ---
+    // --- This turn's input ONLY. Scoped to what arrived since we last processed this bucket
+    //     (the watermark), so a prior voice note is never re-interpreted — mirrors how userText
+    //     already isolated the latest text line. This is what kills phantom re-extraction. ---
     const textLines = (bucket.raw_text || '').split('\n').filter((l: string) => l.trim() !== '')
-    const userText = textLines.length ? textLines[textLines.length - 1] : ''
-    const transcript = transcripts.length ? transcripts[transcripts.length - 1] : ''
+    const newTextLines = textLines.slice(record.seenTextLines)
+    const newTranscripts = transcripts.slice(record.seenTranscripts)
+    const userText = newTextLines.join('\n').trim()
+    const transcript = newTranscripts.join(' ').trim()
+    const reply = (userText || transcript).trim()
 
-    // --- THE single LLM call: interpret this turn ---
-    const interp = await interpretTurn({
-        record,
-        lastAsked: record.lastAsked,
-        userText,
-        transcript,
-        imageAnalysis,
-        projects,
-    })
+    // Mark this turn's input consumed so the next turn starts clean.
+    record = { ...record, seenTextLines: textLines.length, seenTranscripts: transcripts.length }
 
-    // --- Confirmation intent (yes/no/correct/reject) comes from the LLM interpreter itself
-    //     (interp.confirm / interp.rejectField) — no keyword matching. Audio is already folded
-    //     in because the transcript is passed to interpretTurn above. This adds NO LLM cost:
-    //     interpretTurn is the one call we already make each turn. ---
-    const latestRaw = transcript || userText || ''
+    // --- Expectation-driven resolution. When the app asked a CLOSED question, the reply IS the
+    //     input to that question — resolve it deterministically (no LLM, no hallucination, no
+    //     cost). Only genuinely open input falls through to the single interpreter call. ---
+    const expected: Slot | null = record.lastAsked
+    let projectRef: ProjectRef | null = null
+    let resolved = false
 
-    // --- Resolve project: LLM hint first, then fuzzy-match the raw text against the real
-    //     project list (dynamic data, not hardcoded) on project-relevant turns. ---
-    let projectRef: ProjectRef | null = resolveProjectRef(interp, projects, record.lastAsked)
-    if (!projectRef && (record.lastAsked === 'confirm' || record.lastAsked === 'fix' || record.lastAsked === 'project')) {
-        const m = fuzzyFindProject(latestRaw, projects)
-        if (m) projectRef = { id: m.id, name: m.name }
+    if (expected === 'project') {
+        // We showed a numbered list: a number picks it, a name fuzzy-matches it.
+        projectRef = resolveProjectReply(reply, projects)
+        if (projectRef) {
+            record = { ...record, projectId: projectRef.id, projectName: projectRef.name, projectRejected: false }
+            resolved = true
+        }
+    } else if (expected === 'hours') {
+        const h = parseHoursReply(reply)
+        if (h != null) {
+            record = { ...record, hours: h }
+            resolved = true
+        }
+    } else if (expected === 'fix') {
+        // "the work, the hours, or the project?" — if the reply just NAMES a field (no new
+        // value), clear that slot and re-ask it. Deterministic, no LLM. Value replies
+        // ("6 hours", "plumbing", a project name) fall through to interpretFix below.
+        const field = detectFixFieldOnly(reply)
+        if (field === 'project') {
+            record = { ...record, projectId: null, projectName: null, projectRejected: true, needsFix: false }
+            resolved = true
+        } else if (field === 'hours') {
+            record = { ...record, hours: null, needsFix: false }
+            resolved = true
+        } else if (field === 'work') {
+            record = { ...record, workType: null, needsFix: false }
+            resolved = true
+        }
     }
-    record = applyPatch(record, interp, projectRef)
+
+    if (!resolved) {
+        // Open-ended (describe work), or a closed reply we couldn't parse deterministically
+        // ("the first one", "six and a half"), or a confirm/fix reply → the state-conditioned
+        // interpreter. It already scopes its output to the current state, so no extra gating.
+        const interp = await interpretTurn({ record, lastAsked: expected, userText, transcript, imageAnalysis, projects })
+        projectRef = resolveProjectRef(interp, projects, expected)
+
+        // Fuzzy-match the RAW reply against the project list ONLY when the user is actually
+        // naming a project — i.e. the interpreter read this as a correction/selection. Never
+        // on a confirm/reject: a bare "n" must not be scavenged into a project match (it
+        // substring-hits any name containing "n"), which was silently cancelling rejections.
+        const namingProject = interp.intent === 'correct' || interp.intent === 'select' || interp.intent === 'provide'
+        if (!projectRef && namingProject && (expected === 'confirm' || expected === 'fix' || expected === 'project')) {
+            const m = fuzzyFindProject(reply, projects)
+            if (m) projectRef = { id: m.id, name: m.name }
+        }
+        record = applyPatch(record, interp, projectRef)
+    }
 
     // --- No project inferred and the user hasn't asked to pick one → default to Inbox ---
     if (!record.projectId && !record.projectRejected && inbox) {

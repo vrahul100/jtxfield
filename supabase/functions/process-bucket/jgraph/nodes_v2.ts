@@ -170,7 +170,7 @@ async function sendMessage(phone: string, message: string, source: string) {
     console.log(`[Send] To ${phone}: ${message}`)
     console.log(`[Send] From ${fromNumber}`)
     console.log(`[Send] Params ${params.toString()}`)
-    const res = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
+    await fetch(`https://api.twilio.com/2010-04-01/Accounts/${accountSid}/Messages.json`, {
         method: 'POST',
         headers: {
             'Authorization': `Basic ${btoa(`${accountSid}:${authToken}`)}`,
@@ -178,14 +178,6 @@ async function sendMessage(phone: string, message: string, source: string) {
         },
         body: params.toString(),
     })
-
-    if (!res.ok) {
-        const text = await res.text()
-        console.error(`[Send] Twilio API error: ${res.status} - ${text}`)
-    } else {
-        const data = await res.json()
-        console.log(`[Send] Twilio message sent successfully. SID: ${data.sid}`)
-    }
 }
 
 // ============================================================================
@@ -607,8 +599,9 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // Check if we're in a confirmation state with existing work data
     const hasWorkData = extraction.workType && extraction.hoursWorked && extraction.hoursWorked > 0
     const isConfirmState = ['confirming_project', 'confirming_all', 'selecting_project'].includes(currentState)
-    // We only skip full extraction for clarifying_inconsistency which has its own custom re-extraction logic
-    const skipFullExtraction = ['clarifying_inconsistency'].includes(currentState)
+    // States that handle their own extraction logic — skip full re-extraction to prevent
+    // issues like hours doubling (raw_text accumulates duplicate messages)
+    const skipFullExtraction = ['clarifying_inconsistency', 'collecting_work', 'collecting_hours'].includes(currentState)
     
     // When in confirmation state with data, only extract from LATEST input (not all accumulated transcripts)
     // This lets the LLM understand the user's answer in context without re-processing old work data
@@ -1084,44 +1077,16 @@ async function handleCollectingWork(ctx: StateContext): Promise<StateResult> {
 
     // If this is a response (attempts > 0), try to extract
     if (stateAttempts > 0 && lastMsg) {
-        // 1. Try values already extracted by the LLM
-        let hours = extraction.hoursWorked
-        let workType = extraction.workType
+        // Simple extraction from response
+        const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)?/i)
+        const hours = hoursMatch ? parseFloat(hoursMatch[1]) : extraction.hoursWorked
+        const workType = lastMsg.replace(/\d+(?:\.\d+)?\s*(?:hours?|hrs?|h)?/gi, '').trim() || extraction.workType || 'work'
 
-        // 2. Simple regex heuristic fallback if LLM missed it
-        if (!hours || hours <= 0) {
-            const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h)?/i)
-            if (hoursMatch) {
-                hours = parseFloat(hoursMatch[1])
-                extraction.hoursWorked = hours
-            }
-        }
-        if (!workType || workType === 'work' || workType === 'general') {
-            const parsedWork = lastMsg.replace(/\d+(?:\.\d+)?\s*(?:hours?|hrs?|h)?/gi, '').trim()
-            if (parsedWork && parsedWork.length > 3) {
-                workType = parsedWork
-                extraction.workType = workType
-            }
-        }
-
-        const hasWork = workType && workType !== 'work' && workType !== 'general'
-        const hasHours = hours && hours > 0
-
-        if (hasWork && hasHours) {
-            await getSupabase().from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
-            const hasProject = !!extraction.projectHint || !!ctx.member?.last_confirmed_project_id
+        if (hours && hours > 0) {
             return {
-                nextState: hasProject ? 'confirming_all' : 'confirming_project',
+                nextState: 'confirming_project',
                 response: null,
-                extraction,
-            }
-        } else if (hasWork) {
-            // We got the work classification, transition to collecting hours
-            await getSupabase().from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
-            return {
-                nextState: 'collecting_hours',
-                response: null,
-                extraction,
+                extraction: { ...extraction, workType, hoursWorked: hours, summary: lastMsg },
             }
         }
     }
@@ -1163,25 +1128,14 @@ async function handleCollectingHours(ctx: StateContext): Promise<StateResult> {
 
     // If this is a response, try to extract hours
     if (stateAttempts > 0 && lastMsg) {
-        // 1. Try LLM extracted hours
-        let hours = extraction.hoursWorked
-
-        // 2. Simple regex heuristic fallback if LLM missed it
-        if (!hours || hours <= 0) {
-            const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h|horas?)?/i)
-            if (hoursMatch) {
-                hours = parseFloat(hoursMatch[1])
-                extraction.hoursWorked = hours
-            }
-        }
+        const hoursMatch = lastMsg.match(/(\d+(?:\.\d+)?)\s*(?:hours?|hrs?|h|horas?)?/i)
+        const hours = hoursMatch ? parseFloat(hoursMatch[1]) : null
 
         if (hours && hours > 0) {
-            await getSupabase().from('buckets').update({ state_attempts: 0 }).eq('id', ctx.bucketId)
-            const hasProject = !!extraction.projectHint || !!ctx.member?.last_confirmed_project_id
             return {
-                nextState: hasProject ? 'confirming_all' : 'confirming_project',
+                nextState: 'confirming_project',
                 response: null,
-                extraction,
+                extraction: { ...extraction, hoursWorked: hours },
             }
         }
     }

@@ -32,6 +32,12 @@ export interface WorkRecord {
     // Bookkeeping for interpreting the next turn + attempt caps
     lastAsked: Slot | null
     askCount: number               // consecutive times we've asked the SAME thing
+
+    // Input watermark: how many of the bucket's accumulated text lines / transcripts we've
+    // already interpreted. The next turn reads ONLY what arrived after this, so a prior voice
+    // note is never re-interpreted (that was the phantom re-extraction bug).
+    seenTextLines: number
+    seenTranscripts: number
 }
 
 // One turn's interpretation, produced by the single LLM call. Only fields the message
@@ -90,6 +96,8 @@ export function createRecord(): WorkRecord {
         needsFix: false,
         lastAsked: null,
         askCount: 0,
+        seenTextLines: 0,
+        seenTranscripts: 0,
     }
 }
 
@@ -210,8 +218,11 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
         next.inconsistency = null   // user addressed the mismatch
     }
 
-    // --- Confirmation / rejection, interpreted against what we last asked ---
-    if (rec.lastAsked === 'confirm') {
+    // --- Confirmation / rejection, interpreted against what we last asked. Handled at BOTH
+    //     the confirm step ("Reply Y or N") and the fix step ("what should I change?").
+    //     Naming a field at the fix step MUST clear that slot so the engine re-asks it —
+    //     otherwise the answer has nowhere to land and we loop straight back to CONFIRM. ---
+    if (rec.lastAsked === 'confirm' || rec.lastAsked === 'fix') {
         if (p.confirm) {
             next.confirmed = true
         } else if (p.rejectField === 'project' && !projectRef) {
@@ -222,8 +233,9 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
             next.hours = null
         } else if (p.rejectField === 'work' && p.workType == null) {
             next.workType = null
-        } else if ((p.rejectField === 'all' || p.intent === 'reject') && !projectRef && p.hours == null && !p.workType) {
-            next.needsFix = true   // rejected but didn't say what → ask
+        } else if (rec.lastAsked === 'confirm' && (p.rejectField === 'all' || p.intent === 'reject')
+            && !projectRef && p.hours == null && !p.workType) {
+            next.needsFix = true   // rejected at confirm but didn't say what → ask which field
         }
     }
 

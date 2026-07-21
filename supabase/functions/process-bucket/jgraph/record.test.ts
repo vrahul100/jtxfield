@@ -62,6 +62,39 @@ Deno.test('rejecting project at CONFIRM forces SELECT_PROJECT', () => {
     assertEquals(decideNextAction(r).type, 'SELECT_PROJECT')
 })
 
+// --- Regression (the screenshot loop): N → ASK_FIX → "project" → SELECT_PROJECT, not CONFIRM ---
+Deno.test('N then naming a field at the fix step routes to that field, not back to CONFIRM', () => {
+    // 1. At CONFIRM the user rejects with a bare "n" (no field named).
+    let r: WorkRecord = { ...createRecord(), workType: 'electrical', hours: 5, projectId: 5, projectName: 'High-Rise Tower A', lastAsked: 'confirm' }
+    r = applyPatch(r, interp({ confirm: false, rejectField: 'all', intent: 'reject' }), null)
+    assertEquals(r.needsFix, true)
+    assertEquals(decideNextAction(r).type, 'ASK_FIX')
+
+    // 2. Engine asked "what should I change?" → lastAsked becomes 'fix'. User says "project".
+    r.lastAsked = 'fix'
+    r = applyPatch(r, interp({ rejectField: 'project', intent: 'correct' }), null)
+    assertEquals(r.projectId, null)               // the project slot got cleared
+    assertEquals(r.projectRejected, true)
+    assertEquals(decideNextAction(r).type, 'SELECT_PROJECT')   // NOT back to CONFIRM
+})
+
+// --- Fix step: naming "hours" clears hours so we re-ask them ---
+Deno.test('naming hours at the fix step re-asks hours', () => {
+    let r: WorkRecord = { ...createRecord(), workType: 'electrical', hours: 5, projectId: 5, projectName: 'City Mall', lastAsked: 'fix' }
+    r = applyPatch(r, interp({ rejectField: 'hours', intent: 'correct' }), null)
+    assertEquals(r.hours, null)
+    assertEquals(decideNextAction(r).type, 'ASK_HOURS')
+})
+
+// --- Fix step: giving the new value directly applies it and re-confirms ---
+Deno.test('giving a new value at the fix step applies it', () => {
+    let r: WorkRecord = { ...createRecord(), workType: 'electrical', hours: 5, projectId: 5, projectName: 'City Mall', lastAsked: 'fix' }
+    // user answers the "what to change?" question with "6 hours" directly
+    r = applyPatch(r, interp({ hours: 6, intent: 'correct' }), null)
+    assertEquals(r.hours, 6)
+    assertEquals(decideNextAction(r).type, 'CONFIRM')
+})
+
 // --- Confirm yes → SUBMIT ---
 Deno.test('yes at CONFIRM submits', () => {
     let r: WorkRecord = { ...createRecord(), workType: 'electrical', hours: 6, projectId: 5, projectName: 'City Mall', lastAsked: 'confirm' }
