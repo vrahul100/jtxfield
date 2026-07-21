@@ -329,25 +329,25 @@ export function Tickets() {
 
     return (
         <Layout>
-            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 overflow-visible md:overflow-hidden">
                 <div className="flex-shrink-0 pt-1 pb-2 mb-2">
-                    <div className="flex justify-between items-center">
-                        <h1 className="text-3xl font-bold text-gray-900">Work Captured</h1>
-                        <div className="flex gap-2">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
+                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Work Captured</h1>
+                        <div className="flex gap-2 w-full sm:w-auto justify-end">
                             {selectionMode ? (
                                 <>
-                                    <button className="btn-secondary" onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}>Cancel</button>
-                                    <button className="btn-primary" disabled={selectedTickets.length === 0 || creatingPacket} onClick={handleCreatePacket}>
+                                    <button className="btn-secondary text-xs sm:text-sm py-1.5 px-3" onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}>Cancel</button>
+                                    <button className="btn-primary text-xs sm:text-sm py-1.5 px-3" disabled={selectedTickets.length === 0 || creatingPacket} onClick={handleCreatePacket}>
                                         {creatingPacket ? 'Creating...' : `Create CO Packet (${selectedTickets.length})`}
                                     </button>
                                 </>
                             ) : (
-                                <button className="btn-secondary" onClick={() => setSelectionMode(true)}>Select for CO Packet</button>
+                                <button className="btn-secondary text-xs sm:text-sm py-1.5 px-3" onClick={() => setSelectionMode(true)}>Select for CO Packet</button>
                             )}
                             <button
                                 onClick={fetchBuckets}
                                 disabled={refreshing}
-                                className="btn-primary flex items-center gap-2"
+                                className="btn-primary text-xs sm:text-sm py-1.5 px-3 flex items-center gap-2"
                                 style={refreshing ? { cursor: 'wait' } : {}}
                             >
                                 {refreshing && (
@@ -429,12 +429,12 @@ export function Tickets() {
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 items-stretch overflow-hidden">
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 items-stretch overflow-visible lg:overflow-hidden">
                     {/* Left Panel: Table List */}
                     <div className={`transition-all duration-300 flex flex-col min-h-0 card overflow-hidden ${selectedBucketId ? 'w-full lg:w-7/12' : 'w-full'}`}>
                         {/* Scrollable Table Container */}
-                        <div className="flex-1 min-h-0 overflow-y-auto">
-                            <table className="w-full text-left border-collapse">
+                        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+                            <table className="w-full text-left border-collapse min-w-[600px]">
                                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                                     <tr>
                                         {selectionMode && <th className="p-3 w-10 text-center"></th>}
@@ -527,7 +527,7 @@ export function Tickets() {
 
                         {/* Pagination Bar - Fixed at bottom of table card */}
                         {totalPages > 1 && (
-                            <div className="flex-shrink-0 border-t border-slate-200 bg-white p-2.5 px-4 flex justify-between items-center z-10">
+                            <div className="flex-shrink-0 border-t border-slate-200 bg-white p-2.5 px-4 flex flex-col sm:flex-row justify-between items-center gap-2 z-10">
                                 <span className="text-xs text-gray-600">
                                     Showing {buckets.length} of {total} work entries
                                 </span>

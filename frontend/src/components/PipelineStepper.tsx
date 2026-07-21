@@ -34,52 +34,52 @@ export function PipelineStepper() {
     ];
 
     return (
-        <div className="bg-slate-100 rounded-xl border border-slate-700/80 shadow-lg p-3.5 mb-4">
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
+        <div className="bg-slate-100 rounded-xl border border-slate-200 shadow-sm p-2 sm:p-3 mb-3">
+            <div className="flex flex-row overflow-x-auto md:overflow-visible items-center justify-between gap-2 md:gap-3 pb-1 md:pb-0">
                 {steps.map((step, idx) => {
                     const isActive = path === step.path;
                     const isPassed = steps.findIndex(s => s.path === path) > idx;
                     const Icon = step.icon;
 
                     return (
-                        <div key={step.path} className="flex-1 flex items-center">
+                        <div key={step.path} className="flex-1 min-w-[140px] md:min-w-0 flex items-center">
                             <Link
                                 to={step.path}
-                                className={`flex-1 flex items-center gap-3 p-2.5 rounded-lg border transition-all ${
+                                className={`flex-1 flex items-center gap-2 sm:gap-3 p-2 sm:p-2.5 rounded-lg border transition-all ${
                                     isActive
-                                        ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/40 scale-[1.01]'
+                                        ? 'bg-indigo-600 border-indigo-400 text-white shadow-md shadow-indigo-600/30'
                                         : isPassed
-                                        ? 'bg-emerald-600 border-emerald-400 text-white shadow-md shadow-emerald-600/30'
-                                        : 'bg-slate-800/90 border-slate-700 text-slate-300 opacity-70 hover:opacity-100 hover:border-slate-500'
+                                        ? 'bg-emerald-600 border-emerald-400 text-white shadow-sm shadow-emerald-600/20'
+                                        : 'bg-slate-200/80 border-slate-300 text-slate-700 hover:bg-slate-300/80'
                                 }`}
                             >
-                                <div className={`w-9 h-9 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
+                                <div className={`w-7 h-7 sm:w-9 sm:h-9 rounded-full flex items-center justify-center border transition-all flex-shrink-0 ${
                                     isActive
                                         ? 'bg-white text-indigo-700 border-white font-extrabold shadow-sm'
                                         : isPassed
                                         ? 'bg-white text-emerald-700 border-white font-extrabold shadow-sm'
-                                        : 'bg-slate-700 border-slate-600 text-slate-300'
+                                        : 'bg-slate-300 border-slate-400 text-slate-600'
                                 }`}>
-                                    <Icon className="w-5 h-5" />
+                                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
                                 </div>
                                 <div className="flex flex-col min-w-0">
-                                    <span className={`text-sm font-bold truncate ${
-                                        isActive || isPassed ? 'text-white' : 'text-slate-200'
+                                    <span className={`text-xs sm:text-sm font-bold truncate ${
+                                        isActive || isPassed ? 'text-white' : 'text-slate-800'
                                     }`}>
                                         {step.label}
                                     </span>
-                                    <span className={`text-xs truncate ${
-                                        isActive ? 'text-indigo-100 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
+                                    <span className={`text-[10px] sm:text-xs truncate hidden sm:block ${
+                                        isActive ? 'text-indigo-100 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-500'
                                     }`}>
                                         {step.description}
                                     </span>
                                 </div>
                             </Link>
                             {idx < steps.length - 1 && (
-                                <div className={`hidden md:flex items-center justify-center px-2 ${
-                                    isPassed ? 'text-emerald-400 font-bold' : isActive ? 'text-indigo-400 font-bold' : 'text-slate-600'
+                                <div className={`hidden md:flex items-center justify-center px-1.5 ${
+                                    isPassed ? 'text-emerald-500 font-bold' : isActive ? 'text-indigo-500 font-bold' : 'text-slate-400'
                                 }`}>
-                                    <ArrowRight className="w-5 h-5" />
+                                    <ArrowRight className="w-4 h-4" />
                                 </div>
                             )}
                         </div>
