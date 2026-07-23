@@ -1,5 +1,5 @@
 /**
- * Mock implementations of external dependencies for nodes_v2.ts testing
+ * Mock implementations of external dependencies for jgraph engine testing
  * Provides in-memory state management and configurable responses
  */
 

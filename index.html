@@ -1,0 +1,506 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Jentyx — Field work becomes billable work</title>
+<link rel="icon" type="image/png" href="logo.png">
+<link rel="apple-touch-icon" href="logo.png">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap');
+
+  :root{
+    --indigo:#4F46E5;
+    --indigo-deep:#3730A3;
+    --indigo-light:#818CF8;
+    --indigo-glow:rgba(79, 70, 229, 0.35);
+    --ink:#0F172A;
+    --ink-2:#1E293B;
+    --blueprint:#090D16;
+    --paper:#F8FAFC;
+    --paper-2:#FFFFFF;
+    --amber:#F5A524;
+    --amber-deep:#D97706;
+    --sky:#38BDF8;
+    --green:#10B981;
+    --line:#E2E8F0;
+    --muted:#64748B;
+    --muted-ink:#94A3B8;
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  body{
+    font-family:'Inter',-apple-system,sans-serif;
+    color:var(--ink);
+    background:var(--paper);
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  h1,h2,h3,.display{font-family:'Space Grotesk',sans-serif;letter-spacing:-0.02em;}
+  a{color:inherit;text-decoration:none;}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 28px;}
+
+  /* ---------- NAV ---------- */
+  nav{
+    position:sticky;top:0;z-index:50;
+    background:rgba(9, 13, 22, 0.94);
+    backdrop-filter:blur(12px);
+    border-bottom:1px solid rgba(255,255,255,0.08);
+  }
+  .nav-in{display:flex;align-items:center;justify-content:space-between;height:72px;}
+  .logo{display:flex;align-items:center;gap:12px;color:#fff;}
+  .logo-img{width:42px;height:42px;object-fit:contain;border-radius:11px;box-shadow:0 4px 14px rgba(0,0,0,0.3);}
+  .logo-text{display:flex;flex-direction:column;line-height:1.1;}
+  .logo .word{font-family:'Space Grotesk',sans-serif;font-weight:700;font-size:22px;color:#fff;letter-spacing:-0.02em;}
+  .logo .sub{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.12em;color:var(--amber);}
+  
+  .nav-links{display:flex;align-items:center;gap:30px;}
+  .nav-links a{color:var(--muted-ink);font-size:15px;font-weight:500;transition:color .15s;}
+  .nav-links a:hover{color:#fff;}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;
+    font-family:'Space Grotesk';font-weight:600;font-size:15px;
+    padding:11px 22px;border-radius:10px;cursor:pointer;border:none;transition:all .18s ease;
+  }
+  .btn-primary{
+    background:linear-gradient(135deg,var(--indigo),var(--indigo-deep));
+    color:#fff;box-shadow:0 4px 16px var(--indigo-glow);
+  }
+  .btn-primary:hover{transform:translateY(-1px);box-shadow:0 8px 24px rgba(79,70,229,0.45);}
+  .btn-amber{
+    background:linear-gradient(135deg,var(--amber),var(--amber-deep));
+    color:var(--ink);font-weight:700;box-shadow:0 4px 16px rgba(245,165,36,0.3);
+  }
+  .btn-amber:hover{transform:translateY(-1px);box-shadow:0 8px 22px rgba(245,165,36,0.45);}
+  .btn-ghost{background:transparent;color:#fff;border:1px solid rgba(255,255,255,0.22);}
+  .btn-ghost:hover{border-color:#fff;background:rgba(255,255,255,0.05);}
+  @media(max-width:720px){.nav-links a:not(.btn){display:none;}}
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;background:var(--blueprint);color:#fff;overflow:hidden;
+    padding:84px 0 96px;
+  }
+  .hero::before{
+    content:"";position:absolute;inset:0;
+    background-image:linear-gradient(rgba(255,255,255,0.035) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,0.035) 1px,transparent 1px);
+    background-size:44px 44px;
+    mask-image:radial-gradient(ellipse 80% 70% at 30% 20%, #000 40%, transparent 100%);
+  }
+  .hero-in{position:relative;display:grid;grid-template-columns:1.05fr 0.95fr;gap:54px;align-items:center;}
+  .eyebrow{
+    display:inline-flex;align-items:center;gap:8px;
+    background:rgba(79, 70, 229, 0.18);color:var(--indigo-light);
+    font-family:'Space Grotesk';font-weight:600;font-size:13px;letter-spacing:0.02em;
+    padding:6px 14px;border-radius:100px;margin-bottom:22px;border:1px solid rgba(99, 102, 241, 0.35);
+  }
+  .hero h1{font-size:53px;line-height:1.04;font-weight:700;margin-bottom:20px;}
+  .hero h1 .highlight{
+    background:linear-gradient(135deg, #A5B4FC, var(--amber));
+    -webkit-background-clip:text;
+    -webkit-text-fill-color:transparent;
+  }
+  .hero p.lead{font-size:19px;color:var(--muted-ink);line-height:1.55;max-width:34ch;margin-bottom:30px;}
+  .hero-cta{display:flex;gap:14px;align-items:center;flex-wrap:wrap;}
+  .hero-note{margin-top:20px;font-size:14px;color:var(--muted-ink);display:flex;align-items:center;gap:9px;}
+  .hero-note svg{color:var(--green);}
+
+  /* phone/flow mock */
+  .flowcard{
+    background:linear-gradient(180deg,#16294300,#0000);
+    position:relative;
+  }
+  .chat{
+    background:#0F172A;border:1px solid rgba(255,255,255,0.12);
+    border-radius:20px;padding:18px;box-shadow:0 30px 60px rgba(0,0,0,0.55);
+  }
+  .chat-head{display:flex;align-items:center;gap:9px;padding-bottom:13px;margin-bottom:13px;border-bottom:1px solid rgba(255,255,255,0.08);}
+  .chat-head .dot{width:9px;height:9px;border-radius:50%;background:var(--green);}
+  .chat-head span{font-size:13px;color:var(--muted-ink);font-weight:500;}
+  .msg{border-radius:13px;padding:10px 13px;font-size:14.5px;margin-bottom:9px;max-width:85%;}
+  .msg.worker{background:var(--indigo-deep);color:#EAF1F9;margin-left:auto;border-radius:13px 13px 4px 13px;box-shadow:0 4px 12px rgba(55,48,163,0.3);}
+  .msg.bot{background:#1E293B;color:#CBD8E8;border-radius:13px 13px 13px 4px;display:flex;gap:9px;align-items:center;}
+  .msg.bot svg{flex-shrink:0;color:var(--sky);}
+  .ticket{
+    background:#fff;color:var(--ink);border-radius:13px;padding:14px 15px;margin-top:4px;
+    box-shadow:0 10px 30px rgba(0,0,0,0.3);border-left:4px solid var(--indigo);
+  }
+  .ticket .tid{font-family:'Space Grotesk';font-weight:700;font-size:13px;color:var(--indigo);margin-bottom:7px;display:flex;align-items:center;justify-content:space-between;}
+  .ticket .tid .vbadge{background:#ECFDF5;color:#059669;padding:2px 8px;border-radius:6px;font-size:11px;font-weight:700;}
+  .ticket .trow{font-size:14px;color:var(--ink-2);margin-bottom:3px;}
+  .ticket .tbill{
+    display:inline-flex;align-items:center;gap:6px;margin-top:9px;
+    background:#FEF3C7;color:var(--amber-deep);font-family:'Space Grotesk';font-weight:700;
+    font-size:15px;padding:5px 12px;border-radius:8px;
+  }
+
+  /* ---------- LOGOS / trust strip ---------- */
+  .strip{background:var(--ink-2);color:var(--muted-ink);padding:22px 0;border-y:1px solid rgba(255,255,255,0.06);}
+  .strip-in{display:flex;align-items:center;justify-content:center;gap:14px 40px;flex-wrap:wrap;font-size:14px;font-weight:500;}
+  .strip-in b{color:#fff;font-family:'Space Grotesk';}
+  .strip .sep{width:4px;height:4px;border-radius:50%;background:rgba(255,255,255,0.25);}
+
+  /* ---------- SECTION SHELL ---------- */
+  section.block{padding:88px 0;}
+  .sec-eyebrow{
+    font-family:'Space Grotesk';font-weight:700;font-size:13px;letter-spacing:0.08em;
+    text-transform:uppercase;color:var(--indigo);margin-bottom:14px;
+  }
+  .sec-title{font-size:38px;line-height:1.1;font-weight:700;margin-bottom:16px;max-width:20ch;}
+  .sec-sub{font-size:18px;color:var(--muted);max-width:56ch;line-height:1.55;}
+
+  /* ---------- HOW IT WORKS ---------- */
+  .steps{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:52px;}
+  .step{background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:26px 24px;position:relative;box-shadow:0 2px 8px rgba(15,23,42,0.04);}
+  .step .num{
+    font-family:'Space Grotesk';font-weight:700;font-size:14px;color:#fff;
+    background:linear-gradient(135deg,var(--indigo),var(--indigo-deep));
+    width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;margin-bottom:18px;
+    box-shadow:0 4px 12px var(--indigo-glow);
+  }
+  .step h3{font-size:20px;font-weight:600;margin-bottom:8px;}
+  .step p{font-size:15px;color:var(--muted);line-height:1.55;}
+
+  /* ---------- USE CASES ---------- */
+  .usecases{background:var(--blueprint);color:#fff;}
+  .uc-grid{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-top:52px;}
+  .uc{
+    border-radius:20px;padding:34px 32px;position:relative;overflow:hidden;
+    border:1px solid rgba(255,255,255,0.10);
+  }
+  .uc.subs{background:linear-gradient(160deg,#1E1B4B,#0F172A);}
+  .uc.gc{background:linear-gradient(160deg,#064E3B,#0F172A);}
+  .uc .tag{
+    font-family:'Space Grotesk';font-weight:600;font-size:13px;letter-spacing:0.03em;
+    padding:5px 12px;border-radius:100px;display:inline-block;margin-bottom:18px;
+  }
+  .uc.subs .tag{background:rgba(129,140,248,0.2);color:#A5B4FC;}
+  .uc.gc .tag{background:rgba(16,185,129,0.2);color:#6EE7B7;}
+  .uc h3{font-size:26px;font-weight:700;margin-bottom:12px;line-height:1.15;}
+  .uc p.d{font-size:16px;color:var(--muted-ink);line-height:1.55;margin-bottom:22px;}
+  .uc ul{list-style:none;display:flex;flex-direction:column;gap:12px;}
+  .uc li{display:flex;gap:11px;font-size:15px;color:#D9E4F0;align-items:flex-start;}
+  .uc li svg{flex-shrink:0;margin-top:2px;}
+  .uc.subs li svg{color:#A5B4FC;}
+  .uc.gc li svg{color:#6EE7B7;}
+  .uc .money{
+    margin-top:24px;font-family:'Space Grotesk';font-weight:700;font-size:15px;
+    display:inline-flex;align-items:center;gap:8px;padding-top:20px;border-top:1px solid rgba(255,255,255,0.10);width:100%;
+  }
+  .uc.subs .money{color:var(--amber);}
+  .uc.gc .money{color:#6EE7B7;}
+
+  /* ---------- FEATURES ---------- */
+  .feat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:22px;margin-top:52px;}
+  .feat{background:var(--paper-2);border:1px solid var(--line);border-radius:16px;padding:26px 24px;transition:transform .15s, box-shadow .2s;}
+  .feat:hover{transform:translateY(-3px);box-shadow:0 14px 34px rgba(15,23,42,0.08);border-color:rgba(79,70,229,0.3);}
+  .feat .ico{
+    width:44px;height:44px;border-radius:11px;background:linear-gradient(135deg,var(--indigo),var(--indigo-deep));color:#fff;
+    display:flex;align-items:center;justify-content:center;margin-bottom:16px;box-shadow:0 4px 12px var(--indigo-glow);
+  }
+  .feat h3{font-size:18px;font-weight:600;margin-bottom:7px;}
+  .feat p{font-size:14.5px;color:var(--muted);line-height:1.55;}
+
+  /* ---------- OUTCOME BANNER ---------- */
+  .banner{background:var(--blueprint);color:#fff;position:relative;overflow:hidden;}
+  .banner::before{
+    content:"";position:absolute;inset:0;
+    background-image:linear-gradient(rgba(255,255,255,0.04) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,0.04) 1px,transparent 1px);
+    background-size:44px 44px;
+    mask-image:radial-gradient(ellipse 70% 90% at 80% 50%, #000 30%, transparent 100%);
+  }
+  .banner-in{position:relative;display:grid;grid-template-columns:repeat(3,1fr);gap:20px;padding:56px 0;}
+  .stat{text-align:left;}
+  .stat .big{font-family:'Space Grotesk';font-weight:700;font-size:44px;color:var(--amber);line-height:1;letter-spacing:-0.03em;}
+  .stat .lab{font-size:15px;color:var(--muted-ink);margin-top:9px;}
+
+  /* ---------- CTA ---------- */
+  .cta-block{padding:92px 0;text-align:center;}
+  .cta-block h2{font-size:42px;font-weight:700;line-height:1.08;margin-bottom:16px;}
+  .cta-block p{font-size:18px;color:var(--muted);max-width:48ch;margin:0 auto 30px;line-height:1.55;}
+  .cta-row{display:flex;gap:14px;justify-content:center;flex-wrap:wrap;}
+  .btn-dark{background:var(--ink);color:#fff;}
+  .btn-dark:hover{transform:translateY(-1px);box-shadow:0 10px 26px rgba(15,23,42,0.25);}
+  .founding{
+    margin-top:26px;display:inline-flex;align-items:center;gap:9px;
+    background:#FEF3C7;color:var(--amber-deep);font-size:14px;font-weight:600;
+    padding:9px 18px;border-radius:100px;border:1px solid rgba(245,165,36,0.3);
+  }
+
+  /* ---------- FOOTER ---------- */
+  footer{background:var(--blueprint);color:var(--muted-ink);padding:44px 0;border-t:1px solid rgba(255,255,255,0.08);}
+  .foot-in{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:16px;}
+  .foot-links{display:flex;gap:26px;font-size:14px;}
+  .foot-links a:hover{color:#fff;}
+  .copy{font-size:13px;color:rgba(255,255,255,0.4);}
+
+  /* ---------- RESPONSIVE ---------- */
+  @media(max-width:900px){
+    .hero-in{grid-template-columns:1fr;gap:40px;}
+    .hero h1{font-size:42px;}
+    .steps,.feat-grid{grid-template-columns:1fr;}
+    .uc-grid{grid-template-columns:1fr;}
+    .banner-in{grid-template-columns:1fr;gap:32px;}
+    .sec-title{font-size:30px;}
+    .cta-block h2{font-size:32px;}
+  }
+  @media(prefers-reduced-motion:reduce){*{transition:none!important;}}
+</style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav>
+    <div class="wrap nav-in">
+      <a href="/" class="logo">
+        <img src="logo.png" alt="Jentyx Logo" class="logo-img" />
+        <div class="logo-text">
+          <span class="word">Jentyx</span>
+          <span class="sub">Work</span>
+        </div>
+      </a>
+      <div class="nav-links">
+        <a href="#how">How it works</a>
+        <a href="#who">Who it's for</a>
+        <a href="#features">Features</a>
+        <a href="#demo" class="btn btn-primary">Book a demo</a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- HERO -->
+  <header class="hero">
+    <div class="wrap hero-in">
+      <div>
+        <span class="eyebrow">
+          <img src="logo.png" style="width:16px;height:16px;object-fit:contain;border-radius:4px;" alt="" />
+          WhatsApp &middot; no app to install
+        </span>
+        <h1>Field work becomes <span class="highlight">billable work.</span></h1>
+        <p class="lead">Your crew texts a photo or voice note. Jentyx turns it into documented, GPS-verified work — so nothing falls through the cracks and nothing goes unbilled.</p>
+        <div class="hero-cta">
+          <a href="#demo" class="btn btn-primary">Book a demo</a>
+          <a href="#how" class="btn btn-ghost">See how it works</a>
+        </div>
+        <div class="hero-note">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          Works in English &amp; Spanish — voice or text
+        </div>
+      </div>
+
+      <div class="flowcard">
+        <div class="chat">
+          <div class="chat-head"><span class="dot"></span><span>Jentyx Work &middot; +1 (650) •••-••••</span></div>
+          <div class="msg worker">📸 panel replaced, 5 horas</div>
+          <div class="msg bot">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 9l-5 3.6L16.5 19 12 15.5 7.5 19 9 12.6 4 9l6.1-.2z"/></svg>
+            Got it — which project?
+          </div>
+          <div class="msg worker">City Mall</div>
+          <div class="ticket">
+            <div class="tid">
+              <span>TICKET #ACE-10247</span>
+              <span class="vbadge">✓ Verified</span>
+            </div>
+            <div class="trow"><b>Panel replacement</b> &middot; 5.0h</div>
+            <div class="trow">City Mall Project &middot; GPS confirmed</div>
+            <div class="tbill">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+              $673 billable
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- TRUST STRIP -->
+  <div class="strip">
+    <div class="wrap strip-in">
+      <span>Built for <b>drywall</b></span><span class="sep"></span>
+      <span><b>electrical</b></span><span class="sep"></span>
+      <span><b>concrete</b></span><span class="sep"></span>
+      <span><b>landscape</b></span><span class="sep"></span>
+      <span><b>plumbing</b></span><span class="sep"></span>
+      <span>&amp; every trade that works off a truck</span>
+    </div>
+  </div>
+
+  <!-- HOW IT WORKS -->
+  <section class="block" id="how">
+    <div class="wrap">
+      <div class="sec-eyebrow">How it works</div>
+      <h2 class="sec-title">Three steps. Zero new apps.</h2>
+      <p class="sec-sub">Your crew already lives in WhatsApp. Jentyx meets them there and does the paperwork they'd never do themselves.</p>
+      <div class="steps">
+        <div class="step">
+          <div class="num">1</div>
+          <h3>Worker sends</h3>
+          <p>A photo, a voice note, or a quick text — in English, Spanish, or a mix. No forms, no training, no login.</p>
+        </div>
+        <div class="step">
+          <div class="num">2</div>
+          <h3>AI captures</h3>
+          <p>Jentyx extracts the work type, hours, materials, and project — asks one smart question only when something's unclear.</p>
+        </div>
+        <div class="step">
+          <div class="num">3</div>
+          <h3>Office acts</h3>
+          <p>A clean, GPS-verified, photo-backed ticket lands in your dashboard — ready to bill or ready to review.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- USE CASES -->
+  <section class="block usecases" id="who">
+    <div class="wrap">
+      <div class="sec-eyebrow" style="color:var(--amber);">Who it's for</div>
+      <h2 class="sec-title" style="color:#fff;">Two jobs. One phone number.</h2>
+      <p class="sec-sub" style="color:var(--muted-ink);">Whether you're a sub chasing change orders or a contractor watching every project, the field capture works the same — your crew just texts.</p>
+
+      <div class="uc-grid">
+        <div class="uc subs">
+          <span class="tag">For subcontractors</span>
+          <h3>Stop losing money on unbilled change orders.</h3>
+          <p class="d">Extra work happens on every job. By the time the office hears about it, the GC denies the change order for being late. Jentyx captures it the moment it happens.</p>
+          <ul>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Instant T&amp;M and change-order capture from the field</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>One-click CO packets — photo, GPS, timestamp, hours</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Evidence a GC can't deny on a technicality</li>
+          </ul>
+          <span class="money">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            Recover $20–50k a year in work you already did
+          </span>
+        </div>
+
+        <div class="uc gc">
+          <span class="tag">For contractors</span>
+          <h3>See what's happening on every project, every day.</h3>
+          <p class="d">Crews are spread across jobs and updates come in blurry texts weeks late. Jentyx turns daily field activity into a live, organized record across all your projects.</p>
+          <ul>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Daily work auto-sorted by project, crew, and hours</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>GPS and timestamps on every entry, automatically</li>
+            <li><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>Auto-generated daily reports and progress photo logs</li>
+          </ul>
+          <span class="money">
+            <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 14l4-4 3 3 5-6"/></svg>
+            One office manager oversees far more field work
+          </span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES -->
+  <section class="block" id="features">
+    <div class="wrap">
+      <div class="sec-eyebrow">What's inside</div>
+      <h2 class="sec-title">Everything the field forgets, captured.</h2>
+      <p class="sec-sub">A smart agent on WhatsApp that does the documentation your crew never will — and hands your office a clean, billable record.</p>
+
+      <div class="feat-grid">
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></div>
+          <h3>WhatsApp-native</h3>
+          <p>No app, no login, no training. Crews use the messenger already on their phone.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+          <h3>Voice or text</h3>
+          <p>Workers can talk instead of type. Perfect for dirty hands and loud job sites.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 8l6 6"/><path d="M4 14l6-6 2-3"/><path d="M2 5h12"/><path d="M7 2h1"/><path d="M22 22l-5-10-5 10"/><path d="M14 18h6"/></svg></div>
+          <h3>English &amp; Spanish</h3>
+          <p>Understands both, and the mix in between — the way crews actually talk.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.9 5.8L20 9l-5 3.6L16.5 19 12 15.5 7.5 19 9 12.6 4 9l6.1-.2z"/></svg></div>
+          <h3>AI extraction</h3>
+          <p>Pulls work type, hours, materials, and project from a photo or a sentence.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 7-9 12-9 12s-9-5-9-12a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg></div>
+          <h3>GPS-verified evidence</h3>
+          <p>Every ticket carries location, time, and photo — the proof GCs require.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg></div>
+          <h3>One-click CO packets</h3>
+          <p>Bundle tickets into a GC-ready change-order PDF and send it in seconds.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg></div>
+          <h3>Smart agent</h3>
+          <p>Asks one sharp follow-up only when it changes what gets billed. Never nags.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+          <h3>Text-to-join crews</h3>
+          <p>A new worker texts to join. Unknown numbers are held safely until you claim them.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>
+          <h3>Weekly timesheets</h3>
+          <p>Hours roll up by worker and week, ready to approve and export for payroll.</p>
+        </div>
+        <div class="feat">
+          <div class="ico"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 4h16v4H4z"/><path d="M4 12h16v8H4z"/><path d="M8 16h4"/></svg></div>
+          <h3>Feeds your tools</h3>
+          <p>Export clean data to the accounting and PM systems you already run.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- OUTCOME BANNER -->
+  <section class="banner">
+    <div class="wrap banner-in">
+      <div class="stat"><div class="big">$4k+</div><div class="lab">a month is what subs lose to undocumented field work</div></div>
+      <div class="stat"><div class="big">~2 hrs</div><div class="lab">to set up your crew — then it just runs</div></div>
+      <div class="stat"><div class="big">0</div><div class="lab">apps to install &middot; nothing for the crew to learn</div></div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="block cta-block" id="demo">
+    <div class="wrap">
+      <h2>Give your crew a phone number.<br>Get your paperwork back.</h2>
+      <p>Book a 15-minute demo. We'll set up one project with your crew and you'll see it working live — in English or Spanish.</p>
+      <div class="cta-row">
+        <a href="mailto:hello@jentyx.com" class="btn btn-primary">Book a demo</a>
+        <a href="tel:+16505550000" class="btn btn-amber">Call us</a>
+      </div>
+      <div class="founding">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 8.5 22 9.3 17 14 18.2 21 12 17.5 5.8 21 7 14 2 9.3 9 8.5 12 2"/></svg>
+        Founding customer offer: $249/mo for 12 months, locked in
+      </div>
+    </div>
+  </section>
+
+  <!-- FOOTER -->
+  <footer>
+    <div class="wrap foot-in">
+      <a href="/" class="logo">
+        <img src="logo.png" alt="Jentyx Logo" class="logo-img" />
+        <div class="logo-text">
+          <span class="word">Jentyx</span>
+          <span class="sub">Work</span>
+        </div>
+      </a>
+      <div class="foot-links">
+        <a href="#how">How it works</a>
+        <a href="#who">Who it's for</a>
+        <a href="#features">Features</a>
+        <a href="#demo">Book a demo</a>
+      </div>
+      <div class="copy">© 2026 Jentyx. Field work becomes billable work.</div>
+    </div>
+  </footer>
+
+</body>
+</html>

@@ -42,71 +42,91 @@ interface TwilioMedia {
  */
 // ... existing imports ...
 
-export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
-  // 0. SECURITY: Validate Twilio Signature
-  // In production, we MUST validate that the request came from Twilio
-  if (process.env.NODE_ENV === 'production' || process.env.validate_twilio === 'true') {
-    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
-    const twilioSignature = c.req.header('X-Twilio-Signature');
-    const url = c.req.url; // This might need to be the full public URL
+function isValidTwilioSignature(c: Context, body: any): boolean {
+  if (process.env.DISABLE_TWILIO_VALIDATION === 'true' || process.env.SKIP_TWILIO_VALIDATION === 'true') {
+    console.warn('⚠️ Twilio signature validation explicitly disabled via env variable');
+    return true;
+  }
 
-    // We need the raw body for validation
-    // Hono's c.req.parseBody() or json() consumes the stream, so we might need to be careful.
-    // However, validateRequest takes params object for POST requests.
-    // Let's get the params first.
+  const authToken = process.env.TWILIO_AUTH_TOKEN;
+  const signature = c.req.header('X-Twilio-Signature');
 
-    // NOTE: validation logic can be tricky with proxies/Hono. 
-    // For now, we will add the check but allow bypassing if token is missing (with a log).
+  if (!authToken) {
+    console.warn('⚠️ Skipping Twilio validation: TWILIO_AUTH_TOKEN is missing in env');
+    return true;
+  }
 
-    if (twilioAuthToken && twilioSignature) {
-      let params: any = {};
-      const contentType = c.req.header('Content-Type') || '';
+  if (!signature) {
+    console.warn('⚠️ Skipping Twilio validation: X-Twilio-Signature header is missing');
+    return true;
+  }
 
-      // Clone request is hard here. 
-      // We will assume body parsing happens next and we validate AFTER parsing if possible, 
-      // OR we trust the "body" variable if we move this down.
-      // But the plan implies adding it. 
-      // Let's rely on `body` variable being populated.
+  const candidateUrls: string[] = [];
+
+  // 1. PUBLIC_URL if configured
+  if (process.env.PUBLIC_URL) {
+    let pUrl = process.env.PUBLIC_URL.trim();
+    if (!pUrl.startsWith('http://') && !pUrl.startsWith('https://')) {
+      pUrl = `https://${pUrl}`;
+    }
+    pUrl = pUrl.replace(/\/+$/, '');
+    candidateUrls.push(`${pUrl}/twhook`);
+    candidateUrls.push(`${pUrl}${c.req.path}`);
+  }
+
+  // 2. x-forwarded-host (Vercel reverse proxy header)
+  const xForwardedHost = c.req.header('x-forwarded-host');
+  if (xForwardedHost) {
+    const cleanHost = xForwardedHost.split(',')[0].trim();
+    candidateUrls.push(`https://${cleanHost}/twhook`);
+    candidateUrls.push(`https://${cleanHost}${c.req.path}`);
+    candidateUrls.push(`http://${cleanHost}/twhook`);
+  }
+
+  // 3. host header
+  const host = c.req.header('host');
+  if (host) {
+    const cleanHost = host.split(',')[0].trim();
+    candidateUrls.push(`https://${cleanHost}/twhook`);
+    candidateUrls.push(`https://${cleanHost}${c.req.path}`);
+    candidateUrls.push(`http://${cleanHost}/twhook`);
+  }
+
+  // 4. Raw request URL
+  if (c.req.url) {
+    candidateUrls.push(c.req.url);
+    if (c.req.url.startsWith('http:')) {
+      candidateUrls.push(c.req.url.replace('http:', 'https:'));
     }
   }
 
+  const uniqueUrls = Array.from(new Set(candidateUrls));
+
+  for (const testUrl of uniqueUrls) {
+    try {
+      const isValid = twilio.validateRequest(authToken, signature, testUrl, body);
+      if (isValid) {
+        return true;
+      }
+    } catch (err) {
+      // Ignore individual validation attempt error
+    }
+  }
+
+  console.error(`❌ Invalid Twilio Signature. Tried ${uniqueUrls.length} candidate URLs:`, uniqueUrls);
+  console.error(`Headers received: host="${host}", x-forwarded-host="${xForwardedHost}", x-forwarded-proto="${c.req.header('x-forwarded-proto')}"`);
+  return false;
+}
+
+export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
   // VERCEL ADAPTER FIX: Use helper to handle pre-parsed body
   const body = await getRequestBody(c);
 
-  // REAL VALIDATION NOW that we have body
+  // SECURITY: Validate Twilio Signature in production
   if (process.env.NODE_ENV === 'production') {
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
-    const signature = c.req.header('X-Twilio-Signature');
-    // For Hono on Vercel/Node, c.req.url might be relative or absolute.
-    // We usually need the public URL (e.g. jtxfield.vercel.app/twhook).
-    // Let's assume process.env.PUBLIC_URL is set or we construct it.
-    const publicUrl = process.env.PUBLIC_URL ? `${process.env.PUBLIC_URL}/twhook` : c.req.url;
-
-    if (authToken && signature) {
-      const isValid = twilio.validateRequest(
-        authToken,
-        signature,
-        publicUrl,
-        body
-      );
-
-      if (!isValid) {
-        // Fallback: Vercel might report http, but Twilio sees https. 
-        // If validation fails on http, try forcing https.
-        if (publicUrl.startsWith('http:')) {
-          const secureUrl = publicUrl.replace('http:', 'https:');
-          const isValidSecure = twilio.validateRequest(authToken, signature, secureUrl, body);
-          if (!isValidSecure) {
-            console.error('❌ Invalid Twilio Signature (both HTTP and HTTPS)');
-            return c.text('Forbidden', 403);
-          }
-        } else {
-          console.error('❌ Invalid Twilio Signature');
-          return c.text('Forbidden', 403);
-        }
-      }
-    } else {
-      console.warn('⚠️ Skipping Twilio validation: Missing token or signature');
+    const isValid = isValidTwilioSignature(c, body);
+    if (!isValid) {
+      return c.text('Forbidden', 403);
     }
   }
 

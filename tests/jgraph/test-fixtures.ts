@@ -1,5 +1,5 @@
 /**
- * Test fixtures for nodes_v2.ts unit tests
+ * Test fixtures for jgraph unit tests
  * Centralized test data and factory functions
  */
 

@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js'
 
 export const DEV_MODE = Deno.env.get('DEV_MODE') === 'true'
 const GROQ_MODEL = 'openai/gpt-oss-20b'
+const GROQ_IMAGE_MODEL = 'qwen/qwen3.6-27b'
 
 export function getSupabase() {
     const url = Deno.env.get('SUPABASE_URL')!
@@ -187,7 +188,7 @@ export async function analyzeImage(url: string): Promise<string> {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model: GROQ_MODEL,
+                model: GROQ_IMAGE_MODEL,
                 messages: [
                     { role: 'system', content: 'Describe this construction/work photo. Focus on the SPECIFIC TRADE or WORK TYPE visible (masonry, electrical, plumbing, painting, carpentry, concrete, rebar, HVAC, drain). List: 1) Trade/work type, 2) Materials visible, 3) Completion status.' },
                     { role: 'user', content: [
