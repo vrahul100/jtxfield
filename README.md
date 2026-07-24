@@ -45,6 +45,27 @@ cd frontend && npm run dev
 
 ---
 
+## 🛠️ Environment Management & Deployment
+
+The application supports separate configuration files for **DEV** (`.env.dev`) and **PROD** (`.env.prod`).
+
+### Environment Commands & Shortcuts
+
+| Command | Action | Description |
+| :--- | :--- | :--- |
+| `npm run start:dev` | **Local Dev Workflow** | Syncs `.env.dev` $\rightarrow$ `.env`, deploys Supabase Edge Function to DEV (`ourvebdzvojdexygcmbl`), and starts the local server. |
+| `npm run deploy:prod` | **Production Deployment** | Syncs `.env.prod` $\rightarrow$ `.env`, builds API + UI, deploys Edge Function to PROD (`gevdamoroboqxpacbdkk`), and deploys to Vercel (`--prod`). |
+| `npm run env:dev` | **Switch to DEV Env** | Copies `.env.dev` to active `.env`. |
+| `npm run env:prod` | **Switch to PROD Env** | Copies `.env.prod` to active `.env`. |
+| `npm run build:prod` | **Build for Production** | Syncs `.env.prod` $\rightarrow$ `.env` and compiles backend API (`dist/`) & frontend UI (`frontend/dist/`). |
+
+### Workflow Summary
+
+* **Local Development**: Run `npm run start:dev` to set your local environment to `.env.dev` and start developing locally.
+* **Production Release**: Run `npm run deploy:prod` to build and deploy to Supabase PROD and Vercel Production.
+
+---
+
 ## 🔐 Test Credentials
 
 ### Super User (Full Access)
