@@ -58,6 +58,12 @@ interface WorkEntryCardProps {
     onSelectToggle?: () => void;
 }
 
+const formatTicketCode = (nodeName?: string, id?: number) => {
+    if (!id) return '#-';
+    const prefix = (nodeName ? nodeName.substring(0, 3).toUpperCase() : 'ACE');
+    return `${prefix}-${10000 + id}`;
+};
+
 export function WorkEntryCard({
     bucket,
     isExpanded,
@@ -155,7 +161,7 @@ export function WorkEntryCard({
                                         />
                                     </div>
                                 )}
-                                <Link to={`/tickets/${bucket.id}`} className="text-md font-mono text-indigo-600 hover:text-indigo-800 hover:underline">#{bucket.id}</Link>
+                                <Link to={`/tickets/${bucket.id}`} className="text-md font-mono text-indigo-600 hover:text-indigo-800 hover:underline">{formatTicketCode(bucket.node_name, bucket.id)}</Link>
                                 <span className={`px-2 py-0.5 text-md font-semibold rounded border ${getStatusColor(bucket.status)}`}>
                                     {bucket.status?.toUpperCase().replace('_', ' ')}
                                 </span>

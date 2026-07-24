@@ -51,6 +51,7 @@ export interface MockTransaction {
     labor: string | null
     material: string | null
     location: string | null
+    time?: number | null
     status: string
 }
 
@@ -188,6 +189,7 @@ class MockDatabase {
             labor: txn.labor || null,
             material: txn.material || null,
             location: txn.location || null,
+            time: txn.time !== undefined ? txn.time : null,
             status: txn.status || 'COMPLETED',
         }
         this.transactions.set(id, newTxn)

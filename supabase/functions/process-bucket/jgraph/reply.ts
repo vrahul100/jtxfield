@@ -63,12 +63,17 @@ function numberHint(count: number, orWord: string): string {
     return Array.from({ length: count }, (_, i) => i + 1).join(', ').replace(/, ([^,]*)$/, `, ${orWord} $1`)
 }
 
-function withTicket(bucketId: number, response: string): string {
-    return `*TICKET #${bucketId}*\n${response}`
+function formatTicketCode(bucketId: number, companyCode?: string): string {
+    const prefix = (companyCode || 'ACE').trim().toUpperCase()
+    return `${prefix}-${10000 + bucketId}`
 }
 
-function withDev(bucketId: number, response: string, action: Action, rec: WorkRecord): string {
-    let result = withTicket(bucketId, response)
+function withTicket(bucketId: number, response: string, companyCode?: string): string {
+    return `*TICKET ${formatTicketCode(bucketId, companyCode)}*\n${response}`
+}
+
+function withDev(bucketId: number, response: string, action: Action, rec: WorkRecord, companyCode?: string): string {
+    let result = withTicket(bucketId, response, companyCode)
     if (DEV_MODE) {
         result += `\n\n_[DEV: ${action.type} work:${rec.workType ?? '-'} hrs:${rec.hours ?? '-'} proj:${rec.projectName ?? '-'} asked:${rec.lastAsked ?? '-'}×${rec.askCount}]_`
     }
@@ -77,6 +82,7 @@ function withDev(bucketId: number, response: string, action: Action, rec: WorkRe
 
 export interface ComposeExtras {
     bucketId: number
+    companyCode?: string
     projects: ProjectOption[]
     imageAnalysis: string
 }
@@ -127,7 +133,7 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
         default:
             body = m.collectWork
     }
-    return withDev(extras.bucketId, body, action, rec)
+    return withDev(extras.bucketId, body, action, rec, extras.companyCode)
 }
 
 // The final "logged!" confirmation after a successful submit.
@@ -135,5 +141,5 @@ export function composeSuccess(rec: WorkRecord, projectName: string, extras: Com
     const m = MESSAGES[rec.language]
     const materials = rec.materials.length ? rec.materials.join(', ') : undefined
     const body = m.success(rec.workType || 'work', rec.hours || 0, projectName, materials, rec.location || undefined, rec.summary || undefined)
-    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec)
+    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)
 }

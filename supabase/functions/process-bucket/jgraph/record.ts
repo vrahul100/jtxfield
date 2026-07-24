@@ -18,11 +18,13 @@ export interface WorkRecord {
     materials: string[]
     location: string | null
     summary: string | null
+    scopeDescription: string | null
 
     // Meta
     language: 'en' | 'es'
     isWorkRelated: boolean
     inconsistency: string | null   // image/text mismatch awaiting clarification
+    confidence: 'high' | 'medium' | 'low'
 
     // Confirmation lifecycle
     confirmed: boolean             // user gave the final yes on the full record
@@ -48,12 +50,14 @@ export interface TurnInterpretation {
     materials?: string[]
     location?: string | null
     summary?: string | null
+    scopeDescription?: string | null
     projectHint?: string | null   // free-text project name OR a number the user picked
     confirm?: boolean
     rejectField?: 'work' | 'hours' | 'project' | 'all' | null
     language: 'en' | 'es'
     isWorkRelated: boolean
     consistencyIssue?: string | null
+    confidence?: 'high' | 'medium' | 'low' | null
     intent: 'provide' | 'correct' | 'confirm' | 'reject' | 'select' | 'question' | 'chitchat'
 }
 
@@ -122,37 +126,42 @@ export function loadRecord(bucket: any): WorkRecord {
         return base
     }
     if (!parsed || typeof parsed !== 'object') return base
+    const raw = bucket.extracted_data
+        ? (typeof bucket.extracted_data === 'string' ? JSON.parse(bucket.extracted_data) : bucket.extracted_data)
+        : {}
 
-    // New shape — identified by the presence of record-only fields.
-    if ('lastAsked' in parsed || 'confirmed' in parsed) {
-        return { ...base, ...parsed, materials: parsed.materials ?? [] }
-    }
-
-    // Legacy ExtractionResult shape — map the fields we still use.
     return {
-        ...base,
-        workType: parsed.workType ?? null,
-        hours: parsed.hoursWorked ?? null,
-        materials: Array.isArray(parsed.materials) ? parsed.materials : [],
-        location: parsed.location ?? null,
-        summary: parsed.summary ?? null,
-        language: parsed.responseLanguage === 'es' ? 'es' : 'en',
-        isWorkRelated: parsed.isWorkRelated !== false,
-        inconsistency: parsed.isConsistent === false ? (parsed.inconsistencyReason ?? null) : null,
-        // conversation_state on the bucket tells us what we last asked, roughly.
-        lastAsked: legacyStateToSlot(bucket?.conversation_state),
-        askCount: bucket?.state_attempts ?? 0,
+        workType: raw.workType ?? null,
+        hours: raw.hours ?? null,
+        projectId: raw.projectId ?? bucket.project_id ?? null,
+        projectName: raw.projectName ?? null,
+        materials: Array.isArray(raw.materials) ? raw.materials : [],
+        location: raw.location ?? null,
+        summary: raw.summary ?? null,
+        scopeDescription: raw.scopeDescription ?? null,
+        language: raw.language === 'es' ? 'es' : 'en',
+        isWorkRelated: raw.isWorkRelated !== false,
+        inconsistency: raw.inconsistency ?? null,
+        confidence: raw.confidence || 'medium',
+        confirmed: raw.confirmed === true,
+        projectRejected: raw.projectRejected === true,
+        needsFix: raw.needsFix === true,
+        lastAsked: raw.lastAsked ?? null,
+        askCount: raw.askCount ?? 0,
+        seenTextLines: raw.seenTextLines ?? 0,
+        seenTranscripts: raw.seenTranscripts ?? 0,
     }
 }
 
-function legacyStateToSlot(state: string | null | undefined): Slot | null {
-    switch (state) {
-        case 'collecting_work': return 'work'
-        case 'collecting_hours': return 'hours'
-        case 'selecting_project': return 'project'
-        case 'clarifying_inconsistency': return 'clarify'
-        case 'confirming_all':
-        case 'confirming_project': return 'confirm'
+export function slotOfAction(action: Action): Slot | null {
+    switch (action.type) {
+        case 'GREET': return 'greet'
+        case 'ASK_WORK': return 'work'
+        case 'ASK_HOURS': return 'hours'
+        case 'SELECT_PROJECT': return 'project'
+        case 'CLARIFY_INCONSISTENCY': return 'clarify'
+        case 'ASK_FIX': return 'fix'
+        case 'CONFIRM': return 'confirm'
         default: return null
     }
 }
@@ -193,9 +202,11 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
         }
     }
 
-    // --- Location / summary ---
+    // --- Location / summary / scopeDescription ---
     if (p.location) next.location = p.location
     if (p.summary) next.summary = p.summary
+    if (p.scopeDescription) next.scopeDescription = p.scopeDescription
+    if (p.confidence) next.confidence = p.confidence
 
     // --- Project (resolved reference wins) ---
     if (projectRef) {
@@ -247,8 +258,9 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
 // ============================================================================
 
 // Project is a best-effort slot, NOT a required gate: when it can't be inferred the engine
-// falls it back to Inbox (that's the whole point of Inbox). So we only show the numbered
-// picker when the user has EXPLICITLY rejected the attributed project.
+// falls it back to Inbox.
+// Tiered W-TK-02 confirmation: High confidence extractions with clear work, hours, and project
+// auto-confirm without requiring an explicit Y/N turn.
 export function decideNextAction(rec: WorkRecord): Action {
     if (!rec.isWorkRelated && isEmpty(rec)) return { type: 'GREET' }
     if (rec.inconsistency) return { type: 'CLARIFY_INCONSISTENCY', reason: rec.inconsistency }
@@ -256,7 +268,12 @@ export function decideNextAction(rec: WorkRecord): Action {
     if (!rec.hours || rec.hours <= 0) return { type: 'ASK_HOURS' }
     if (rec.projectRejected && !rec.projectId) return { type: 'SELECT_PROJECT' }
     if (rec.needsFix) return { type: 'ASK_FIX' }
-    if (!rec.confirmed) return { type: 'CONFIRM' }
+
+    // Confidence-gated auto-confirm: Skip Y/N prompt for high confidence extractions
+    if (!rec.confirmed && rec.confidence !== 'high') {
+        return { type: 'CONFIRM' }
+    }
+
     return { type: 'SUBMIT' }
 }
 

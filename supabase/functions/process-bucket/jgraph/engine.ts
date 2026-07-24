@@ -46,6 +46,12 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         member = data
     }
 
+    let companyCode = 'ACE'
+    if (bucket.node_id) {
+        const { data: node } = await supabase.from('nodes').select('code').eq('id', bucket.node_id).single()
+        if (node?.code) companyCode = node.code
+    }
+
     // --- Load the record (single source of truth) ---
     let record = loadRecord(bucket)
 
@@ -185,14 +191,15 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     })
 
     // --- Act ---
+    const extras = { bucketId, companyCode, projects, imageAnalysis }
     if (action.type === 'SUBMIT') {
-        return await submit(record, bucket, member, inbox, { bucketId, projects, imageAnalysis })
+        return await submit(record, bucket, member, inbox, extras)
     }
 
     if (action.type === 'FLAG_FOR_REVIEW') {
         record.lastAsked = null
         record.askCount = 0
-        const response = composeReply(action, record, { bucketId, projects, imageAnalysis })
+        const response = composeReply(action, record, extras)
         await sendMessage(bucket.from_phone, response, bucket.source)
         await supabase.from('buckets').update({
             extracted_data: JSON.stringify(record),
@@ -208,7 +215,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // --- Non-terminal: ask the next question and wait ---
     record.lastAsked = slotOf(action)
     record.askCount = capped.askCount
-    const response = composeReply(action, record, { bucketId, projects, imageAnalysis })
+    const response = composeReply(action, record, extras)
 
     await sendMessage(bucket.from_phone, response, bucket.source)
     await supabase.from('buckets').update({
@@ -244,7 +251,7 @@ async function submit(
     bucket: any,
     member: any,
     inbox: ProjectRef | null,
-    extras: { bucketId: number; projects: ProjectOption[]; imageAnalysis: string },
+    extras: { bucketId: number; companyCode?: string; projects: ProjectOption[]; imageAnalysis: string },
 ): Promise<{ status: string; action: string; response: string }> {
     const supabase = getSupabase()
     const { bucketId } = extras
@@ -270,14 +277,15 @@ async function submit(
     }).eq('id', bucketId)
 
     const finalHours = record.hours ?? null
+    const scopeLine = englishSummary || record.scopeDescription || (record.workType ? `${record.workType}${record.location ? ` — ${record.location}` : ''}` : 'General Work')
     const txn = {
         bucket_id: bucketId,
         company_id: bucket.node_id,
         user_id: bucket.member_id,
         project_id: record.projectId,
-        job: `${record.workType || 'work'} - ${finalHours || 0}h`,
-        scope_description: englishSummary || record.workType,
-        labor: englishSummary || `${record.workType || 'work'} for ${finalHours || 0}h`,
+        job: `${scopeLine} - ${finalHours || 0}h`,
+        scope_description: scopeLine,
+        labor: `${scopeLine} for ${finalHours || 0}h`,
         material: record.materials.length ? record.materials.join(', ') : null,
         location: record.location || null,
         time: finalHours,

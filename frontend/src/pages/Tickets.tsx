@@ -44,6 +44,12 @@ interface Project {
     name: string;
 }
 
+const formatTicketCode = (nodeName?: string, id?: number) => {
+    if (!id) return '#-';
+    const prefix = (nodeName ? nodeName.substring(0, 3).toUpperCase() : 'ACE');
+    return `${prefix}-${10000 + id}`;
+};
+
 export function Tickets() {
     const [buckets, setBuckets] = useState<Bucket[]>([]);
     const [projects, setProjects] = useState<Project[]>([]);
@@ -472,7 +478,7 @@ export function Tickets() {
                                                     </td>
                                                 )}
                                                 <td className="p-3 font-mono text-xs font-bold text-indigo-600">
-                                                    #{bucket.id}
+                                                    {formatTicketCode(bucket.node_name, bucket.id)}
                                                 </td>
                                                 <td className="p-3 text-sm text-slate-700 whitespace-nowrap">
                                                     <div className="flex items-center gap-1.5">
@@ -566,7 +572,7 @@ export function Tickets() {
                                 <div className="w-full lg:w-5/12 min-h-0 flex flex-col border border-slate-200 bg-white rounded-xl shadow-lg overflow-hidden">
                                     <div className="flex justify-between items-center px-4 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
                                         <div className="flex items-center gap-2">
-                                            <span className="font-bold text-slate-800 font-mono text-lg">Ticket #{selectedBucket.id}</span>
+                                            <span className="font-bold text-slate-800 font-mono text-lg">Ticket {formatTicketCode(selectedBucket.node_name, selectedBucket.id)}</span>
                                             <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getStatusColors(selectedBucket.status)}`}>
                                                 {selectedBucket.status.replace('_', ' ')}
                                             </span>

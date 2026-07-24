@@ -71,19 +71,25 @@ omit or null it otherwise (do not repeat unchanged values).
 {
   "workType": one of "electrical","plumbing","hvac","carpentry","roofing","masonry","painting","rebar","concrete","drain","general" | null,
   "hours": number | null,          // convert words→numbers (three→3, dos→2, "and a half"→+0.5). "another 2"/"2 more"→2. "make it 4"/"actually 4"→4.
-  "materials": string[],           // materials to ADD, [] if none
-  "location": string | null,
-  "summary": string | null,        // short description of the work if given
-  "projectHint": string | null,    // the project the user means. If it resembles a KNOWN PROJECT above (even misspelled, e.g. "city hall"→"City Mall", "the mall"→"City Mall"), return that project's EXACT name. Else their raw words, OR the number they picked. null if none.
+  "materials": string[],           // MANDATORY: Extract ALL materials, hardware, lumber, or supplies mentioned even if unprompted (e.g. "4 logs", "2x4 studs", "copper pipe", "screws"). [] if none.
+  "location": string | null,       // specific location on site if mentioned (e.g. "Parapet", "2nd floor", "Main entrance")
+  "summary": string | null,        // SPECIFIC SCOPE LINE: Do NOT return a lone generic trade word ("carpentry"). Combine trade with specific object/task and materials (e.g., "Carpentry — Parapet / Wooden Railing", "Electrical — Replaced panel with 4 breakers"). Use Image Analysis if helpful.
+  "projectHint": string | null,    // the project the user means. If it resembles a KNOWN PROJECT above (even misspelled, e.g. "city hall"→"City Mall", "the mall"→"City Mall"), return that project's EXACT name. Else their raw words, OR the number they picked. NOTE: Site locations like "Parapet" or "2nd floor" are locations, NOT project hints!
   "confirm": boolean,              // true ONLY if they affirmed what we asked to confirm (yes/correct/sí/right)
   "rejectField": "work"|"hours"|"project"|"all"|null,  // if they rejected something, which part. "wrong project"→"project"; bare "no"→"all".
   "language": "en" | "es",         // language to reply in
   "isWorkRelated": boolean,        // false for greetings/spam/off-topic with no work content
   "consistencyIssue": string | null, // set ONLY if the IMAGE clearly contradicts the stated work type (e.g. photo is brickwork but they said electrical). Otherwise null. Give benefit of the doubt.
+  "confidence": "high" | "medium" | "low", // "high" if workType, hours, and project/scope are explicit & unambiguous; "medium" if inferred; "low" if uncertain.
   "intent": "provide"|"correct"|"confirm"|"reject"|"select"|"question"|"chitchat"
 }
 
 RULES:
+- CRITICAL: Extract ALL unprompted materials (e.g. "4 logs") into the materials array!
+- Do not collapse specific construction tasks ("parapet railing") into generic trade labels ("carpentry"). Format summary as "Trade — Specific Task/Detail".
+- Do not mistake location terms ("parapet", "roof") for project hints unless it matches a known project name.
+- CRITICAL CONFIDENCE RULE: Whenever both workType and hours are stated clearly (e.g. "masonrly for 6 hours", "electrical for 8 hours"), set confidence to "high"!
+- If workType or hours is inferred or ambiguous, set confidence to "medium" or "low".
 - If they are answering a confirmation and just say yes/no (or Y/N), set confirm/rejectField — do not re-extract the whole log.
 - At the fix step, a lone field name ("work"/"hours"/"project") is a request to CHANGE that field: set rejectField to it. Do NOT treat the word "project" as a new project name.
 - A correction ("actually it was 6 hours", "no, plumbing") sets the new slot value AND intent "correct".
@@ -181,12 +187,14 @@ async function interpretExtraction(input: InterpretInput): Promise<TurnInterpret
         materials: Array.isArray(raw.materials) ? raw.materials : [],
         location: raw.location ?? null,
         summary: raw.summary ?? null,
+        scopeDescription: raw.summary || (raw.workType ? `${raw.workType}${raw.location ? ` — ${raw.location}` : ''}` : null),
         projectHint: raw.projectHint != null ? String(raw.projectHint) : null,
         confirm: raw.confirm === true,
         rejectField: raw.rejectField ?? null,
         language: raw.language === 'es' ? 'es' : 'en',
         isWorkRelated: raw.isWorkRelated !== false,
         consistencyIssue: raw.consistencyIssue ?? null,
+        confidence: ['high', 'medium', 'low'].includes(raw.confidence) ? raw.confidence : 'medium',
         intent: raw.intent ?? 'provide',
     }
 }
