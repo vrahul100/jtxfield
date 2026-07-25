@@ -22,6 +22,7 @@ import {
     analyzeImage,
     getSupabase,
     sendMessage,
+    stripThinking,
     transcribeAudio,
     translateToEnglish,
     withTimeout,
@@ -171,9 +172,26 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         }
         record = applyPatch(record, interp, projectRef, preferredLanguage)
     }
-
-    // --- Media/Text Contradiction Guard ---
+    // --- ALWAYS Infer & Check Image Description (with or without text) ---
     if (imageAnalysis) {
+        const cleaned = stripThinking(imageAnalysis).replace(/<[^>]*>/g, '').trim()
+        const lines = cleaned.split('\n').map(l => l.trim()).filter(l => l.length >= 3 && !l.startsWith('<'))
+        const cleanPhrase = (lines[0] || '').replace(/^[0-9\.\-\)\s]+/, '').trim()
+
+        if (cleanPhrase && cleanPhrase.length >= 3 && !cleanPhrase.includes('<')) {
+            const visualTrade = cleanPhrase.substring(0, 60)
+            // Override workType if missing, generic ("general", "work"), or contains reasoning tags
+            if (!record.workType || record.workType === 'general' || record.workType === 'work' || record.workType.includes('<')) {
+                record.workType = visualTrade
+            }
+            if (!record.summary || record.summary.includes('general')) {
+                record.summary = `${record.workType} (from photo)`
+            }
+        }
+    }
+
+    // --- Media/Text Contradiction Guard (Run ONLY ONCE — DO NOT RE-FLAG ONCE CLARIFIED) ---
+    if (imageAnalysis && record.lastAsked !== 'clarify') {
         const imgLower = imageAnalysis.toLowerCase()
         const textLower = (userText + ' ' + (record.workType || '') + ' ' + (record.summary || '')).toLowerCase()
         const isElectricalImage = imgLower.includes('electrical') || imgLower.includes('breaker') || imgLower.includes('wire') || imgLower.includes('conduit') || imgLower.includes('panel')
@@ -197,9 +215,9 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // --- Decide next action ---
     let action = decideNextAction(record)
 
-    // --- Project picker is best-effort: after MAX_ASK tries or if no active projects exist,
-    //     fall back to Inbox instead of looping or flagging ---
-    if (action.type === 'SELECT_PROJECT' && inbox && (nextAttempt(record, 'project') > MAX_ASK || !projects.length)) {
+    // --- Project picker is snappy (1 QUESTION MAX): if already asked 'project' ONCE or if no active projects exist,
+    //     fall back to Inbox immediately instead of looping ---
+    if (action.type === 'SELECT_PROJECT' && inbox && (record.lastAsked === 'project' || nextAttempt(record, 'project') > MAX_ASK || !projects.length)) {
         record = setInboxProject(record, inbox)
         action = decideNextAction(record)
     }

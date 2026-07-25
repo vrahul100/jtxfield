@@ -85,6 +85,7 @@ omit or null it otherwise (do not repeat unchanged values).
 }
 
 RULES:
+- CRITICAL: If the user sent an IMAGE with NO TEXT (media only), infer workType and summary directly from the IMAGE ANALYSIS! Do not leave workType null or generic when Image Analysis describes visible work.
 - CRITICAL: Extract ALL unprompted materials (e.g. "4 logs") into the materials array!
 - Do not collapse specific construction tasks ("parapet railing") into generic trade labels ("carpentry"). Format summary as "Trade — Specific Task/Detail".
 - Do not mistake location terms ("parapet", "roof") for project hints unless it matches a known project name.

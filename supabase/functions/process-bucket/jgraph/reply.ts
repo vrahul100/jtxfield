@@ -2,7 +2,7 @@
 // pure function of the chosen action + record, so wording stays predictable and free.
 
 import type { Action, WorkRecord } from './record.ts'
-import { DEV_MODE } from './io.ts'
+import { DEV_MODE, stripThinking } from './io.ts'
 
 export interface ProjectOption { id: number; name: string }
 
@@ -10,7 +10,9 @@ const MESSAGES = {
     en: {
         greeting: '👋 Hello! Ready to log your work?\n\nSend a photo, voice note, or describe what you worked on.',
         collectWork: '🔧 *What kind of work did you do?*\n\nAlso tell me how many hours.\n(Example: "electrical for 6 hours")',
-        askHours: (wt: string) => `⏱️ Got it: *${wt}* work\n\nHow many hours did you work?\n(Example: 6.5 or "6 and a half")`,
+        askHours: (wt: string) => wt && wt !== 'work' && wt !== 'your'
+            ? `⏱️ Got it: *${wt}*\n\nHow many hours did you work?\n(Example: 6.5 or "6 and a half")`
+            : `⏱️ How many hours did you work?\n(Example: 6.5 or "6 and a half")`,
         clarify: (reason: string) => `⚠️ *NEEDS CLARIFICATION*\n\n${reason}\n\nCan you confirm what you actually worked on?`,
         askFix: '🤔 No problem — what should I change: the *work*, the *hours*, or the *project*?',
         confirm: (wt: string, h: number, proj: string, materials?: string, location?: string) => {
@@ -35,7 +37,9 @@ const MESSAGES = {
     es: {
         greeting: '👋 ¡Hola! ¿Listo para registrar tu trabajo?\n\nEnvía una foto, nota de voz, o describe lo que trabajaste.',
         collectWork: '🔧 *¿Qué tipo de trabajo hiciste?*\n\nTambién dime cuántas horas.\n(Ejemplo: "eléctrico por 6 horas")',
-        askHours: (wt: string) => `⏱️ Entendido: trabajo de *${wt}*\n\n¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`,
+        askHours: (wt: string) => wt && wt !== 'trabajo'
+            ? `⏱️ Entendido: *${wt}*\n\n¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`
+            : `⏱️ ¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`,
         clarify: (reason: string) => `⚠️ *NECESITA ACLARACIÓN*\n\n${reason}\n\n¿Puedes confirmar qué trabajo hiciste realmente?`,
         askFix: '🤔 Sin problema — ¿qué quieres cambiar: el *trabajo*, las *horas*, o el *proyecto*?',
         confirm: (wt: string, h: number, proj: string, materials?: string, location?: string) => {
@@ -77,7 +81,7 @@ function withTicket(bucketId: number, response: string, companyCode?: string): s
 function withDev(bucketId: number, response: string, action: Action, rec: WorkRecord, companyCode?: string): string {
     let result = withTicket(bucketId, response, companyCode)
     if (DEV_MODE) {
-        result += `\n\n_[DEV: ${action.type} work:${rec.workType ?? '-'} hrs:${rec.hours ?? '-'} proj:${rec.projectName ?? '-'} asked:${rec.lastAsked ?? '-'}×${rec.askCount}]_`
+        result += `\n\n_[DEV: ${action.type} work:${stripThinking(rec.workType) || '-'} hrs:${rec.hours ?? '-'} proj:${stripThinking(rec.projectName) || '-'} asked:${rec.lastAsked ?? '-'}×${rec.askCount}]_`
     }
     return result
 }
@@ -92,29 +96,23 @@ export interface ComposeExtras {
 // Build the outgoing WhatsApp message for a non-terminal action.
 export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
-    const wt = rec.workType || 'work'
+    const wt = stripThinking(rec.summary || rec.workType) || 'work'
     const h = rec.hours || 0
-    const materials = rec.materials.length ? rec.materials.join(', ') : undefined
-    const location = rec.location || undefined
-    const proj = rec.projectName || 'your project'
+    const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
+    const location = stripThinking(rec.location) || undefined
+    const proj = stripThinking(rec.projectName) || 'your project'
+    const cleanReason = action.type === 'CLARIFY_INCONSISTENCY' ? stripThinking(action.reason) : ''
 
     let body: string
     switch (action.type) {
         case 'GREET':
             body = m.greeting
             break
-        case 'ASK_WORK':
-            body = extras.imageAnalysis && rec.workType
-                ? (rec.language === 'es'
-                    ? `Veo trabajo de ${rec.workType}. ¿Qué hiciste exactamente y cuántas horas?`
-                    : `I see ${rec.workType} work. What exactly did you work on, and how many hours?`)
-                : m.collectWork
-            break
         case 'ASK_HOURS':
             body = m.askHours(wt)
             break
         case 'CLARIFY_INCONSISTENCY':
-            body = m.clarify(action.reason)
+            body = m.clarify(cleanReason)
             break
         case 'ASK_FIX':
             body = m.askFix
@@ -133,7 +131,7 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
             body = m.flagged
             break
         default:
-            body = m.collectWork
+            body = m.askHours(wt)
     }
     return withDev(extras.bucketId, body, action, rec, extras.companyCode)
 }
@@ -141,7 +139,10 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
 // The final "logged!" confirmation after a successful submit.
 export function composeSuccess(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
-    const materials = rec.materials.length ? rec.materials.join(', ') : undefined
-    const body = m.success(rec.workType || 'work', rec.hours || 0, projectName, materials, rec.location || undefined, rec.summary || undefined)
+    const wt = stripThinking(rec.workType) || 'work'
+    const proj = stripThinking(projectName) || 'your project'
+    const summary = stripThinking(rec.summary) || undefined
+    const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
+    const body = m.success(wt, rec.hours || 0, proj, materials, stripThinking(rec.location) || undefined, summary)
     return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)
 }

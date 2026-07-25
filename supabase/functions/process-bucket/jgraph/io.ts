@@ -182,6 +182,16 @@ export async function transcribeAudio(url: string): Promise<string | null> {
     }
 }
 
+export function stripThinking(text: string | null | undefined): string {
+    if (!text) return ''
+    return text
+        .replace(/<think>[\s\S]*?<\/think>/gi, '')
+        .replace(/<think>[\s\S]*/gi, '')
+        .replace(/<\/?think>/gi, '')
+        .replace(/^["']|["']$/g, '')
+        .trim()
+}
+
 export async function analyzeImage(url: string): Promise<string> {
     const apiKey = Deno.env.get('GROQ_API_KEY')
     if (!apiKey) {
@@ -225,7 +235,7 @@ export async function analyzeImage(url: string): Promise<string> {
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are an expert construction trade visual inspector. Analyze the photo and classify the VISIBLE WORK & TRADE OBJECTS (electrical panel/wiring/breakers, masonry bricks/mortar, plumbing pipes/drains, roofing shingles/sheets, carpentry lumber/framing, concrete pouring, rebar cage, excavation/digging soil). List: 1) Trade/work type visible, 2) Key objects/materials seen.'
+                        content: 'You are an expert construction trade visual inspector. Analyze the photo and output a concise 3-to-6 word work description phrase summarizing the visible trade, action, and materials (e.g. "Masonry brick wall drilling", "Electrical panel & wiring work", "Plumbing PVC pipe fitting", "Drywall installation & taping"). Keep it strictly grounded to what is physically visible. Output ONLY this short phrase without introductory text.'
                     },
                     {
                         role: 'user',
@@ -245,7 +255,8 @@ export async function analyzeImage(url: string): Promise<string> {
             return ''
         }
         const data = await resp.json()
-        const analysis = data.choices?.[0]?.message?.content || ''
+        const rawContent = data.choices?.[0]?.message?.content || ''
+        const analysis = stripThinking(rawContent)
         console.log(`[Vision Analysis Result] "${analysis.substring(0, 100)}..."`)
         return analysis
     } catch (e) {

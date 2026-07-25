@@ -54,7 +54,7 @@ export interface TurnInterpretation {
     scopeDescription?: string | null
     projectHint?: string | null   // free-text project name OR a number the user picked
     confirm?: boolean
-    rejectField?: 'work' | 'hours' | 'project' | 'all' | null
+    rejectField?: 'hours' | 'project' | 'all' | null
     language: 'en' | 'es'
     isWorkRelated: boolean
     consistencyIssue?: string | null
@@ -71,7 +71,6 @@ export interface ProjectRef {
 // The decision — what to do next. Derived purely from the record.
 export type Action =
     | { type: 'GREET' }
-    | { type: 'ASK_WORK' }
     | { type: 'ASK_HOURS' }
     | { type: 'CLARIFY_INCONSISTENCY'; reason: string }
     | { type: 'SELECT_PROJECT' }
@@ -227,11 +226,11 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
     const anySlot = !!(next.workType || next.hours || next.materials.length || next.location || next.summary)
     next.isWorkRelated = anySlot || p.isWorkRelated || !isEmpty(rec)
 
-    // --- Consistency ---
-    if (p.consistencyIssue) {
+    // --- Consistency (Clarify ONLY ONCE) ---
+    if (p.consistencyIssue && rec.lastAsked !== 'clarify') {
         next.inconsistency = p.consistencyIssue
-    } else if (rec.inconsistency && rec.lastAsked === 'clarify' && (p.workType || p.hours || p.confirm)) {
-        next.inconsistency = null   // user addressed the mismatch
+    } else if (rec.inconsistency && rec.lastAsked === 'clarify') {
+        next.inconsistency = null   // User responded to the single clarification prompt
     }
 
     // --- Confirmation / rejection, interpreted against what we last asked. Handled at BOTH
@@ -262,18 +261,28 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
 // POLICY — decide the next action purely from the record
 // ============================================================================
 
-// SKIP intermediate Y/N confirmation ONLY when project was pre-filled from the 6-hr active window.
-// Outside the 6-hr window (or new session / manual selection), show CONFIRM prompt (Reply Y or N).
 export function decideNextAction(rec: WorkRecord): Action {
     if (!rec.isWorkRelated && isEmpty(rec)) return { type: 'GREET' }
-    if (rec.inconsistency) return { type: 'CLARIFY_INCONSISTENCY', reason: rec.inconsistency }
-    if (!rec.workType) return { type: 'ASK_WORK' }
-    if (!rec.hours || rec.hours <= 0) return { type: 'ASK_HOURS' }
-    if (!rec.projectId || rec.projectRejected) return { type: 'SELECT_PROJECT' }
+
+    // 1. Consistency check (Ask ONLY ONCE)
+    if (rec.inconsistency && rec.lastAsked !== 'clarify') {
+        return { type: 'CLARIFY_INCONSISTENCY', reason: rec.inconsistency }
+    }
+
+    // 2. Hours missing or invalid?
+    if (!rec.hours || rec.hours <= 0) {
+        return { type: 'ASK_HOURS' }
+    }
+
+    // 4. Project selection missing?
+    if (!rec.projectId || rec.projectRejected) {
+        return { type: 'SELECT_PROJECT' }
+    }
+
     if (rec.needsFix) return { type: 'ASK_FIX' }
 
-    // If project was NOT from a fresh 6-hour active window AND user hasn't confirmed yet -> show CONFIRM
-    if (!rec.confirmed && !rec.isFreshProject) {
+    // 5. Confirmation prompt outside 6-hr window (Ask ONLY ONCE)
+    if (!rec.confirmed && !rec.isFreshProject && rec.lastAsked !== 'confirm') {
         return { type: 'CONFIRM' }
     }
 
