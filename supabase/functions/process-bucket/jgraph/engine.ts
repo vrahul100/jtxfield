@@ -99,7 +99,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     }
 
     let imageAnalysis = ''
-    if (imageUrls.length > 0 && !record.workType) {
+    if (imageUrls.length > 0) {
         imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
     }
 
@@ -170,6 +170,17 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
             if (m) projectRef = { id: m.id, name: m.name }
         }
         record = applyPatch(record, interp, projectRef, preferredLanguage)
+    }
+
+    // --- Media/Text Contradiction Guard ---
+    if (imageAnalysis) {
+        const imgLower = imageAnalysis.toLowerCase()
+        const textLower = (userText + ' ' + (record.workType || '') + ' ' + (record.summary || '')).toLowerCase()
+        const isElectricalImage = imgLower.includes('electrical') || imgLower.includes('breaker') || imgLower.includes('wire') || imgLower.includes('conduit') || imgLower.includes('panel')
+        const isDiggingText = textLower.includes('dig') || textLower.includes('soil') || textLower.includes('excavat') || textLower.includes('earth')
+        if (isElectricalImage && isDiggingText) {
+            record.inconsistency = "Photo shows electrical panel/wiring, but text states digging/soil work."
+        }
     }
 
     // --- Clock reset: whenever a project is selected/changed, reset member's 6-hr window to NOW ---

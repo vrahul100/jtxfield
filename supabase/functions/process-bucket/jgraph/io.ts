@@ -142,11 +142,24 @@ function twilioAuthHeaders(url: string): Record<string, string> {
     return {}
 }
 
+async function fetchTwilioMedia(url: string): Promise<Response> {
+    const headers = twilioAuthHeaders(url)
+    let resp = await fetch(url, { headers, redirect: 'manual' })
+    if (resp.status >= 300 && resp.status < 400) {
+        const location = resp.headers.get('location')
+        if (location) {
+            console.log(`[TwilioMedia] Redirecting to S3 location: ${location.substring(0, 60)}...`)
+            resp = await fetch(location, { redirect: 'follow' })
+        }
+    }
+    return resp
+}
+
 export async function transcribeAudio(url: string): Promise<string | null> {
     const apiKey = Deno.env.get('GROQ_API_KEY')
     if (!apiKey) return null
     try {
-        const audioResp = await fetch(url, { headers: twilioAuthHeaders(url) })
+        const audioResp = await fetchTwilioMedia(url)
         if (!audioResp.ok) return null
 
         const blob = await audioResp.blob()
@@ -171,18 +184,38 @@ export async function transcribeAudio(url: string): Promise<string | null> {
 
 export async function analyzeImage(url: string): Promise<string> {
     const apiKey = Deno.env.get('GROQ_API_KEY')
-    if (!apiKey) return ''
+    if (!apiKey) {
+        console.error('[Vision] GROQ_API_KEY missing')
+        return ''
+    }
     try {
-        const imageResp = await fetch(url, { headers: twilioAuthHeaders(url), redirect: 'follow' })
-        if (!imageResp.ok) return ''
+        console.log(`[Vision] Starting image analysis for URL: ${url}`)
+        let imageUrlPayload: string = url
 
+        // Fetch image bytes safely via fetchTwilioMedia (handles S3 redirect)
+        const imageResp = await fetchTwilioMedia(url)
+        if (!imageResp.ok) {
+            console.error(`[Vision] Image fetch failed: HTTP ${imageResp.status}`)
+            return ''
+        }
         const contentType = imageResp.headers.get('content-type') || 'image/jpeg'
         const bytes = new Uint8Array(await imageResp.arrayBuffer())
-        let binary = ''
-        for (let i = 0; i < bytes.length; i += 8192) {
-            binary += String.fromCharCode.apply(null, bytes.slice(i, i + 8192) as unknown as number[])
+        console.log(`[Vision] Fetched image bytes: ${bytes.byteLength}`)
+
+        // 20MB limit guard for qwen/qwen3.6-27b (15MB binary ensures base64 Data URL stays under 20MB limit)
+        const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+        if (bytes.byteLength > MAX_IMAGE_BYTES) {
+            console.warn(`[Vision] Image size (${(bytes.byteLength / 1024 / 1024).toFixed(2)}MB) exceeds 20MB limit. Skipping vision.`)
+            return ''
         }
-        const dataUrl = `data:${contentType};base64,${btoa(binary)}`
+
+        const CHUNK_SIZE = 32768
+        let binary = ''
+        for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+            const chunk = bytes.subarray(i, i + CHUNK_SIZE)
+            binary += String.fromCharCode.apply(null, chunk as unknown as number[])
+        }
+        imageUrlPayload = `data:${contentType};base64,${btoa(binary)}`
 
         const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
@@ -190,23 +223,33 @@ export async function analyzeImage(url: string): Promise<string> {
             body: JSON.stringify({
                 model: GROQ_IMAGE_MODEL,
                 messages: [
-                    { role: 'system', content: 'Describe this construction/work photo. Focus on the SPECIFIC TRADE or WORK TYPE visible (masonry, electrical, plumbing, painting, carpentry, concrete, rebar, HVAC, drain). List: 1) Trade/work type, 2) Materials visible, 3) Completion status.' },
-                    { role: 'user', content: [
-                        { type: 'text', text: 'Analyze this work photo:' },
-                        { type: 'image_url', image_url: { url: dataUrl } },
-                    ] },
+                    {
+                        role: 'system',
+                        content: 'You are an expert construction trade visual inspector. Analyze the photo and classify the VISIBLE WORK & TRADE OBJECTS (electrical panel/wiring/breakers, masonry bricks/mortar, plumbing pipes/drains, roofing shingles/sheets, carpentry lumber/framing, concrete pouring, rebar cage, excavation/digging soil). List: 1) Trade/work type visible, 2) Key objects/materials seen.'
+                    },
+                    {
+                        role: 'user',
+                        content: [
+                            { type: 'text', text: 'Analyze this work photo:' },
+                            { type: 'image_url', image_url: { url: imageUrlPayload } },
+                        ]
+                    },
                 ],
                 temperature: 0.1,
-                max_tokens: 500,
+                max_tokens: 300,
             }),
         })
-        if (!resp.ok) return ''
+        if (!resp.ok) {
+            const errBody = await resp.text()
+            console.error(`[Vision] Groq API returned HTTP ${resp.status}: ${errBody}`)
+            return ''
+        }
         const data = await resp.json()
         const analysis = data.choices?.[0]?.message?.content || ''
-        console.log(`[Vision] "${analysis.substring(0, 80)}..."`)
+        console.log(`[Vision Analysis Result] "${analysis.substring(0, 100)}..."`)
         return analysis
     } catch (e) {
-        console.error('[Vision] Error:', e)
+        console.error('[Vision] Error in analyzeImage:', e)
         return ''
     }
 }

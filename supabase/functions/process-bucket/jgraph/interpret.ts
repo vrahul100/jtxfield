@@ -79,7 +79,7 @@ omit or null it otherwise (do not repeat unchanged values).
   "rejectField": "work"|"hours"|"project"|"all"|null,  // if they rejected something, which part. "wrong project"→"project"; bare "no"→"all".
   "language": "en" | "es",         // language to reply in
   "isWorkRelated": boolean,        // false for greetings/spam/off-topic with no work content
-  "consistencyIssue": string | null, // set ONLY if the IMAGE clearly contradicts the stated work type (e.g. photo is brickwork but they said electrical). Otherwise null. Give benefit of the doubt.
+  "consistencyIssue": string | null, // MANDATORY CONTRADICTION VALIDATION: Compare Image Analysis & Audio Transcript against the stated text/trade. Set ONLY if the Image Analysis or Audio clearly contradicts the stated work type or hours (e.g. photo is brickwork/masonry but text says electrical, or photo is plumbing pipes but text says roofing). Otherwise null. Give benefit of the doubt.
   "confidence": "high" | "medium" | "low", // "high" if workType, hours, and project/scope are explicit & unambiguous; "medium" if inferred; "low" if uncertain.
   "intent": "provide"|"correct"|"confirm"|"reject"|"select"|"question"|"chitchat"
 }
@@ -88,13 +88,12 @@ RULES:
 - CRITICAL: Extract ALL unprompted materials (e.g. "4 logs") into the materials array!
 - Do not collapse specific construction tasks ("parapet railing") into generic trade labels ("carpentry"). Format summary as "Trade — Specific Task/Detail".
 - Do not mistake location terms ("parapet", "roof") for project hints unless it matches a known project name.
-- CRITICAL CONFIDENCE RULE: Whenever both workType and hours are stated clearly (e.g. "masonrly for 6 hours", "electrical for 8 hours"), set confidence to "high"!
-- If workType or hours is inferred or ambiguous, set confidence to "medium" or "low".
+- CRITICAL CONTRADICTION VALIDATION: If Image Analysis describes a visible trade or work objects (e.g., electrical panel, wiring, breaker box, masonry bricks, plumbing pipes, roofing) that does NOT match the stated work in the text/caption (e.g. text says "soil work", "painting", "plumbing"), YOU MUST set consistencyIssue to describe the trade mismatch (e.g., "Photo shows electrical panel/wiring, but text states soil work") AND set confidence to "low"!
+- CONFIDENCE RULE: Set confidence to "high" ONLY when workType and hours are explicit AND there is NO contradiction with Image Analysis. If Image Analysis contradicts text, set confidence to "low".
 - If they are answering a confirmation and just say yes/no (or Y/N), set confirm/rejectField — do not re-extract the whole log.
 - At the fix step, a lone field name ("work"/"hours"/"project") is a request to CHANGE that field: set rejectField to it. Do NOT treat the word "project" as a new project name.
 - A correction ("actually it was 6 hours", "no, plumbing") sets the new slot value AND intent "correct".
-- If they add info ("also used 3 bags of cement"), ADD it — set materials, keep intent "provide".
-- Only set consistencyIssue for an OBVIOUS photo/text trade mismatch. When in doubt, null.`
+- If they add info ("also used 3 bags of cement"), ADD it — set materials, keep intent "provide".`
 }
 
 // Instruct model for the focused yes/no/correction classification. It is far more reliable
@@ -181,13 +180,16 @@ async function interpretExtraction(input: InterpretInput): Promise<TurnInterpret
         }
     }
 
+    const locationSuffix = raw.location ? ' — ' + raw.location : ''
+    const scopeDesc = raw.summary || (raw.workType ? (raw.workType + locationSuffix) : null)
+
     return {
         workType: raw.workType ?? null,
         hours: typeof raw.hours === 'number' ? raw.hours : (raw.hours ? Number(raw.hours) : null),
         materials: Array.isArray(raw.materials) ? raw.materials : [],
         location: raw.location ?? null,
         summary: raw.summary ?? null,
-        scopeDescription: raw.summary || (raw.workType ? `${raw.workType}${raw.location ? ` — ${raw.location}` : ''}` : null),
+        scopeDescription: scopeDesc,
         projectHint: raw.projectHint != null ? String(raw.projectHint) : null,
         confirm: raw.confirm === true,
         rejectField: raw.rejectField ?? null,
