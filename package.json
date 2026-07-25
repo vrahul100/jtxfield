@@ -8,6 +8,8 @@
     "build:prod": "npm run env:prod && npm run build",
     "env:dev": "cp .env.dev .env",
     "env:prod": "cp .env.prod .env",
+    "deploy:functions:dev": "npx supabase functions deploy process-bucket --no-verify-jwt --project-ref ourvebdzvojdexygcmbl",
+    "deploy:functions:prod": "npx supabase functions deploy process-bucket --no-verify-jwt --project-ref gevdamoroboqxpacbdkk",
     "start:dev": "tsx scripts/deploy.ts dev",
     "deploy:prod": "tsx scripts/deploy.ts prod",
     "dev": "tsx watch src/index.ts",

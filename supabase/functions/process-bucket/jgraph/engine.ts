@@ -27,7 +27,7 @@ import {
     withTimeout,
 } from './io.ts'
 
-const PROJECT_FRESH_HOURS = 8
+const PROJECT_FRESH_HOURS = 6
 
 export async function runStateMachine(bucketId: number): Promise<{ status: string; action: string; response?: string | null }> {
     console.log(`[Engine] Starting bucket #${bucketId}`)
@@ -54,6 +54,12 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     // --- Load the record (single source of truth) ---
     let record = loadRecord(bucket)
+
+    // --- Honor member language preference ---
+    const preferredLanguage = member?.language_preference === 'es' ? 'es' : (member?.language_preference === 'en' ? 'en' : null)
+    if (preferredLanguage) {
+        record.language = preferredLanguage
+    }
 
     // --- Load active projects (needed for selection, resolution, and the fresh candidate) ---
     const { data: projectRows } = await supabase
@@ -163,20 +169,26 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
             const m = fuzzyFindProject(reply, projects)
             if (m) projectRef = { id: m.id, name: m.name }
         }
-        record = applyPatch(record, interp, projectRef)
+        record = applyPatch(record, interp, projectRef, preferredLanguage)
     }
 
-    // --- No project inferred and the user hasn't asked to pick one → default to Inbox ---
-    if (!record.projectId && !record.projectRejected && inbox) {
-        record = setInboxProject(record, inbox)
+    // --- Clock reset: whenever a project is selected/changed, reset member's 6-hr window to NOW ---
+    if (projectRef && projectRef.id !== inbox?.id) {
+        record.isFreshProject = true
+        if (member?.id) {
+            await supabase.from('members').update({
+                last_confirmed_project_id: projectRef.id,
+                project_confirmed_at: new Date().toISOString(),
+            }).eq('id', member.id)
+        }
     }
 
     // --- Decide next action ---
     let action = decideNextAction(record)
 
-    // --- Project picker is best-effort: after MAX_ASK tries, fall back to Inbox instead
-    //     of looping or flagging ---
-    if (action.type === 'SELECT_PROJECT' && inbox && nextAttempt(record, 'project') > MAX_ASK) {
+    // --- Project picker is best-effort: after MAX_ASK tries or if no active projects exist,
+    //     fall back to Inbox instead of looping or flagging ---
+    if (action.type === 'SELECT_PROJECT' && inbox && (nextAttempt(record, 'project') > MAX_ASK || !projects.length)) {
         record = setInboxProject(record, inbox)
         action = decideNextAction(record)
     }
@@ -242,7 +254,7 @@ function prefillProject(record: WorkRecord, member: any, projects: ProjectOption
     const match = projects.find(p => p.id === member.last_confirmed_project_id)
     if (!match) return record
 
-    return { ...record, projectId: match.id, projectName: match.name }
+    return { ...record, projectId: match.id, projectName: match.name, isFreshProject: true }
 }
 
 // Terminal: write the transaction, mark the member's project, send the success message.
@@ -297,11 +309,15 @@ async function submit(
 
     // Remember the project for this member's next log — but NOT when it went to Inbox
     // (Inbox is "unassigned", so it shouldn't seed the recent-project inference).
-    if (record.projectId && member?.id && record.projectId !== inbox?.id) {
-        await supabase.from('members').update({
-            last_confirmed_project_id: record.projectId,
-            project_confirmed_at: new Date().toISOString(),
-        }).eq('id', member.id)
+    if (member?.id) {
+        const updateData: any = {
+            language_preference: record.language,
+        }
+        if (record.projectId && record.projectId !== inbox?.id) {
+            updateData.last_confirmed_project_id = record.projectId
+            updateData.project_confirmed_at = new Date().toISOString()
+        }
+        await supabase.from('members').update(updateData).eq('id', member.id)
     }
 
     // Mark the conversation done.

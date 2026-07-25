@@ -28,6 +28,7 @@ export interface WorkRecord {
 
     // Confirmation lifecycle
     confirmed: boolean             // user gave the final yes on the full record
+    isFreshProject?: boolean       // project was populated within the 6-hr active window
     projectRejected: boolean       // user rejected the candidate project → force selection
     needsFix: boolean              // user rejected confirmation without saying what → ask
 
@@ -92,10 +93,13 @@ export function createRecord(): WorkRecord {
         materials: [],
         location: null,
         summary: null,
+        scopeDescription: null,
         language: 'en',
         isWorkRelated: true,
         inconsistency: null,
+        confidence: 'medium',
         confirmed: false,
+        isFreshProject: false,
         projectRejected: false,
         needsFix: false,
         lastAsked: null,
@@ -144,6 +148,7 @@ export function loadRecord(bucket: any): WorkRecord {
         inconsistency: raw.inconsistency ?? null,
         confidence: raw.confidence || 'medium',
         confirmed: raw.confirmed === true,
+        isFreshProject: raw.isFreshProject === true,
         projectRejected: raw.projectRejected === true,
         needsFix: raw.needsFix === true,
         lastAsked: raw.lastAsked ?? null,
@@ -178,10 +183,10 @@ export function isEmpty(rec: WorkRecord): boolean {
 // Pure. Produces the next record. Corrections REPLACE a slot; materials ADD; a changed
 // slot un-confirms the record; rejections (interpreted against what we last asked) clear
 // the relevant slot. Never fabricates values.
-export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: ProjectRef | null): WorkRecord {
+export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: ProjectRef | null, preferredLanguage?: 'en' | 'es' | null): WorkRecord {
     const next: WorkRecord = { ...rec, materials: [...rec.materials], needsFix: false }
 
-    next.language = p.language || rec.language
+    next.language = preferredLanguage || p.language || rec.language
 
     // --- Work type ---
     if (p.workType != null && p.workType !== '') {
@@ -257,20 +262,18 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
 // POLICY — decide the next action purely from the record
 // ============================================================================
 
-// Project is a best-effort slot, NOT a required gate: when it can't be inferred the engine
-// falls it back to Inbox.
-// Tiered W-TK-02 confirmation: High confidence extractions with clear work, hours, and project
-// auto-confirm without requiring an explicit Y/N turn.
+// SKIP intermediate Y/N confirmation ONLY when project was pre-filled from the 6-hr active window.
+// Outside the 6-hr window (or new session / manual selection), show CONFIRM prompt (Reply Y or N).
 export function decideNextAction(rec: WorkRecord): Action {
     if (!rec.isWorkRelated && isEmpty(rec)) return { type: 'GREET' }
     if (rec.inconsistency) return { type: 'CLARIFY_INCONSISTENCY', reason: rec.inconsistency }
     if (!rec.workType) return { type: 'ASK_WORK' }
     if (!rec.hours || rec.hours <= 0) return { type: 'ASK_HOURS' }
-    if (rec.projectRejected && !rec.projectId) return { type: 'SELECT_PROJECT' }
+    if (!rec.projectId || rec.projectRejected) return { type: 'SELECT_PROJECT' }
     if (rec.needsFix) return { type: 'ASK_FIX' }
 
-    // Confidence-gated auto-confirm: Skip Y/N prompt for high confidence extractions
-    if (!rec.confirmed && rec.confidence !== 'high') {
+    // If project was NOT from a fresh 6-hour active window AND user hasn't confirmed yet -> show CONFIRM
+    if (!rec.confirmed && !rec.isFreshProject) {
         return { type: 'CONFIRM' }
     }
 

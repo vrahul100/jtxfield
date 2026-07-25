@@ -26,6 +26,7 @@ const MESSAGES = {
             if (materials) m += `\n🧰 *Materials:* ${materials}`
             if (location) m += `\n📌 *Location:* ${location}`
             if (summary) m += `\n\n_"${summary}"_`
+            m += `\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`
             return m
         },
         flagged: '🙋 Thanks — I\'ve flagged this for your foreman to review. They\'ll follow up.',
@@ -50,6 +51,7 @@ const MESSAGES = {
             if (materials) m += `\n🧰 *Materiales:* ${materials}`
             if (location) m += `\n📌 *Ubicación:* ${location}`
             if (summary) m += `\n\n_"${summary}"_`
+            m += `\n\n💡 _¿Necesitas ajustar? Responde "cambiar proyecto a <Nombre>" o "cambiar horas a 8"._`
             return m
         },
         flagged: '🙋 Gracias — lo he marcado para que tu supervisor lo revise. Te contactarán.',
