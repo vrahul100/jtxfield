@@ -191,13 +191,15 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     }
 
     // --- Media/Text Contradiction Guard (Run ONLY ONCE — DO NOT RE-FLAG ONCE CLARIFIED) ---
-    if (imageAnalysis && record.lastAsked !== 'clarify') {
-        const imgLower = imageAnalysis.toLowerCase()
-        const textLower = (userText + ' ' + (record.workType || '') + ' ' + (record.summary || '')).toLowerCase()
-        const isElectricalImage = imgLower.includes('electrical') || imgLower.includes('breaker') || imgLower.includes('wire') || imgLower.includes('conduit') || imgLower.includes('panel')
+    if (record.lastAsked === 'clarify') {
+        record.inconsistency = null // Clear contradiction on turn after asking ONCE — DO NOT HOLD THE USER!
+    } else if ((imageAnalysis || transcript) && userText.trim().length > 2) {
+        const mediaText = (imageAnalysis + ' ' + transcript).toLowerCase()
+        const textLower = userText.toLowerCase()
+        const isElectricalMedia = mediaText.includes('electrical') || mediaText.includes('breaker') || mediaText.includes('wire') || mediaText.includes('conduit') || mediaText.includes('panel')
         const isDiggingText = textLower.includes('dig') || textLower.includes('soil') || textLower.includes('excavat') || textLower.includes('earth')
-        if (isElectricalImage && isDiggingText) {
-            record.inconsistency = "Photo shows electrical panel/wiring, but text states digging/soil work."
+        if (isElectricalMedia && isDiggingText) {
+            record.inconsistency = "Photo/audio shows electrical panel/wiring, but text states digging/soil work."
         }
     }
 
