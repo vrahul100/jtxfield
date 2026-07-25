@@ -136,13 +136,17 @@ export const handleTwilioWebhook = async (c: Context, sql: Sql) => {
 
   // 2. CHECK FOR MEMBER CONFIRMATION (before authentication)
   const messageText = normalized.text.trim().toUpperCase();
-  if (messageText === 'YES') {
+  if (['YES', 'SI', 'SÍ', 'ACCEPT', 'ACEPTAR'].includes(messageText)) {
     const confirmResult = await confirmMemberByPhone(sql, normalized.sender);
     if (confirmResult.success) {
+      const lang = getLang(confirmResult.member);
       const name = confirmResult.member?.full_name ? `, ${confirmResult.member.full_name}` : '';
-      const teamMsg = confirmResult.nodeName ? ` You've joined ${confirmResult.nodeName}.` : '';
-      const welcomeMsg = `🎉 *Welcome to Jentyx${name}!${teamMsg}*\n\n*You're now activated and ready to go!*\n\nJust send:\n• 📸 Photos of your work\n• 🎤 Voice notes describing what you did\n• ⏱️ Details of your work like hours, materials used, etc.`;
-      return c.text(`<Response><Message>${welcomeMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      const team = confirmResult.nodeName ? ` (${confirmResult.nodeName})` : '';
+      const welcomeMsg = t(lang, 'welcome', { name, team });
+      const logoUrl = process.env.JENTYX_LOGO_URL;
+      const mediaXml = logoUrl ? `<Media>${logoUrl}</Media>` : '';
+
+      return c.text(`<Response><Message><Body>${welcomeMsg}</Body>${mediaXml}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
     }
     // If not a pending member, continue with normal flow
   }

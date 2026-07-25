@@ -17,7 +17,9 @@ type MessageKey =
     | 'invalid_selection'
     | 'welcome'
     | 'not_registered'
-    | 'hours_question';
+    | 'hours_question'
+    | 'invitation'
+    | 'confirmation_request';
 
 const translations: Record<string, Record<MessageKey, string>> = {
     en: {
@@ -33,9 +35,11 @@ const translations: Record<string, Record<MessageKey, string>> = {
         admin_followup: 'An admin will follow up.',
         max_attachments: '⚠️ Ticket #{id} has max 5 attachments. Send text details or wait for this ticket to close.',
         invalid_selection: 'Invalid selection. Reply with a number between 1 and {max}.',
-        welcome: '✅ *Welcome to Jentyx{name}!{team}*\n\nYou\'re now activated. Start sending your work updates via text, photos, or voice notes.',
+        welcome: '🎉 *Welcome to Jentyx{name}!{team}*\n\n*You\'re now activated and ready to go!*\n\nJust send:\n• 📸 Photos of your work\n• 🎤 Voice notes describing what you did\n• ⏱️ Details of your work like hours, materials used, etc.',
         not_registered: '👋 Hi! You\'re not registered. Please contact your admin.',
         hours_question: 'How many hours did this take?',
+        invitation: '👋 Hello{name}! You\'ve been invited to join {company} on Jentyx.\n\nReply YES to accept and start logging your work.',
+        confirmation_request: '👋 Hello{name}! You\'ve been added to the Jentyx system.\n\nPlease reply with YES to activate your account and start logging work.',
     },
     es: {
         ticket_opened: '📋 Ticket #{id} abierto.',
@@ -50,9 +54,11 @@ const translations: Record<string, Record<MessageKey, string>> = {
         admin_followup: 'Un administrador dará seguimiento.',
         max_attachments: '⚠️ El ticket #{id} tiene máximo 5 archivos. Envía detalles en texto o espera a que se cierre.',
         invalid_selection: 'Selección inválida. Responde con un número entre 1 y {max}.',
-        welcome: '✅ *Bienvenido a Jentyx{name}!{team}*\n\nYa estás activado. Comienza a enviar tus reportes de trabajo por texto, fotos o notas de voz.',
+        welcome: '🎉 *¡Bienvenido a Jentyx{name}!{team}*\n\n*¡Ya estás activado y listo para empezar!*\n\nSolo envía:\n• 📸 Fotos de tu trabajo\n• 🎤 Notas de voz describiendo lo que hiciste\n• ⏱️ Detalles de tu trabajo como horas, materiales usados, etc.',
         not_registered: '👋 ¡Hola! No estás registrado. Contacta a tu administrador.',
         hours_question: '¿Cuántas horas tomó esto?',
+        invitation: '👋 ¡Hola{name}! Has sido invitado a unirte a {company} en Jentyx.\n\nResponde SI para aceptar y comenzar a registrar tu trabajo.',
+        confirmation_request: '👋 ¡Hola{name}! Has sido agregado al sistema Jentyx.\n\nPor favor responde SI para activar tu cuenta y comenzar a registrar tu trabajo.',
     },
 };
 

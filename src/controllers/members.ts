@@ -3,51 +3,28 @@ import { Sql } from 'postgres';
 import { User } from '../services/auth.js';
 import { sendTwilioMessage } from '../services/twilio.js';
 import { getRequestBody } from '../utils/request.js';
-
-
-
-/**
- * Normalize phone number to E.164 format
- */
-function normalizePhoneNumber(phone: string): string {
-    // Remove all non-digit characters except leading +
-    let normalized = phone.replace(/[^\d+]/g, '');
-
-    // If no + prefix, assume US number and add +1
-    if (!normalized.startsWith('+')) {
-        if (normalized.length === 10) {
-            normalized = '+1' + normalized;
-        } else if (normalized.length === 11 && normalized.startsWith('1')) {
-            normalized = '+' + normalized;
-        }
-    }
-
-    return normalized;
-}
+import { normalizePhoneNumber } from '../utils/normalize.js';
+import { t, getLang } from '../services/i18n.js';
 
 /**
  * Send confirmation request message to member
  */
-async function sendConfirmationMessage(phoneNumber: string, memberName?: string): Promise<void> {
+async function sendConfirmationMessage(phoneNumber: string, memberName?: string, lang?: string): Promise<void> {
     const name = memberName ? ` ${memberName}` : '';
-    const message = `👋 Hello${name}! You've been added to the Jentyx system. 
-
-Please reply with YES to activate your account and start logging work.`;
-
-    await sendTwilioMessage(phoneNumber, message, 'whatsapp');
+    const message = t(lang, 'confirmation_request', { name });
+    const logoUrl = process.env.JENTYX_LOGO_URL;
+    await sendTwilioMessage(phoneNumber, message, 'whatsapp', logoUrl);
 }
 
 /**
  * Send invitation message from an OM to join their node
  */
-async function sendInvitationMessage(phoneNumber: string, memberName?: string, nodeName?: string): Promise<void> {
+async function sendInvitationMessage(phoneNumber: string, memberName?: string, nodeName?: string, lang?: string): Promise<void> {
     const name = memberName ? ` ${memberName}` : '';
     const company = nodeName || 'our team';
-    const message = `👋 Hello${name}! You've been invited to join ${company} on Jentyx.
-
-Reply YES to accept and start logging your work.`;
-
-    await sendTwilioMessage(phoneNumber, message, 'whatsapp');
+    const message = t(lang, 'invitation', { name, company });
+    const logoUrl = process.env.JENTYX_LOGO_URL;
+    await sendTwilioMessage(phoneNumber, message, 'whatsapp', logoUrl);
 }
 
 /**
@@ -117,6 +94,47 @@ export async function getMembers(c: Context, sql: Sql) {
 }
 
 /**
+ * Shared member activation logic (used by Web Admin approve & WhatsApp YES confirmation)
+ */
+export async function activateMember(
+    sql: Sql,
+    memberId: number,
+    targetNodeId?: number
+): Promise<{ success: boolean; member?: any; nodeName?: string }> {
+    const members = await sql`
+        SELECT m.*
+        FROM members m
+        WHERE m.id = ${memberId}
+    `;
+
+    if (members.length === 0) {
+        return { success: false };
+    }
+
+    const member = members[0];
+    const finalNodeId = targetNodeId || member.pending_node_id || member.company_id;
+
+    await sql`
+        UPDATE members 
+        SET status = 'active',
+            company_id = ${finalNodeId || null},
+            pending_node_id = NULL,
+            onboarded_at = NOW()
+        WHERE id = ${member.id}
+    `;
+
+    // Fetch node name for onboarding welcome message
+    let nodeName: string | undefined = undefined;
+    if (finalNodeId) {
+        const nodes = await sql`SELECT name FROM nodes WHERE id = ${finalNodeId}`;
+        if (nodes.length > 0) nodeName = nodes[0].name;
+    }
+
+    console.log(`[Members] Member #${member.id} activated, assigned to node ${finalNodeId || 'none'}`);
+    return { success: true, member, nodeName };
+}
+
+/**
  * POST /api/members/:id/approve
  * Approve a pending (orphan) member
  * OM only
@@ -139,24 +157,17 @@ export async function approveMember(c: Context, sql: Sql) {
             return c.json({ error: 'Forbidden' }, 403);
         }
 
-        // Update member status
-        await sql`
-            UPDATE members 
-            SET status = 'active',
-                company_id = ${user.nodeId},
-                onboarded_at = NOW()
-            WHERE id = ${memberId}
-        `;
+        const res = await activateMember(sql, memberId, user.nodeId);
 
         // Send WhatsApp welcome message with logo
         try {
             const logoUrl = process.env.JENTYX_LOGO_URL;
-            await sendTwilioMessage(
-                member.phone_number,
-                `✅ *Welcome!*\n\nYou've been added to the system by your Office Manager.\n\nStart sending your work updates.`,
-                'whatsapp',
-                logoUrl
-            );
+            const lang = getLang(member);
+            const name = member.full_name ? `, ${member.full_name}` : '';
+            const team = res.nodeName ? ` (${res.nodeName})` : '';
+            const welcomeMsg = t(lang, 'welcome', { name, team });
+
+            await sendTwilioMessage(member.phone_number, welcomeMsg, 'whatsapp', logoUrl);
         } catch (err) {
             console.error('[Members] Failed to send welcome message:', err);
         }
@@ -413,31 +424,15 @@ export async function confirmMemberByPhone(sql: Sql, phoneNumber: string): Promi
 
     // Find pending member with this phone
     const members = await sql`
-        SELECT m.*, n.name as pending_node_name
-        FROM members m
-        LEFT JOIN nodes n ON m.pending_node_id = n.id
-        WHERE m.phone_number = ${normalizedPhone} 
-        AND m.status = 'pending'
+        SELECT * FROM members 
+        WHERE phone_number = ${normalizedPhone} 
+        AND status = 'pending'
     `;
 
     if (members.length === 0) {
         return { success: false };
     }
 
-    const member = members[0];
-
-    // Update status to active and set company_id from pending_node_id
-    await sql`
-        UPDATE members 
-        SET status = 'active',
-            company_id = COALESCE(pending_node_id, company_id),
-            pending_node_id = NULL,
-            onboarded_at = NOW()
-        WHERE id = ${member.id}
-    `;
-
-    console.log(`[Members] Member #${member.id} confirmed via WhatsApp, assigned to node ${member.pending_node_id || member.company_id}`);
-
-    return { success: true, member, nodeName: member.pending_node_name };
+    return await activateMember(sql, members[0].id);
 }
 

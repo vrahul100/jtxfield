@@ -67,11 +67,26 @@ export function isWhatsAppMessage(body: any): boolean {
 }
 
 /**
- * Get clean phone number without whatsapp: prefix
+ * Normalize phone number to E.164 format (e.g. +1234567890)
+ */
+export function normalizePhoneNumber(phone: string): string {
+    const raw = (phone || '').replace(/^whatsapp:/i, '').trim();
+    let normalized = raw.replace(/[^\d+]/g, '');
+
+    if (!normalized.startsWith('+')) {
+        if (normalized.length === 10) {
+            normalized = '+1' + normalized;
+        } else if (normalized.length === 11 && normalized.startsWith('1')) {
+            normalized = '+' + normalized;
+        }
+    }
+
+    return normalized;
+}
+
+/**
+ * Get clean phone number in normalized E.164 format
  */
 export function getCleanPhoneNumber(from: string): string {
-    if (from.startsWith('whatsapp:')) {
-        return from.split(':')[1];
-    }
-    return from;
+    return normalizePhoneNumber(from);
 }
