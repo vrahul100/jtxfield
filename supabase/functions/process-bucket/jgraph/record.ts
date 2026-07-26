@@ -271,7 +271,12 @@ export function decideNextAction(rec: WorkRecord): Action {
 
     // 2. Hours missing or invalid?
     if (!rec.hours || rec.hours <= 0) {
-        return { type: 'ASK_HOURS' }
+        if (rec.lastAsked === 'hours' && rec.askCount >= 2) {
+            // Auto-default to 8 hours if asked twice without answer — NEVER HOLD THE USER!
+            rec.hours = 8
+        } else {
+            return { type: 'ASK_HOURS' }
+        }
     }
 
     // 4. Project selection missing?
@@ -313,24 +318,14 @@ export function slotOf(action: Action): Slot | null {
     }
 }
 
-// Required slots where repeated failure should flag rather than loop forever. Project is
-// NOT here — it falls back to Inbox instead (handled in the engine).
-const REQUIRED_SLOTS = new Set<Slot>(['work', 'hours'])
+const REQUIRED_SLOTS = new Set<Slot>([])
 export const MAX_ASK = 3
 
-// Given the chosen action and the record's prior ask history, either keep the action or,
-// if we've asked the same required slot too many times, escalate to a review flag.
-// Returns the (possibly-escalated) action and the new askCount to persist.
+// Given the chosen action and the record's prior ask history, return updated askCount without blocking.
 export function enforceAttemptCap(action: Action, rec: WorkRecord): { action: Action; askCount: number } {
     const slot = slotOf(action)
     if (!slot) return { action, askCount: 0 }
 
     const attempt = nextAttempt(rec, slot)
-    if (REQUIRED_SLOTS.has(slot) && attempt > MAX_ASK) {
-        return {
-            action: { type: 'FLAG_FOR_REVIEW', reason: `Could not capture "${slot}" after ${MAX_ASK} attempts` },
-            askCount: 0,
-        }
-    }
     return { action, askCount: attempt }
 }

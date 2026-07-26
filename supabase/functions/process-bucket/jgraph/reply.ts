@@ -6,11 +6,16 @@ import { DEV_MODE, stripThinking } from './io.ts'
 
 export interface ProjectOption { id: number; name: string }
 
+const isGenericWork = (str: string) => {
+    const s = (str || '').toLowerCase().trim()
+    return !s || s === 'work' || s === 'your' || s === 'general' || s === 'site work' || s === 'site photo work' || s === 'trabajo'
+}
+
 const MESSAGES = {
     en: {
         greeting: '👋 Hello! Ready to log your work?\n\nSend a photo, voice note, or describe what you worked on.',
         collectWork: '🔧 *What kind of work did you do?*\n\nAlso tell me how many hours.\n(Example: "electrical for 6 hours")',
-        askHours: (wt: string) => wt && wt !== 'work' && wt !== 'your'
+        askHours: (wt: string) => wt && !isGenericWork(wt)
             ? `⏱️ Got it: *${wt}*\n\nHow many hours did you work?\n(Example: 6.5 or "6 and a half")`
             : `⏱️ How many hours did you work?\n(Example: 6.5 or "6 and a half")`,
         clarify: (reason: string) => `⚠️ *NEEDS CLARIFICATION*\n\n${reason}\n\nCan you confirm what you actually worked on?`,
@@ -37,7 +42,7 @@ const MESSAGES = {
     es: {
         greeting: '👋 ¡Hola! ¿Listo para registrar tu trabajo?\n\nEnvía una foto, nota de voz, o describe lo que trabajaste.',
         collectWork: '🔧 *¿Qué tipo de trabajo hiciste?*\n\nTambién dime cuántas horas.\n(Ejemplo: "eléctrico por 6 horas")',
-        askHours: (wt: string) => wt && wt !== 'trabajo'
+        askHours: (wt: string) => wt && !isGenericWork(wt)
             ? `⏱️ Entendido: *${wt}*\n\n¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`
             : `⏱️ ¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`,
         clarify: (reason: string) => `⚠️ *NECESITA ACLARACIÓN*\n\n${reason}\n\n¿Puedes confirmar qué trabajo hiciste realmente?`,
@@ -96,7 +101,8 @@ export interface ComposeExtras {
 // Build the outgoing WhatsApp message for a non-terminal action.
 export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
-    const wt = stripThinking(rec.summary || rec.workType) || 'work'
+    const rawWt = stripThinking(rec.summary || rec.workType)
+    const wt = isGenericWork(rawWt) ? 'work' : rawWt
     const h = rec.hours || 0
     const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
     const location = stripThinking(rec.location) || undefined
@@ -139,9 +145,10 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
 // The final "logged!" confirmation after a successful submit.
 export function composeSuccess(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
-    const wt = stripThinking(rec.workType) || 'work'
+    const rawWt = stripThinking(rec.summary || rec.workType)
+    const wt = isGenericWork(rawWt) ? 'Site work' : rawWt
     const proj = stripThinking(projectName) || 'your project'
-    const summary = stripThinking(rec.summary) || undefined
+    const summary = stripThinking(rec.summary) && !isGenericWork(rec.summary) ? stripThinking(rec.summary) : undefined
     const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
     const body = m.success(wt, rec.hours || 0, proj, materials, stripThinking(rec.location) || undefined, summary)
     return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)

@@ -20,6 +20,7 @@ import { detectFixFieldOnly, fuzzyFindProject, parseHoursReply, resolveProjectRe
 import { composeReply, composeSuccess } from './reply.ts'
 import {
     analyzeImage,
+    extractTradePhrase,
     getSupabase,
     sendMessage,
     stripThinking,
@@ -101,7 +102,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     let imageAnalysis = ''
     if (imageUrls.length > 0) {
-        imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 15000, '')
+        imageAnalysis = await withTimeout(analyzeImage(imageUrls[0]), 30000, '')
     }
 
     // --- This turn's input ONLY. Scoped to what arrived since we last processed this bucket
@@ -172,22 +173,27 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         }
         record = applyPatch(record, interp, projectRef, preferredLanguage)
     }
-    // --- ALWAYS Infer & Check Image Description (with or without text) ---
-    if (imageAnalysis) {
-        const cleaned = stripThinking(imageAnalysis).replace(/<[^>]*>/g, '').trim()
-        const lines = cleaned.split('\n').map(l => l.trim()).filter(l => l.length >= 3 && !l.startsWith('<'))
-        const cleanPhrase = (lines[0] || '').replace(/^[0-9\.\-\)\s]+/, '').trim()
+    // --- ALWAYS Extract & Persist Grounded Work Summary ---
+    const hasMediaInput = !!(
+        imageAnalysis ||
+        transcript ||
+        (bucket.image_urls && bucket.image_urls.length > 0) ||
+        (bucket.audio_urls && bucket.audio_urls.length > 0)
+    )
+    if (hasMediaInput) {
+        record.isWorkRelated = true
+    }
 
-        if (cleanPhrase && cleanPhrase.length >= 3 && !cleanPhrase.includes('<')) {
-            const visualTrade = cleanPhrase.substring(0, 60)
-            // Override workType if missing, generic ("general", "work"), or contains reasoning tags
-            if (!record.workType || record.workType === 'general' || record.workType === 'work' || record.workType.includes('<')) {
-                record.workType = visualTrade
-            }
-            if (!record.summary || record.summary.includes('general')) {
-                record.summary = `${record.workType} (from photo)`
-            }
-        }
+    const visualTrade = extractTradePhrase(imageAnalysis)
+    const cleanAudio = stripThinking(transcript).replace(/<[^>]*>/g, '').trim()
+    const cleanText = userText.trim()
+    const bestDesc = visualTrade || cleanAudio || (cleanText.length > 2 ? cleanText : '')
+
+    const isGenericSummary = !record.summary || ['work', 'general', 'site work', 'site photo work', 'your'].includes(record.summary.toLowerCase().trim()) || record.summary.includes('<')
+
+    if (isGenericSummary && bestDesc) {
+        record.summary = bestDesc.substring(0, 100)
+        record.workType = bestDesc.substring(0, 60)
     }
 
     // --- Media/Text Contradiction Guard (Run ONLY ONCE — DO NOT RE-FLAG ONCE CLARIFIED) ---

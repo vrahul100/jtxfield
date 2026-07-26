@@ -8,6 +8,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest'
+import path from 'node:path'
+import { analyzeImage, extractTradePhrase } from '../../supabase/functions/process-bucket/jgraph/io.ts'
 import { mockDb, createMockSupabase } from './mocks'
 import { sampleExtractions, sampleMembers, sampleProjects } from './test-fixtures'
 

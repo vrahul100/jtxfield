@@ -192,6 +192,55 @@ export function stripThinking(text: string | null | undefined): string {
         .trim()
 }
 
+export function extractTradePhrase(raw: string | null | undefined): string {
+    if (!raw) return ''
+    const cleaned = stripThinking(raw)
+        .replace(/<[^>]*>/g, '')
+        .replace(/^["']|["']$/g, '')
+        .replace(/^(Here is a description|This image shows|The photo shows|Visible trade:)\s*/i, '')
+        .trim()
+    if (!cleaned) return ''
+
+    const lines = cleaned.split('\n')
+        .map(l => l.replace(/^[0-9\.\-\*\)\s]+/, '').trim())
+        .filter(l => l.length >= 3 && !l.toLowerCase().startsWith('here') && !l.toLowerCase().startsWith('this image'))
+
+    const bestLine = lines[0] || cleaned
+    return bestLine.substring(0, 70).trim()
+}
+
+export async function getDirectImageUrl(url: string): Promise<string> {
+    if (!url.includes('twilio.com')) return url
+    try {
+        const headers = twilioAuthHeaders(url)
+        const resp = await fetch(url, { headers, redirect: 'manual' })
+        if (resp.status >= 300 && resp.status < 400) {
+            const location = resp.headers.get('location')
+            if (location) {
+                console.log(`[TwilioMedia] Resolved presigned S3 URL: ${location.substring(0, 80)}...`)
+                return location
+            }
+        }
+    } catch (e) {
+        console.warn('[TwilioMedia] Redirect resolution warning:', e)
+    }
+    return url
+}
+
+function uint8ToBase64(bytes: Uint8Array): string {
+    const isNode = typeof process !== 'undefined' && process.versions && process.versions.node
+    if (isNode || typeof (globalThis as any).Buffer !== 'undefined') {
+        return (globalThis as any).Buffer.from(bytes).toString('base64')
+    }
+    const CHUNK_SIZE = 8192
+    let binary = ''
+    for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
+        const chunk = Array.from(bytes.subarray(i, i + CHUNK_SIZE))
+        binary += String.fromCharCode.apply(null, chunk)
+    }
+    return btoa(binary)
+}
+
 export async function analyzeImage(url: string): Promise<string> {
     const apiKey = Deno.env.get('GROQ_API_KEY')
     if (!apiKey) {
@@ -199,35 +248,31 @@ export async function analyzeImage(url: string): Promise<string> {
         return ''
     }
     try {
-        console.log(`[Vision] Starting image analysis for URL: ${url}`)
+        console.log(`[Vision] Starting image analysis for: ${url.substring(0, 80)}`)
         let imageUrlPayload: string = url
 
-        // Fetch image bytes safely via fetchTwilioMedia (handles S3 redirect)
-        const imageResp = await fetchTwilioMedia(url)
-        if (!imageResp.ok) {
-            console.error(`[Vision] Image fetch failed: HTTP ${imageResp.status}`)
-            return ''
+        if (url.startsWith('data:')) {
+            imageUrlPayload = url
+        } else if (url.startsWith('http://') || url.startsWith('https://')) {
+            // First try direct presigned S3 URL (zero Base64 overhead, instant download by Groq)
+            const directUrl = await getDirectImageUrl(url)
+            imageUrlPayload = directUrl
+        } else {
+            // Local file path
+            const isDeno = typeof (globalThis as any).Deno !== 'undefined'
+            let bytes: Uint8Array
+            if (isDeno) {
+                bytes = await (globalThis as any).Deno.readFile(url)
+            } else {
+                const fs = await import('node:fs')
+                bytes = new Uint8Array(fs.readFileSync(url))
+            }
+            const ext = url.split('.').pop()?.toLowerCase() || 'jpeg'
+            const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
+            imageUrlPayload = `data:${mime};base64,${uint8ToBase64(bytes)}`
         }
-        const contentType = imageResp.headers.get('content-type') || 'image/jpeg'
-        const bytes = new Uint8Array(await imageResp.arrayBuffer())
-        console.log(`[Vision] Fetched image bytes: ${bytes.byteLength}`)
 
-        // 20MB limit guard for qwen/qwen3.6-27b (15MB binary ensures base64 Data URL stays under 20MB limit)
-        const MAX_IMAGE_BYTES = 15 * 1024 * 1024
-        if (bytes.byteLength > MAX_IMAGE_BYTES) {
-            console.warn(`[Vision] Image size (${(bytes.byteLength / 1024 / 1024).toFixed(2)}MB) exceeds 20MB limit. Skipping vision.`)
-            return ''
-        }
-
-        const CHUNK_SIZE = 32768
-        let binary = ''
-        for (let i = 0; i < bytes.length; i += CHUNK_SIZE) {
-            const chunk = bytes.subarray(i, i + CHUNK_SIZE)
-            binary += String.fromCharCode.apply(null, chunk as unknown as number[])
-        }
-        imageUrlPayload = `data:${contentType};base64,${btoa(binary)}`
-
-        const resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        let resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
@@ -249,6 +294,43 @@ export async function analyzeImage(url: string): Promise<string> {
                 max_tokens: 300,
             }),
         })
+
+        // Fallback to Base64 data URL if direct S3 URL fetch by Groq fails
+        if (!resp.ok && (url.startsWith('http://') || url.startsWith('https://'))) {
+            console.warn(`[Vision] Direct URL fetch failed (HTTP ${resp.status}). Retrying with Base64 payload...`)
+            const imageResp = await fetchTwilioMedia(url)
+            if (imageResp.ok) {
+                let contentType = imageResp.headers.get('content-type') || 'image/jpeg'
+                if (!contentType.startsWith('image/')) contentType = 'image/jpeg'
+                const bytes = new Uint8Array(await imageResp.arrayBuffer())
+                if (bytes.byteLength <= 15 * 1024 * 1024) {
+                    imageUrlPayload = `data:${contentType};base64,${uint8ToBase64(bytes)}`
+                    resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            model: GROQ_IMAGE_MODEL,
+                            messages: [
+                                {
+                                    role: 'system',
+                                    content: 'You are an expert construction trade visual inspector. Analyze the photo and output a concise 3-to-6 word work description phrase summarizing the visible trade, action, and materials (e.g. "Masonry brick wall drilling", "Electrical panel & wiring work", "Plumbing PVC pipe fitting", "Drywall installation & taping"). Keep it strictly grounded to what is physically visible. Output ONLY this short phrase without introductory text.'
+                                },
+                                {
+                                    role: 'user',
+                                    content: [
+                                        { type: 'text', text: 'Analyze this work photo:' },
+                                        { type: 'image_url', image_url: { url: imageUrlPayload } },
+                                    ]
+                                },
+                            ],
+                            temperature: 0.1,
+                            max_tokens: 300,
+                        }),
+                    })
+                }
+            }
+        }
+
         if (!resp.ok) {
             const errBody = await resp.text()
             console.error(`[Vision] Groq API returned HTTP ${resp.status}: ${errBody}`)
@@ -256,6 +338,9 @@ export async function analyzeImage(url: string): Promise<string> {
         }
         const data = await resp.json()
         const rawContent = data.choices?.[0]?.message?.content || ''
+        if (!rawContent) {
+            console.warn(`[Vision] Empty choices content from Groq Vision:`, JSON.stringify(data))
+        }
         const analysis = stripThinking(rawContent)
         console.log(`[Vision Analysis Result] "${analysis.substring(0, 100)}..."`)
         return analysis
