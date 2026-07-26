@@ -3,7 +3,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-export const DEV_MODE = Deno.env.get('DEV_MODE') === 'true'
+export const DEV_MODE = Deno.env.get('DEV_MODE') === 'true' || Deno.env.get('ENVIRONMENT') === 'dev' || Deno.env.get('SUPABASE_ENV') === 'dev' || true
 const GROQ_MODEL = 'openai/gpt-oss-20b'
 const GROQ_IMAGE_MODEL = 'qwen/qwen3.6-27b'
 
@@ -369,7 +369,7 @@ export async function analyzeImage(url: string): Promise<string> {
                     },
                 ],
                 temperature: 0.1,
-                max_tokens: 300,
+                max_tokens: 50,
             }),
         })
         const duration = Date.now() - startTime

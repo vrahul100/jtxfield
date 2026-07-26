@@ -83,10 +83,15 @@ function withTicket(bucketId: number, response: string, companyCode?: string): s
     return `*TICKET ${formatTicketCode(bucketId, companyCode)}*\n${response}`
 }
 
-function withDev(bucketId: number, response: string, action: Action, rec: WorkRecord, companyCode?: string): string {
-    let result = withTicket(bucketId, response, companyCode)
+function withDev(bucketId: number, response: string, action: Action, rec: WorkRecord, companyCode?: string, elapsedMs?: number): string {
+    let result = response.includes('*TICKET') ? response : withTicket(bucketId, response, companyCode)
     if (DEV_MODE) {
-        result += `\n\n_[DEV: ${action.type} work:${stripThinking(rec.workType) || '-'} hrs:${rec.hours ?? '-'} proj:${stripThinking(rec.projectName) || '-'} asked:${rec.lastAsked ?? '-'}×${rec.askCount}]_`
+        let devStr = `[DEV: ${action.type} work:${stripThinking(rec.workType) || '-'} hrs:${rec.hours ?? '-'} proj:${stripThinking(rec.projectName) || '-'} asked:${rec.lastAsked ?? '-'}×${rec.askCount}`
+        if (elapsedMs) {
+            devStr += ` | ⚡ ${elapsedMs}ms`
+        }
+        devStr += `]`
+        result += `\n\n_${devStr}_`
     }
     return result
 }
@@ -96,6 +101,7 @@ export interface ComposeExtras {
     companyCode?: string
     projects: ProjectOption[]
     imageAnalysis: string
+    elapsedMs?: number
 }
 
 // Build the outgoing WhatsApp message for a non-terminal action.
@@ -139,7 +145,7 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
         default:
             body = m.askHours(wt)
     }
-    return withDev(extras.bucketId, body, action, rec, extras.companyCode)
+    return withDev(extras.bucketId, body, action, rec, extras.companyCode, extras.elapsedMs)
 }
 
 // The final "logged!" confirmation after a successful submit.
@@ -151,7 +157,7 @@ export function composeSuccess(rec: WorkRecord, projectName: string, extras: Com
     const summary = stripThinking(rec.summary) && !isGenericWork(rec.summary) ? stripThinking(rec.summary) : undefined
     const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
     const body = m.success(wt, rec.hours || 0, proj, materials, stripThinking(rec.location) || undefined, summary)
-    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)
+    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode, extras.elapsedMs)
 }
 
 export function composeUpdated(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
@@ -162,5 +168,5 @@ export function composeUpdated(rec: WorkRecord, projectName: string, extras: Com
     const ticketId = `${extras.companyCode || 'ACE'}-${ticketNum}`
 
     const body = `*TICKET ${ticketId}*\n✏️ *UPDATED*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${rec.hours || 0} hours\n📍 *Project:* ${proj}\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`
-    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)
+    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode, extras.elapsedMs)
 }

@@ -32,6 +32,7 @@ import {
 const PROJECT_FRESH_HOURS = 6
 
 export async function runStateMachine(bucketId: number): Promise<{ status: string; action: string; response?: string | null }> {
+    const startTime = Date.now()
     console.log(`[Engine] Starting bucket #${bucketId}`)
     const supabase = getSupabase()
 
@@ -356,7 +357,8 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     })
 
     // --- Act ---
-    const extras = { bucketId, companyCode, projects, imageAnalysis }
+    const elapsedMs = Date.now() - startTime
+    const extras = { bucketId, companyCode, projects, imageAnalysis, elapsedMs }
     if (action.type === 'SUBMIT') {
         return await submit(record, bucket, member, inbox, extras)
     }
