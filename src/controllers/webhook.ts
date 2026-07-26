@@ -295,7 +295,148 @@ Your message has been saved. An admin will add you to your project soon!`;
     // If existingBucket exists, let it flow through — user is mid-conversation
   }
 
-  // 6c. CHECK FOR TICKET CORRECTION — typed "#122 city hall" OR spoken "change ticket 11 to 10 hours"
+  // 6c. DIRECT EDIT COMMAND INTERCEPTOR FOR LOGGED TICKETS (Zero bucket creation)
+  const isChangeCmd = (text: string) => {
+    const s = text.toLowerCase().trim();
+    return (
+      s.startsWith('change ') ||
+      s.startsWith('fix ') ||
+      s.startsWith('modify ') ||
+      s.startsWith('update ') ||
+      s.includes('change project') ||
+      s.includes('change hours') ||
+      s.includes('change work')
+    );
+  };
+
+  if (isChangeCmd(intentText)) {
+    const inboxProjectId = await ensureInboxProject(sql, member.company_id);
+    const existingBucket = await findOpenBucket(sql, member.id, inboxProjectId);
+
+    if (!existingBucket) {
+      console.log(`[WEBHOOK] Change command detected without open bucket: "${intentText}". Applying edit directly to logged ticket...`);
+
+      let targetTicketId: number | null = matchTicketReference(intentText);
+      if (targetTicketId === null) {
+        const recent = await sql`
+          SELECT id, extracted_data FROM buckets 
+          WHERE member_id = ${member.id} AND status NOT IN ('cancelled', 'rejected') 
+          ORDER BY created_at DESC LIMIT 1
+        `;
+        if (recent.length > 0) {
+          targetTicketId = recent[0].id;
+        }
+      }
+
+      console.log(`[WEBHOOK Change Cmd] Target Ticket ID: ${targetTicketId}`);
+
+      if (targetTicketId !== null) {
+        const buckets = await sql`
+          SELECT id, member_id, project_id, status, extracted_data FROM buckets 
+          WHERE id = ${targetTicketId} AND member_id = ${member.id}
+          LIMIT 1
+        `;
+
+        if (buckets.length > 0) {
+          const targetBucket = buckets[0];
+          let rawData = targetBucket.extracted_data;
+          let rec: any = {};
+          if (rawData) {
+            try {
+              rec = typeof rawData === 'string' ? JSON.parse(rawData) : rawData;
+              if (typeof rec === 'string') {
+                rec = JSON.parse(rec);
+              }
+            } catch (e) {
+              rec = {};
+            }
+          }
+          if (!rec || typeof rec !== 'object') {
+            rec = {};
+          }
+
+          const textLower = intentText.toLowerCase();
+
+          // Change Project
+          if (textLower.includes('project')) {
+            const rawProjName = intentText.replace(/^change\s+project\s+(to\s+)?/i, '').trim();
+            const project = await findProjectByAlias(sql, member.company_id, rawProjName);
+            if (project) {
+              rec.projectId = project.id;
+              rec.projectName = project.name;
+              const jsonStr = JSON.stringify(rec);
+
+              await sql`
+                UPDATE buckets 
+                SET project_id = ${project.id}, extracted_data = ${jsonStr}::jsonb, updated_at = NOW()
+                WHERE id = ${targetTicketId}
+              `;
+
+              const scopeLine = rec.summary || rec.workType || 'Work';
+              const hoursVal = rec.hours || 0;
+              await sql`
+                UPDATE txns 
+                SET project_id = ${project.id}, job = ${`${scopeLine} - ${hoursVal}h`}
+                WHERE bucket_id = ${targetTicketId}
+              `;
+
+              console.log(`[WEBHOOK Change Cmd] Successfully updated project to "${project.name}" on Ticket #${targetTicketId}`);
+
+              const ticketNum = targetTicketId > 10000 ? targetTicketId : targetTicketId + 10000;
+              const replyMsg = `*TICKET ACE-${ticketNum}*\n✏️ *UPDATED*\n\n🔧 *Work:* ${scopeLine}\n⏱️ *Time:* ${hoursVal} hours\n📍 *Project:* ${project.name}\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`;
+
+              const xmlEscaped = replyMsg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+              return c.text(`<Response><Message>${xmlEscaped}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+            }
+          }
+
+          // Change Hours
+          if (textLower.includes('hours')) {
+            const hMatch = intentText.match(/(\d+(?:\.\d+)?)/);
+            if (hMatch && hMatch[1]) {
+              const h = parseFloat(hMatch[1]);
+              if (h > 0 && h <= 168) {
+                rec.hours = h;
+                const jsonStr = JSON.stringify(rec);
+
+                await sql`
+                  UPDATE buckets 
+                  SET extracted_data = ${jsonStr}::jsonb, updated_at = NOW()
+                  WHERE id = ${targetTicketId}
+                `;
+
+                const scopeLine = rec.summary || rec.workType || 'Work';
+                await sql`
+                  UPDATE txns 
+                  SET time = ${h}, job = ${`${scopeLine} - ${h}h`}, labor = ${`${scopeLine} for ${h}h`}
+                  WHERE bucket_id = ${targetTicketId}
+                `;
+
+                console.log(`[WEBHOOK Change Cmd] Successfully updated hours to ${h}h on Ticket #${targetTicketId}`);
+
+                const projName = rec.projectName || 'Inbox';
+                const ticketNum = targetTicketId > 10000 ? targetTicketId : targetTicketId + 10000;
+                const replyMsg = `*TICKET ACE-${ticketNum}*\n✏️ *UPDATED*\n\n🔧 *Work:* ${scopeLine}\n⏱️ *Time:* ${h} hours\n📍 *Project:* ${projName}\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`;
+
+                const xmlEscaped = replyMsg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+                return c.text(`<Response><Message>${xmlEscaped}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+              } else {
+                const replyMsg = `❌ Invalid hours: ${h}. Please enter a number between 1 and 168.`;
+                return c.text(`<Response><Message>${replyMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+              }
+            }
+          }
+        }
+      }
+
+      // If target ticket was not found or command was unclear, return error message directly (DO NOT CREATE A NEW BUCKET)
+      const replyMsg = `❓ Could not find ticket to update. To log new work, send a photo or describe your work.`;
+      const xmlEscaped = replyMsg.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      return c.text(`<Response><Message>${xmlEscaped}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+  }
+
+  // 6d. CHECK FOR TICKET CORRECTION — typed "#122 city hall" OR spoken "change ticket 11 to 10 hours"
   const ticketId = matchTicketReference(intentText);
   if (ticketId !== null) {
     console.log(`[WEBHOOK] Detected ticket reference #${ticketId} (fromVoice=${commandFromVoice})`);

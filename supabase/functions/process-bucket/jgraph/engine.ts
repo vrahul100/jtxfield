@@ -17,7 +17,7 @@ import {
 } from './record.ts'
 import { interpretTurn } from './interpret.ts'
 import { detectFixFieldOnly, fuzzyFindProject, parseHoursReply, resolveProjectReply, resolveProjectRef, type ProjectOption } from './match.ts'
-import { composeReply, composeSuccess } from './reply.ts'
+import { composeReply, composeSuccess, composeUpdated } from './reply.ts'
 import {
     analyzeImage,
     extractTradePhrase,
@@ -117,6 +117,116 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
 
     // Mark this turn's input consumed so the next turn starts clean.
     record = { ...record, seenTextLines: textLines.length, seenTranscripts: transcripts.length }
+
+    // --- Change Command Interceptor for Logged Tickets ---
+    const isChangeCommand = (text: string) => {
+        const s = text.toLowerCase().trim()
+        return (
+            s.startsWith('change ') ||
+            s.startsWith('fix ') ||
+            s.startsWith('modify ') ||
+            s.startsWith('update ') ||
+            s.includes('change project') ||
+            s.includes('change hours') ||
+            s.includes('change work')
+        )
+    }
+
+    if (isChangeCommand(reply)) {
+        let targetBucketId: number | null = null
+        const ticketMatch = reply.match(/(?:#|TICKET\s*)?([A-Z]+)-(\d+)/i)
+        if (ticketMatch && ticketMatch[2]) {
+            const rawId = parseInt(ticketMatch[2], 10)
+            targetBucketId = rawId > 10000 ? rawId - 10000 : rawId
+        }
+
+        if (!targetBucketId && bucket.member_id) {
+            const { data: recentBuckets } = await supabase
+                .from('buckets')
+                .select('*')
+                .eq('member_id', bucket.member_id)
+                .neq('id', bucket.id)
+                .not('status', 'in', '("cancelled","rejected")')
+                .order('created_at', { ascending: false })
+                .limit(1)
+
+            if (recentBuckets && recentBuckets.length > 0) {
+                targetBucketId = recentBuckets[0].id
+            }
+        }
+
+        if (targetBucketId && targetBucketId !== bucket.id) {
+            const { data: targetBucket } = await supabase.from('buckets').select('*').eq('id', targetBucketId).single()
+            if (targetBucket && targetBucket.extracted_data) {
+                let targetRec: WorkRecord = loadRecord(targetBucket)
+
+                if (reply.toLowerCase().includes('project')) {
+                    const pMatch = resolveProjectReply(reply, projects) || fuzzyFindProject(reply, projects)
+                    if (pMatch) {
+                        targetRec = { ...targetRec, projectId: pMatch.id, projectName: pMatch.name }
+                        await supabase.from('buckets').update({
+                            project_id: pMatch.id,
+                            extracted_data: JSON.stringify(targetRec),
+                        }).eq('id', targetBucketId)
+
+                        const scopeLine = targetRec.summary || targetRec.workType || 'Work'
+                        await supabase.from('txns').update({
+                            project_id: pMatch.id,
+                            job: `${scopeLine} - ${targetRec.hours || 0}h`,
+                        }).eq('bucket_id', targetBucketId)
+
+                        // Cancel the current edit-command bucket so it NEVER creates a duplicate ticket
+                        await supabase.from('buckets').update({
+                            status: 'cancelled',
+                            conversation_state: 'cancelled'
+                        }).eq('id', bucket.id)
+
+                        const response = composeUpdated(targetRec, pMatch.name, { bucketId: targetBucketId, companyCode })
+                        await sendMessage(bucket.from_phone, response, bucket.source)
+                        return { status: 'cancelled', action: 'edit_applied', response }
+                    }
+                }
+
+                if (reply.toLowerCase().includes('hours')) {
+                    const h = parseHoursReply(reply)
+                    if (h != null && h > 0 && h <= 168) {
+                        targetRec = { ...targetRec, hours: h }
+                        await supabase.from('buckets').update({
+                            hours: h,
+                            extracted_data: JSON.stringify(targetRec),
+                        }).eq('id', targetBucketId)
+
+                        const scopeLine = targetRec.summary || targetRec.workType || 'Work'
+                        await supabase.from('txns').update({
+                            time: h,
+                            job: `${scopeLine} - ${h}h`,
+                            labor: `${scopeLine} for ${h}h`,
+                        }).eq('bucket_id', targetBucketId)
+
+                        // Cancel the current edit-command bucket so it NEVER creates a duplicate ticket
+                        await supabase.from('buckets').update({
+                            status: 'cancelled',
+                            conversation_state: 'cancelled'
+                        }).eq('id', bucket.id)
+
+                        const response = composeUpdated(targetRec, targetRec.projectName || 'Inbox', { bucketId: targetBucketId, companyCode })
+                        await sendMessage(bucket.from_phone, response, bucket.source)
+                        return { status: 'cancelled', action: 'edit_applied', response }
+                    }
+                }
+            }
+        }
+
+        // ABSOLUTE SAFETY GUARD: A change command MUST NEVER fall through to create a new ticket!
+        await supabase.from('buckets').update({
+            status: 'cancelled',
+            conversation_state: 'cancelled'
+        }).eq('id', bucket.id)
+
+        const errorResponse = `❓ Could not find ticket to update. To log new work, send a photo or describe your work.`
+        await sendMessage(bucket.from_phone, errorResponse, bucket.source)
+        return { status: 'cancelled', action: 'edit_cancelled', response: errorResponse }
+    }
 
     // --- Expectation-driven resolution. When the app asked a CLOSED question, the reply IS the
     //     input to that question — resolve it deterministically (no LLM, no hallucination, no

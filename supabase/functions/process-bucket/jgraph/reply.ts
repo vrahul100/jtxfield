@@ -146,10 +146,21 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
 export function composeSuccess(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
     const rawWt = stripThinking(rec.summary || rec.workType)
-    const wt = isGenericWork(rawWt) ? 'Site work' : rawWt
+    const wt = rawWt && !isGenericWork(rawWt) ? rawWt : (rawWt || 'Work')
     const proj = stripThinking(projectName) || 'your project'
     const summary = stripThinking(rec.summary) && !isGenericWork(rec.summary) ? stripThinking(rec.summary) : undefined
     const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
     const body = m.success(wt, rec.hours || 0, proj, materials, stripThinking(rec.location) || undefined, summary)
+    return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)
+}
+
+export function composeUpdated(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
+    const rawWt = stripThinking(rec.summary || rec.workType)
+    const wt = rawWt && !isGenericWork(rawWt) ? rawWt : (rawWt || 'Work')
+    const proj = stripThinking(projectName) || 'your project'
+    const ticketNum = extras.bucketId > 10000 ? extras.bucketId : extras.bucketId + 10000
+    const ticketId = `${extras.companyCode || 'ACE'}-${ticketNum}`
+
+    const body = `*TICKET ${ticketId}*\n✏️ *UPDATED*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${rec.hours || 0} hours\n📍 *Project:* ${proj}\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`
     return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode)
 }
