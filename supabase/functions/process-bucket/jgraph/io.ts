@@ -184,26 +184,58 @@ export async function transcribeAudio(url: string): Promise<string | null> {
 
 export function stripThinking(text: string | null | undefined): string {
     if (!text) return ''
-    return text
+    let cleaned = text
         .replace(/<think>[\s\S]*?<\/think>/gi, '')
-        .replace(/<think>[\s\S]*/gi, '')
-        .replace(/<\/?think>/gi, '')
         .replace(/^["']|["']$/g, '')
         .trim()
+
+    if (cleaned.length > 0 && !cleaned.startsWith('<think>')) {
+        return cleaned
+    }
+
+    // If text was unclosed <think>... or only contained reasoning:
+    const quotedMatch = text.match(/"([^"\n]{4,60})"/i) || text.match(/'([^'\n]{4,60})'/i)
+    if (quotedMatch && quotedMatch[1]) {
+        const q = quotedMatch[1].trim()
+        if (!q.toLowerCase().startsWith('the ') && !q.toLowerCase().startsWith('phrase')) {
+            return q
+        }
+    }
+
+    const phraseMatch = text.match(/(?:Phrase|Summary|Trade|Action):\s*"?([^"\n]{3,60})"?/i)
+    if (phraseMatch && phraseMatch[1]) {
+        return phraseMatch[1].trim()
+    }
+
+    cleaned = text.replace(/<\/?think>/gi, '').trim()
+    return cleaned
 }
 
 export function extractTradePhrase(raw: string | null | undefined): string {
     if (!raw) return ''
-    const cleaned = stripThinking(raw)
+    let cleaned = stripThinking(raw)
         .replace(/<[^>]*>/g, '')
         .replace(/^["']|["']$/g, '')
         .replace(/^(Here is a description|This image shows|The photo shows|Visible trade:)\s*/i, '')
         .trim()
+
+    if (!cleaned || cleaned.length < 3 || cleaned.toLowerCase().startsWith('the user') || cleaned.toLowerCase().includes('think')) {
+        const quotedMatches = [...raw.matchAll(/"([^"\n]{4,60})"/g)]
+        for (const m of quotedMatches) {
+            const val = m[1].trim()
+            const lower = val.toLowerCase()
+            if (!lower.startsWith('the ') && !lower.startsWith('here ') && !lower.includes('word') && !lower.includes('format')) {
+                cleaned = val
+                break
+            }
+        }
+    }
+
     if (!cleaned) return ''
 
     const lines = cleaned.split('\n')
-        .map(l => l.replace(/^[0-9\.\-\*\)\s]+/, '').trim())
-        .filter(l => l.length >= 3 && !l.toLowerCase().startsWith('here') && !l.toLowerCase().startsWith('this image'))
+        .map(l => l.replace(/^[0-9\.\-\*\)\s]+/, '').replace(/^(Phrase|Summary|Trade|Action):\s*/i, '').replace(/^"|"$/g, '').trim())
+        .filter(l => l.length >= 3 && !l.toLowerCase().startsWith('here') && !l.toLowerCase().startsWith('this image') && !l.toLowerCase().startsWith('the user'))
 
     const bestLine = lines[0] || cleaned
     return bestLine.substring(0, 70).trim()
@@ -228,9 +260,9 @@ export async function getDirectImageUrl(url: string): Promise<string> {
 }
 
 function uint8ToBase64(bytes: Uint8Array): string {
-    const isNode = typeof process !== 'undefined' && process.versions && process.versions.node
-    if (isNode || typeof (globalThis as any).Buffer !== 'undefined') {
-        return (globalThis as any).Buffer.from(bytes).toString('base64')
+    const gBuf = (globalThis as any).Buffer
+    if (gBuf && typeof gBuf.from === 'function') {
+        return gBuf.from(bytes).toString('base64')
     }
     const CHUNK_SIZE = 8192
     let binary = ''
@@ -242,23 +274,47 @@ function uint8ToBase64(bytes: Uint8Array): string {
 }
 
 export async function analyzeImage(url: string): Promise<string> {
-    const apiKey = Deno.env.get('GROQ_API_KEY')
-    if (!apiKey) {
-        console.error('[Vision] GROQ_API_KEY missing')
+    const openrouterKey = Deno.env.get('OPENROUTER_API_KEY')
+    const groqKey = Deno.env.get('GROQ_API_KEY')
+
+    if (!openrouterKey && !groqKey) {
+        console.error('[Vision] Neither OPENROUTER_API_KEY nor GROQ_API_KEY is available in environment!')
         return ''
     }
+
     try {
-        console.log(`[Vision] Starting image analysis for: ${url.substring(0, 80)}`)
+        console.log(`[Vision] Starting image analysis for URL: ${url}`)
         let imageUrlPayload: string = url
 
         if (url.startsWith('data:')) {
+            console.log(`[Vision] Using pre-formatted Base64 Data URL (length: ${url.length})`)
             imageUrlPayload = url
         } else if (url.startsWith('http://') || url.startsWith('https://')) {
-            // First try direct presigned S3 URL (zero Base64 overhead, instant download by Groq)
-            const directUrl = await getDirectImageUrl(url)
-            imageUrlPayload = directUrl
+            console.log(`[Vision] Fetching media bytes via fetchTwilioMedia...`)
+            const imageResp = await fetchTwilioMedia(url)
+            if (!imageResp.ok) {
+                console.error(`[Vision] Image fetch failed with HTTP status ${imageResp.status}`)
+                return ''
+            }
+            let contentType = imageResp.headers.get('content-type') || 'image/jpeg'
+            if (!contentType.startsWith('image/')) {
+                console.warn(`[Vision] Header Content-Type "${contentType}" is non-image, normalizing to image/jpeg`)
+                contentType = 'image/jpeg'
+            }
+            const bytes = new Uint8Array(await imageResp.arrayBuffer())
+            console.log(`[Vision] Successfully fetched ${bytes.byteLength} image bytes (MIME: ${contentType})`)
+
+            const MAX_IMAGE_BYTES = 15 * 1024 * 1024
+            if (bytes.byteLength > MAX_IMAGE_BYTES) {
+                console.warn(`[Vision] Image size (${(bytes.byteLength / 1024 / 1024).toFixed(2)}MB) exceeds limit. Skipping vision.`)
+                return ''
+            }
+
+            imageUrlPayload = `data:${contentType};base64,${uint8ToBase64(bytes)}`
+            console.log(`[Vision] Constructed Data URL payload (length: ${imageUrlPayload.length})`)
         } else {
             // Local file path
+            console.log(`[Vision] Loading local file from path: ${url}`)
             const isDeno = typeof (globalThis as any).Deno !== 'undefined'
             let bytes: Uint8Array
             if (isDeno) {
@@ -270,17 +326,39 @@ export async function analyzeImage(url: string): Promise<string> {
             const ext = url.split('.').pop()?.toLowerCase() || 'jpeg'
             const mime = ext === 'png' ? 'image/png' : ext === 'webp' ? 'image/webp' : 'image/jpeg'
             imageUrlPayload = `data:${mime};base64,${uint8ToBase64(bytes)}`
+            console.log(`[Vision] Loaded ${bytes.byteLength} bytes from local file`)
         }
 
-        let resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+        let endpoint = 'https://api.groq.com/openai/v1/chat/completions'
+        let apiKey = groqKey || ''
+        let modelName = Deno.env.get('VISION_MODEL') || GROQ_IMAGE_MODEL
+        const headers: Record<string, string> = {
+            'Content-Type': 'application/json'
+        }
+
+        if (openrouterKey) {
+            endpoint = 'https://openrouter.ai/api/v1/chat/completions'
+            apiKey = openrouterKey
+            modelName = Deno.env.get('OPENROUTER_VISION_MODEL') || 'google/gemini-2.5-flash'
+            headers['Authorization'] = `Bearer ${openrouterKey}`
+            headers['HTTP-Referer'] = 'https://jtxfield.com'
+            headers['X-Title'] = 'JtxField'
+            console.log(`[Vision] Using OpenRouter Vision endpoint (${endpoint}) with model ${modelName}`)
+        } else {
+            headers['Authorization'] = `Bearer ${groqKey}`
+            console.log(`[Vision] Using Groq Vision endpoint (${endpoint}) with model ${modelName}`)
+        }
+
+        const startTime = Date.now()
+        const resp = await fetch(endpoint, {
             method: 'POST',
-            headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+            headers,
             body: JSON.stringify({
-                model: GROQ_IMAGE_MODEL,
+                model: modelName,
                 messages: [
                     {
                         role: 'system',
-                        content: 'You are an expert construction trade visual inspector. Analyze the photo and output a concise 3-to-6 word work description phrase summarizing the visible trade, action, and materials (e.g. "Masonry brick wall drilling", "Electrical panel & wiring work", "Plumbing PVC pipe fitting", "Drywall installation & taping"). Keep it strictly grounded to what is physically visible. Output ONLY this short phrase without introductory text.'
+                        content: 'You are an expert construction trade visual inspector. Analyze the photo and output a concise 3-to-6 word work description phrase summarizing the visible trade, action, and materials (e.g. "Masonry brick wall drilling", "Electrical panel & wiring work", "Plumbing PVC pipe fitting", "Drywall installation & taping"). Keep it strictly grounded to what is physically visible. Output ONLY this short phrase without introductory text or reasoning.'
                     },
                     {
                         role: 'user',
@@ -294,56 +372,24 @@ export async function analyzeImage(url: string): Promise<string> {
                 max_tokens: 300,
             }),
         })
-
-        // Fallback to Base64 data URL if direct S3 URL fetch by Groq fails
-        if (!resp.ok && (url.startsWith('http://') || url.startsWith('https://'))) {
-            console.warn(`[Vision] Direct URL fetch failed (HTTP ${resp.status}). Retrying with Base64 payload...`)
-            const imageResp = await fetchTwilioMedia(url)
-            if (imageResp.ok) {
-                let contentType = imageResp.headers.get('content-type') || 'image/jpeg'
-                if (!contentType.startsWith('image/')) contentType = 'image/jpeg'
-                const bytes = new Uint8Array(await imageResp.arrayBuffer())
-                if (bytes.byteLength <= 15 * 1024 * 1024) {
-                    imageUrlPayload = `data:${contentType};base64,${uint8ToBase64(bytes)}`
-                    resp = await fetch('https://api.groq.com/openai/v1/chat/completions', {
-                        method: 'POST',
-                        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
-                        body: JSON.stringify({
-                            model: GROQ_IMAGE_MODEL,
-                            messages: [
-                                {
-                                    role: 'system',
-                                    content: 'You are an expert construction trade visual inspector. Analyze the photo and output a concise 3-to-6 word work description phrase summarizing the visible trade, action, and materials (e.g. "Masonry brick wall drilling", "Electrical panel & wiring work", "Plumbing PVC pipe fitting", "Drywall installation & taping"). Keep it strictly grounded to what is physically visible. Output ONLY this short phrase without introductory text.'
-                                },
-                                {
-                                    role: 'user',
-                                    content: [
-                                        { type: 'text', text: 'Analyze this work photo:' },
-                                        { type: 'image_url', image_url: { url: imageUrlPayload } },
-                                    ]
-                                },
-                            ],
-                            temperature: 0.1,
-                            max_tokens: 300,
-                        }),
-                    })
-                }
-            }
-        }
+        const duration = Date.now() - startTime
+        console.log(`[Vision] Provider response received in ${duration}ms (HTTP ${resp.status})`)
 
         if (!resp.ok) {
             const errBody = await resp.text()
-            console.error(`[Vision] Groq API returned HTTP ${resp.status}: ${errBody}`)
+            console.error(`[Vision] Vision API returned HTTP ${resp.status}: ${errBody}`)
             return ''
         }
         const data = await resp.json()
         const rawContent = data.choices?.[0]?.message?.content || ''
+        console.log(`[Vision] Raw content from Provider: "${rawContent}"`)
         if (!rawContent) {
-            console.warn(`[Vision] Empty choices content from Groq Vision:`, JSON.stringify(data))
+            console.warn(`[Vision] Empty choices content from Provider:`, JSON.stringify(data))
         }
         const analysis = stripThinking(rawContent)
-        console.log(`[Vision Analysis Result] "${analysis.substring(0, 100)}..."`)
-        return analysis
+        const tradePhrase = extractTradePhrase(rawContent)
+        console.log(`[Vision Analysis Result] Raw: "${analysis}" | Extracted Trade: "${tradePhrase}"`)
+        return tradePhrase || analysis
     } catch (e) {
         console.error('[Vision] Error in analyzeImage:', e)
         return ''

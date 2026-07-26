@@ -189,11 +189,17 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     const cleanText = userText.trim()
     const bestDesc = visualTrade || cleanAudio || (cleanText.length > 2 ? cleanText : '')
 
+    console.log(`[Engine] Summary Candidates -> imageAnalysis: "${imageAnalysis}" | visualTrade: "${visualTrade}" | cleanAudio: "${cleanAudio}" | cleanText: "${cleanText}"`)
+    console.log(`[Engine] Selected bestDesc: "${bestDesc}" | Current record.summary: "${record.summary}"`)
+
     const isGenericSummary = !record.summary || ['work', 'general', 'site work', 'site photo work', 'your'].includes(record.summary.toLowerCase().trim()) || record.summary.includes('<')
 
     if (isGenericSummary && bestDesc) {
+        console.log(`[Engine] Replacing generic record.summary ("${record.summary}") with bestDesc ("${bestDesc}")`)
         record.summary = bestDesc.substring(0, 100)
         record.workType = bestDesc.substring(0, 60)
+    } else {
+        console.log(`[Engine] Keeping existing record.summary: "${record.summary}"`)
     }
 
     // --- Media/Text Contradiction Guard (Run ONLY ONCE — DO NOT RE-FLAG ONCE CLARIFIED) ---
