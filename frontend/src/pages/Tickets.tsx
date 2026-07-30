@@ -335,7 +335,7 @@ export function Tickets() {
 
     return (
         <Layout>
-            <div className="flex-1 flex flex-col min-h-0 overflow-visible md:overflow-hidden">
+            <div className="flex-1 flex flex-col min-h-0 lg:overflow-hidden">
                 <div className="flex-shrink-0 pt-1 pb-2 mb-2">
                     <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
                         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Work Captured</h1>
@@ -435,11 +435,11 @@ export function Tickets() {
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 items-stretch overflow-visible lg:overflow-hidden">
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 items-stretch lg:overflow-hidden lg:min-h-[320px]">
                     {/* Left Panel: Table List */}
-                    <div className={`transition-all duration-300 flex flex-col min-h-0 card overflow-hidden ${selectedBucketId ? 'w-full lg:w-7/12' : 'w-full'}`}>
+                    <div className={`transition-all duration-300 flex flex-col min-h-[280px] lg:min-h-0 card overflow-hidden ${selectedBucketId ? 'w-full lg:w-7/12' : 'w-full lg:flex-1'}`}>
                         {/* Scrollable Table Container */}
-                        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
+                        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto overscroll-contain">
                             <table className="w-full text-left border-collapse min-w-[600px]">
                                 <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
                                     <tr>
