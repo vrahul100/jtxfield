@@ -8,15 +8,22 @@
 
 /* Custom styles */
 @layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    max-height: 100%;
+  }
+
   html {
     font-family: 'Public Sans', system-ui, sans-serif;
     font-size: 100%;
-    /* 18px base font size */
-    /* line-height: 1.6; */
   }
 
   body {
     @apply bg-slate-100 text-slate-900 text-base;
+    margin: 0;
+    overflow: hidden;
   }
 
   /* Scale down heading sizes slightly to maintain good proportions */
