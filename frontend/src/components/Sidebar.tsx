@@ -33,13 +33,12 @@ export function Sidebar() {
         return 'pending';
     };
 
-    // Detect mobile and auto-collapse
     useEffect(() => {
         const checkMobile = () => {
             const mobile = window.innerWidth < 768;
             setIsMobile(mobile);
             if (mobile) {
-                setIsCollapsed(true); // Auto-collapse on mobile
+                setIsCollapsed(true);
             }
         };
 
@@ -54,11 +53,10 @@ export function Sidebar() {
             : 'text-slate-400 hover:bg-slate-800 hover:text-white'
         }`;
 
-
+    const showLabels = isMobile || !isCollapsed;
 
     return (
         <>
-            {/* Mobile Hamburger Button - Fixed Position */}
             {isMobile && (
                 <button
                     onClick={() => setIsCollapsed(!isCollapsed)}
@@ -69,24 +67,23 @@ export function Sidebar() {
                 </button>
             )}
 
-            {/* Overlay for mobile when expanded */}
             {isMobile && !isCollapsed && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-30 top-20"
+                    className="fixed inset-0 bg-black/50 z-30"
                     onClick={() => setIsCollapsed(true)}
                 />
             )}
 
             <aside
-                className={`${
-                    isMobile 
-                        ? (isCollapsed ? '-translate-x-full' : 'translate-x-0')
-                        : (isCollapsed ? 'w-16' : 'w-64')
-                } ${isMobile ? 'w-64' : ''} bg-slate-900 h-screen fixed left-0 top-20 overflow-y-auto transition-all duration-300 ease-in-out z-40`}
+                className={[
+                    'bg-slate-900 overflow-y-auto overscroll-contain transition-all duration-300 ease-in-out z-40',
+                    isMobile
+                        ? `fixed inset-y-0 left-0 w-64 ${isCollapsed ? '-translate-x-full' : 'translate-x-0'}`
+                        : `relative flex-shrink-0 h-full ${isCollapsed ? 'w-16' : 'w-64'}`,
+                ].join(' ')}
             >
                 <nav className="p-4 pt-6 space-y-4">
-                    {/* Pipeline Section */}
-                    {!isCollapsed && (
+                    {showLabels && (
                         <div className="px-3">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest block">
                                 Field Pipeline
@@ -95,11 +92,6 @@ export function Sidebar() {
                     )}
 
                     <div className="bg-slate-500 rounded-xl p-2 border border-slate-800/80 shadow-inner relative space-y-2">
-                        {/* Connecting Line
-                        {!isCollapsed && (
-                            <div className="absolute left-[27px] top-6 bottom-6 w-[2px] bg-slate-800 z-0" />
-                        )} */}
-
                         {pipelineSteps.map((step) => {
                             const state = getStepState(step.path);
                             const isActive = state === 'active';
@@ -128,25 +120,26 @@ export function Sidebar() {
                                     }`}>
                                         {step.stepNum}
                                     </div>
-                                    <div className={`flex flex-col min-w-0 ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>
-                                        <span className={`text-sm font-bold truncate ${
-                                            isActive || isPassed ? 'text-white' : 'text-slate-200'
-                                        }`}>
-                                            {step.label}
-                                        </span>
-                                        <span className={`text-[10px] truncate ${
-                                            isActive ? 'text-indigo-100 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
-                                        }`}>
-                                            {step.sub}
-                                        </span>
-                                    </div>
+                                    {showLabels && (
+                                        <div className="flex flex-col min-w-0">
+                                            <span className={`text-sm font-bold truncate ${
+                                                isActive || isPassed ? 'text-white' : 'text-slate-200'
+                                            }`}>
+                                                {step.label}
+                                            </span>
+                                            <span className={`text-[10px] truncate ${
+                                                isActive ? 'text-indigo-100 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
+                                            }`}>
+                                                {step.sub}
+                                            </span>
+                                        </div>
+                                    )}
                                 </NavLink>
                             );
                         })}
                     </div>
 
-                    {/* Management Section */}
-                    {!isCollapsed && (
+                    {showLabels && (
                         <div className="pt-4 px-3">
                             <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block">
                                 Setup & Config
@@ -157,30 +150,28 @@ export function Sidebar() {
                     <div className="space-y-1">
                         <NavLink to="/projects" className={navLinkClass} title="Projects" onClick={() => isMobile && setIsCollapsed(true)}>
                             <FolderKanban className="w-5 h-5 flex-shrink-0" />
-                            <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Projects</span>
+                            {showLabels && <span className="text-base">Projects</span>}
                         </NavLink>
 
                         <NavLink to="/members" className={navLinkClass} title="Members" onClick={() => isMobile && setIsCollapsed(true)}>
                             <Users className="w-5 h-5 flex-shrink-0" />
-                            <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Members</span>
+                            {showLabels && <span className="text-base">Members</span>}
                         </NavLink>
 
                         <NavLink to="/reports" className={navLinkClass} title="Reports" onClick={() => isMobile && setIsCollapsed(true)}>
                             <ChartBar className="w-5 h-5 flex-shrink-0" />
-                            <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Reports</span>
+                            {showLabels && <span className="text-base">Reports</span>}
                         </NavLink>
 
                         <NavLink to="/integrations" className={navLinkClass} title="Integrations" onClick={() => isMobile && setIsCollapsed(true)}>
                             <Settings2 className="w-5 h-5 flex-shrink-0" />
-                            <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Integrations</span>
+                            {showLabels && <span className="text-base">Integrations</span>}
                         </NavLink>
                     </div>
 
-
-                    {/* SU Only Links */}
                     {user?.role === 'SU' && (
                         <>
-                            {!isCollapsed && (
+                            {showLabels && (
                                 <div className="pt-6 pb-2">
                                     <div className="px-4 text-xs font-semibold text-slate-500 uppercase tracking-wider">
                                         Admin
@@ -190,12 +181,12 @@ export function Sidebar() {
 
                             <NavLink to="/nodes" className={navLinkClass} title="Nodes" onClick={() => isMobile && setIsCollapsed(true)}>
                                 <Building2 className="w-5 h-5 flex-shrink-0" />
-                                <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Nodes</span>
+                                {showLabels && <span className="text-base">Nodes</span>}
                             </NavLink>
 
                             <NavLink to="/users" className={navLinkClass} title="Users" onClick={() => isMobile && setIsCollapsed(true)}>
                                 <Shield className="w-5 h-5 flex-shrink-0" />
-                                <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Users</span>
+                                {showLabels && <span className="text-base">Users</span>}
                             </NavLink>
                         </>
                     )}
