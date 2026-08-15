@@ -99,7 +99,7 @@ RULES:
 
 // Instruct model for the focused yes/no/correction classification. It is far more reliable
 // than the gpt-oss reasoning model at a bare "Y"/"N", and cheap.
-const FOCUSED_MODEL = Deno.env.get('GROQ_FOCUSED_MODEL') || Deno.env.get(' GENERAL_MODEL') 
+const FOCUSED_MODEL =  Deno.env.get('GENERAL_MODEL') 
 
 // State-conditioned interpretation. The interpreter's job depends on WHICH state we're in:
 // - confirm/fix: infer yes / no / a specific correction (a small, focused decision).

@@ -4,7 +4,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 export const DEV_MODE = Deno.env.get('DEV_MODE') === 'true' || Deno.env.get('ENVIRONMENT') === 'dev' || Deno.env.get('SUPABASE_ENV') === 'dev' || true
-const  GENERAL_MODEL = Deno.env.get(' GENERAL_MODEL')  
+const GENERAL_MODEL = Deno.env.get('GENERAL_MODEL')  
 
 export function getSupabase() {
     const url = Deno.env.get('SUPABASE_URL')!
@@ -45,7 +45,7 @@ function extractJsonObject(text: string | null | undefined): any | null {
 // One chat completion. reasoning_effort:'low' is critical for gpt-oss models: without it
 // they spend the token budget on hidden reasoning and emit empty content, which trips
 // Groq's json_object validator (json_validate_failed with empty failed_generation).
-async function groqChat(messages: any[], maxTokens: number, jsonMode: boolean, model: string =  GENERAL_MODEL): Promise<string | null> {
+async function groqChat(messages: any[], maxTokens: number, jsonMode: boolean, model: string = GENERAL_MODEL): Promise<string | null> {
     const apiKey = Deno.env.get('GROQ_API_KEY')
     if (!apiKey) return null
     const body: any = {
@@ -77,7 +77,7 @@ export async function groqJson(
 ): Promise<any | null> {
     if (!Deno.env.get('GROQ_API_KEY')) return null
     const maxTokens = opts.maxTokens ?? 1500
-    const model = opts.model ??  GENERAL_MODEL
+    const model = opts.model ?? GENERAL_MODEL
 
     const messages: any[] = []
     if (opts.system) messages.push({ role: 'system', content: opts.system })
@@ -108,7 +108,7 @@ export async function groqText(system: string, user: string, maxTokens = 200): P
             method: 'POST',
             headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
             body: JSON.stringify({
-                model:  GENERAL_MODEL,
+                model: GENERAL_MODEL,
                 messages: [{ role: 'system', content: system }, { role: 'user', content: user }],
                 temperature: 0.1,
                 max_tokens: maxTokens,

@@ -90,7 +90,7 @@ export abstract class BaseProcessor implements DomainProcessor {
                 { role: 'system', content: this.getSystemPrompt() },
                 { role: 'user', content: userContent }
             ],
-            model: process.env. GENERAL_MODEL ,
+            model: process.env.GENERAL_MODEL ,
             temperature: 0.1,
             response_format: { type: 'json_object' }
         });

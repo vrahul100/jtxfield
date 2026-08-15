@@ -96,7 +96,7 @@ Respond ONLY with valid JSON:
 
     try {
         const completion = await groq.chat.completions.create({
-            model: process.env. GENERAL_MODEL ,
+            model: process.env.GENERAL_MODEL ,
             messages: [{ role: 'user', content: prompt }],
             temperature: 0.1,
             max_tokens: 200,

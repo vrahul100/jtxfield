@@ -66,7 +66,7 @@ export async function parseChangeOrder(
         ],
         model: imageUrl
             ? (process.env.VISION_MODEL  )
-            : (process.env. GENERAL_MODEL ),
+            : (process.env.GENERAL_MODEL ),
         temperature: 0.1,
         response_format: { type: "json_object" }
     });
