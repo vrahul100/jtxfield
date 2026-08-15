@@ -2,7 +2,10 @@
 
 ## Overview
 
-The Jentyx application uses an **intent-driven conversational flow** to handle incoming WhatsApp/SMS messages from construction workers. Instead of a rigid linear flow, each message is classified by intent, allowing for natural, out-of-sequence responses.
+The Jentyx application uses an **intent-driven conversational flow** to handle
+incoming WhatsApp/SMS messages from construction workers. Instead of a rigid
+linear flow, each message is classified by intent, allowing for natural,
+out-of-sequence responses.
 
 ## Architecture
 
@@ -46,31 +49,35 @@ The Jentyx application uses an **intent-driven conversational flow** to handle i
 
 ## Intent Types
 
-| Intent | Trigger Examples | Behavior |
-|--------|------------------|----------|
-| `ADD_CONTENT` | "Worked 4 hours", [photo], "electrical panel" | Append content to ticket, validate |
-| `CONFIRM` | "ok", "yes", "correct", "si", "that's right" | Submit ticket if complete |
-| `CORRECTION` | "wrong photo", "actually...", "let me redo" | Clear pending issue, await new input |
-| `CANCEL` | "cancel", "never mind", "forget it" | Mark ticket as cancelled |
+| Intent        | Trigger Examples                              | Behavior                             |
+| ------------- | --------------------------------------------- | ------------------------------------ |
+| `ADD_CONTENT` | "Worked 4 hours", [photo], "electrical panel" | Append content to ticket, validate   |
+| `CONFIRM`     | "ok", "yes", "correct", "si", "that's right"  | Submit ticket if complete            |
+| `CORRECTION`  | "wrong photo", "actually...", "let me redo"   | Clear pending issue, await new input |
+| `CANCEL`      | "cancel", "never mind", "forget it"           | Mark ticket as cancelled             |
 
 ## Key Design Decisions
 
 ### 1. Conversation State is Per-Ticket
+
 - Each bucket/ticket stores its own `conversation_history` as JSONB
 - History persists across messages until ticket is closed
 - Provides context for LLM intent classification
 
 ### 2. "OK" Always Means Confirmation
+
 - Short affirmative responses trigger `CONFIRM` intent
 - System asks for confirmation before submitting: "Does this look correct?"
 - User responds "ok" → ticket submitted
 
 ### 3. Rigid System Behavior
+
 - Acts as an office manager assistant
 - Validates work reports thoroughly
 - Sends to `pending_review` if validation issues persist after 5 attempts
 
 ### 4. Out-of-Sequence Handling
+
 - If user provides hours before being asked, it's detected via `extractedData`
 - LLM understands conversation context
 - Example: "4 hours" sent before hours question → still captured
@@ -98,7 +105,7 @@ status VARCHAR -- 'open' | 'submitted' | 'pending_review' | 'rejected' | 'cancel
     "timestamp": "2024-01-15T10:30:00Z"
   },
   {
-    "role": "assistant", 
+    "role": "assistant",
     "content": "Ticket #42 opened. How many hours did you work?",
     "timestamp": "2024-01-15T10:30:01Z"
   }
@@ -109,11 +116,11 @@ status VARCHAR -- 'open' | 'submitted' | 'pending_review' | 'rejected' | 'cancel
 
 ### Files
 
-| File | Purpose |
-|------|---------|
+| File                                 | Purpose                                                        |
+| ------------------------------------ | -------------------------------------------------------------- |
 | `src/services/conversationEngine.ts` | Intent classification, history management, response generation |
-| `src/controllers/webhook.ts` | Main message handler, routes to intent handlers |
-| `src/services/bucketService.ts` | Bucket CRUD, validation |
+| `src/controllers/webhook.ts`         | Main message handler, routes to intent handlers                |
+| `src/services/bucketService.ts`      | Bucket CRUD, validation                                        |
 
 ### Key Functions
 
@@ -136,6 +143,7 @@ submitBucket(sql, bucketId, hasIssues): Promise<void>
 ## Example Conversation Flows
 
 ### Happy Path
+
 ```
 User: [photo] Finished electrical panel work
 System: ✅ Ticket #42 opened. How many hours did you work?
@@ -146,6 +154,7 @@ System: ✅ Ticket #42 submitted for Downtown Project!
 ```
 
 ### Out-of-Sequence (Hours provided early)
+
 ```
 User: [photo] Worked 4 hours on wiring
 System: ✅ Ticket #43 opened. Logged 4 hours. Does this look correct?
@@ -154,6 +163,7 @@ System: ✅ Ticket #43 submitted!
 ```
 
 ### Correction Flow
+
 ```
 User: [blurry photo]
 System: Ticket #44 opened. The photo looks blurry - can you resend?
@@ -166,6 +176,7 @@ System: ✅ Ticket #44 submitted!
 ```
 
 ### User Wants to Correct
+
 ```
 User: [wrong photo]
 System: Ticket #45 opened. What work does this show?
@@ -176,6 +187,7 @@ System: Got it! What work did you do?
 ```
 
 ### Cancel Flow
+
 ```
 User: Started work report
 System: Ticket #46 opened. Please describe your work.
@@ -185,7 +197,8 @@ System: 🚫 Ticket #46 cancelled. Send a new message when ready.
 
 ## LLM Prompt
 
-The intent classification uses Groq's `llama-3.1-8b-instant` model with this prompt structure:
+The intent classification uses Groq's `openai/gpt-oss-20b` model with this
+prompt structure:
 
 ```
 You are analyzing a WhatsApp message from a construction worker.
@@ -204,6 +217,7 @@ Extract data if ADD_CONTENT: hours, projectHint, workDescription
 ## Frontend Display
 
 The Tickets page shows conversation history in the expanded view:
+
 - Chat-style bubbles (user = right/indigo, assistant = left/white)
 - Shows timestamps and attachment counts
 - Scrollable container for long conversations
@@ -213,4 +227,5 @@ The Tickets page shows conversation history in the expanded view:
 1. **Multi-turn clarification** - Smart follow-up questions
 2. **Intent confidence thresholds** - Ask for clarification if confidence < 0.7
 3. **Project learning** - Auto-create project aliases from common mentions
-4. **Voice transcription context** - Include audio context in intent classification
+4. **Voice transcription context** - Include audio context in intent
+   classification

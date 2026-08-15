@@ -758,7 +758,7 @@ async function interpretYesNo(text: string): Promise<'yes' | 'no' | 'unclear'> {
     const Groq = (await import('groq-sdk')).default;
     const groq = new Groq({ apiKey: groqApiKey });
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: process.env. GENERAL_MODEL ,
       messages: [{
         role: 'user',
         content: `A worker was asked to confirm a change (Yes/No). They replied: "${t}"\nIs this an affirmation, a rejection, or unclear? Answer with exactly one word: yes, no, or unclear.`,
@@ -823,7 +823,7 @@ async function parseCorrectionIntent(text: string): Promise<CorrectionIntent> {
   try {
     const groq = new Groq({ apiKey: groqApiKey });
     const completion = await groq.chat.completions.create({
-      model: 'llama-3.1-8b-instant',
+      model: process.env. GENERAL_MODEL ,
       messages: [{ role: 'user', content: `A construction worker sent a correction for an existing work ticket. They wrote: "${correctionText}"
 
 What do they want to change? Respond with ONLY valid JSON:

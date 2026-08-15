@@ -5,7 +5,7 @@
 
 import { createClient } from '@supabase/supabase-js'
 
-const TTS_MODEL = 'canopylabs/orpheus-v1-english'  // Fast, natural-sounding TTS
+const TTS_MODEL = Deno.env.get('TTS_MODEL') || 'canopylabs/orpheus-v1-english'  // Fast, natural-sounding TTS
 const MAX_TEXT_LENGTH = 500  // Truncate very long responses
 
 /**

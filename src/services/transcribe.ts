@@ -36,7 +36,7 @@ export async function transcribeAudio(audioUrl: string, contentType: string, hea
         console.log(`📤 Uploading to Groq Whisper...`);
         const transcription = await getGroq().audio.transcriptions.create({
             file: fs.createReadStream(tempFilePath),
-            model: "whisper-large-v3",
+            model: process.env.WHISPER_MODEL || "whisper-large-v3",
             response_format: "json",
             temperature: 0.0,
         });
