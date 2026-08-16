@@ -8,7 +8,9 @@
 
 /* Custom styles */
 @layer base {
-  html, body, #root {
+  html,
+  body,
+  #root {
     height: 100%;
     overflow: hidden;
   }
@@ -20,6 +22,8 @@
 
   body {
     @apply bg-slate-100 text-slate-900 text-base;
+    margin: 0;
+    overflow: hidden;
   }
 
   /* Scale down heading sizes slightly to maintain good proportions */
