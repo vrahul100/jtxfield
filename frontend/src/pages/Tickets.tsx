@@ -1,43 +1,15 @@
 import { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { EditModal, EditField } from '../components/EditModal';
-import { WorkEntryCard } from '../components/WorkEntryCard';
- 
+import { TicketDrawer, Bucket } from '../components/TicketDrawer';
 import {
- 
     SquareChevronLeft,
-    SquareChevronRight, 
+    SquareChevronRight,
+    Search,
+    RotateCw,
+    PlusCircle,
+    CheckSquare
 } from 'lucide-react';
-
-interface ConversationMessage {
-    role: 'user' | 'assistant';
-    content: string;
-    media?: string[];
-    timestamp: string;
-}
-
-interface Bucket {
-    id: number;
-    member_id: number;
-    member_name: string;
-    member_phone: string;
-    project_id: number;
-    project_name: string;
-    node_name: string;
-    status: string;
-    raw_text: string;
-    summary: string | null;
-    image_urls: string | null;
-    audio_urls: string | null;
-    transcripts: string | null;
-    conversation_history: ConversationMessage[] | null;
-    clarity_score: number | null;
-    notes: string | null;
-    potential_change: boolean | null;
-    hours: number | null;
-    created_at: string;
-    updated_at?: string;
-}
 
 interface Project {
     id: number;
@@ -58,8 +30,7 @@ export function Tickets() {
     const [editingBucket, setEditingBucket] = useState<Bucket | null>(null);
     const [statusFilter, setStatusFilter] = useState<string>('all');
     const [projectFilter, setProjectFilter] = useState<string>('all');
-    const [sortBy, setSortBy] = useState('created_at');
-    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
+    const [sortCombined, setSortCombined] = useState<string>('created_at:desc');
     const [search, setSearch] = useState('');
     const [changeFilter, setChangeFilter] = useState('all');
     const [page, setPage] = useState(1);
@@ -78,11 +49,11 @@ export function Tickets() {
 
     useEffect(() => {
         setPage(1); // Reset to page 1 when filters change
-    }, [statusFilter, projectFilter, sortBy, sortOrder, search, changeFilter]);
+    }, [statusFilter, projectFilter, sortCombined, search, changeFilter]);
 
     useEffect(() => {
         fetchBuckets();
-    }, [statusFilter, projectFilter, sortBy, sortOrder, search, changeFilter, page]);
+    }, [statusFilter, projectFilter, sortCombined, search, changeFilter, page]);
 
     const fetchProjects = async () => {
         try {
@@ -101,14 +72,15 @@ export function Tickets() {
     const fetchBuckets = async () => {
         setRefreshing(true);
         try {
+            const [sortBy, sortOrder] = sortCombined.split(':');
             const params = new URLSearchParams();
             if (statusFilter !== 'all') params.append('status', statusFilter);
             if (projectFilter !== 'all') params.append('projectId', projectFilter);
             if (changeFilter !== 'all') params.append('potentialChange', changeFilter);
-            params.append('sortBy', sortBy);
-            params.append('order', sortOrder);
+            params.append('sortBy', sortBy || 'created_at');
+            params.append('order', sortOrder || 'desc');
             params.append('page', page.toString());
-            params.append('limit', '10');
+            params.append('limit', '12');
             if (search.trim()) params.append('search', search.trim());
 
             const response = await fetch(`/api/worklog?${params.toString()}`, {
@@ -120,6 +92,10 @@ export function Tickets() {
                     setBuckets(data.buckets);
                     setTotalPages(data.totalPages || 1);
                     setTotal(data.total || 0);
+                    // Select first bucket if none selected and on desktop
+                    if (data.buckets.length > 0 && selectedBucketId === null && window.innerWidth >= 1024) {
+                        setSelectedBucketId(data.buckets[0].id);
+                    }
                 }
             } else {
                 console.error('Failed to fetch worklog:', response.status);
@@ -133,8 +109,6 @@ export function Tickets() {
             setRefreshing(false);
         }
     };
-
-
 
     const handleEdit = (bucket: Bucket) => {
         setEditingBucket(bucket);
@@ -208,7 +182,6 @@ export function Tickets() {
                 }),
             });
             if (response.ok) {
-                // Update local state immediately for better UX
                 setBuckets(prev => prev.map(b =>
                     b.id === id ? { ...b, potential_change: !currentValue } : b
                 ));
@@ -229,7 +202,6 @@ export function Tickets() {
                 body: JSON.stringify({ hours }),
             });
             if (response.ok) {
-                // Update local state immediately for better UX
                 setBuckets(prev => prev.map(b =>
                     b.id === id ? { ...b, hours } : b
                 ));
@@ -275,13 +247,11 @@ export function Tickets() {
             });
             if (res.ok) {
                 const data = await res.json();
-                
                 try {
                     await fetch(`/api/copackets/${data.packet.id}/generate`, { method: 'POST' });
-                } catch(e) {
+                } catch (e) {
                     console.error('PDF gen failed');
                 }
-                
                 alert(`Packet created successfully.`);
                 setSelectionMode(false);
                 setSelectedTickets([]);
@@ -299,15 +269,15 @@ export function Tickets() {
     const getStatusColors = (status: string) => {
         switch (status) {
             case 'open':
-                return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+                return 'bg-indigo-50 text-indigo-700 border-indigo-200';
             case 'submitted':
                 return 'bg-emerald-500 text-white border-emerald-500 font-bold';
             case 'pending_review':
-                return 'bg-orange-100 text-orange-800 border-orange-200';
+                return 'bg-amber-100 text-amber-800 border-amber-300';
             case 'rejected':
-                return 'bg-red-200 text-red-900 border-red-300';
+                return 'bg-rose-100 text-rose-800 border-rose-200';
             default:
-                return 'bg-slate-200 text-slate-800 border-slate-200';
+                return 'bg-slate-100 text-slate-700 border-slate-200';
         }
     };
 
@@ -323,11 +293,16 @@ export function Tickets() {
         });
     };
 
+    const selectedBucket = buckets.find(b => b.id === selectedBucketId) || null;
+
     if (loading) {
         return (
             <Layout>
                 <div className="flex items-center justify-center h-64">
-                    <div className="text-gray-600">Loading...</div>
+                    <div className="text-gray-600 font-medium flex items-center gap-2">
+                        <RotateCw className="w-5 h-5 animate-spin text-indigo-600" />
+                        Loading work entries...
+                    </div>
                 </div>
             </Layout>
         );
@@ -335,56 +310,80 @@ export function Tickets() {
 
     return (
         <Layout>
-            <div className="flex-1 flex flex-col min-h-0 overflow-visible md:overflow-hidden">
-                <div className="flex-shrink-0 pt-1 pb-2 mb-2">
-                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
-                        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Work Captured</h1>
-                        <div className="flex gap-2 w-full sm:w-auto justify-end">
+            <div className="flex-1 flex flex-col min-h-0 overflow-hidden">
+                
+                {/* 1. Page Header & Actions */}
+                <div className="flex-shrink-0 mb-2">
+                    <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2">
+                        <div>
+                            <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">Daily Work Logs</h1>
+                            <p className="text-xs text-slate-500">Capture, verify, and classify inbound field tickets</p>
+                        </div>
+
+                        <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
                             {selectionMode ? (
                                 <>
-                                    <button className="btn-secondary text-xs sm:text-sm py-1.5 px-3" onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}>Cancel</button>
-                                    <button className="btn-primary text-xs sm:text-sm py-1.5 px-3" disabled={selectedTickets.length === 0 || creatingPacket} onClick={handleCreatePacket}>
+                                    <button 
+                                        className="btn-secondary text-xs py-1.5 px-3" 
+                                        onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button 
+                                        className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5" 
+                                        disabled={selectedTickets.length === 0 || creatingPacket} 
+                                        onClick={handleCreatePacket}
+                                    >
+                                        <CheckSquare className="w-3.5 h-3.5" />
                                         {creatingPacket ? 'Creating...' : `Create CO Packet (${selectedTickets.length})`}
                                     </button>
                                 </>
                             ) : (
-                                <button className="btn-secondary text-xs sm:text-sm py-1.5 px-3" onClick={() => setSelectionMode(true)}>Select for CO Packet</button>
+                                <button 
+                                    className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5" 
+                                    onClick={() => setSelectionMode(true)}
+                                >
+                                    <PlusCircle className="w-3.5 h-3.5" />
+                                    Select for CO Packet
+                                </button>
                             )}
+
                             <button
                                 onClick={fetchBuckets}
                                 disabled={refreshing}
-                                className="btn-primary text-xs sm:text-sm py-1.5 px-3 flex items-center gap-2"
+                                className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
                                 style={refreshing ? { cursor: 'wait' } : {}}
+                                title="Refresh work logs"
                             >
-                                {refreshing && (
-                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                )}
-                                {refreshing ? 'Loading...' : 'Refresh'}
+                                <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                                <span>{refreshing ? 'Loading...' : 'Refresh'}</span>
                             </button>
                         </div>
                     </div>
                 </div>
 
-                {/* Search and Filters */}
-                <div className="card p-2 px-3 mb-3 flex-shrink-0">
-                    <div className="flex flex-col lg:flex-row gap-3 items-stretch lg:items-center">
-                        <div className="flex-1 min-w-[200px]">
+                {/* 2. Compact Single-Row Search and Filter Bar */}
+                <div className="bg-white rounded-lg p-1.5 px-3 mb-2 flex-shrink-0 shadow-xs border border-slate-200">
+                    <div className="flex items-center gap-2 w-full">
+                        {/* Search field */}
+                        <div className="relative flex-1 min-w-0">
+                            <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                             <input
                                 type="text"
-                                placeholder="Search by member, project, or message..."
+                                placeholder="Search worker, project, notes..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="input-field w-full py-1.5 px-3 text-sm"
+                                className="w-full h-8 pl-8 pr-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-400"
                             />
                         </div>
-                        <div className="flex flex-wrap gap-2 items-center w-full lg:w-auto">
+
+                        {/* Dropdown Filters (Single flex row with explicit compact widths) */}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                            {/* Status Filter */}
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-28 shrink-0"
                             >
                                 <option value="all">All Statuses</option>
                                 <option value="open">Open</option>
@@ -393,10 +392,11 @@ export function Tickets() {
                                 <option value="rejected">Rejected</option>
                             </select>
 
+                            {/* Project Filter */}
                             <select
                                 value={projectFilter}
                                 onChange={(e) => setProjectFilter(e.target.value)}
-                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200 max-w-full lg:max-w-[160px] truncate"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-32 shrink-0 truncate"
                             >
                                 <option value="all">All Projects</option>
                                 {projects.map(p => (
@@ -404,57 +404,54 @@ export function Tickets() {
                                 ))}
                             </select>
 
+                            {/* Combined Sort Dropdown */}
                             <select
-                                value={sortBy}
-                                onChange={(e) => setSortBy(e.target.value)}
-                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
+                                value={sortCombined}
+                                onChange={(e) => setSortCombined(e.target.value)}
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-36 shrink-0"
                             >
-                                <option value="created_at">Sort: Created Date</option>
-                                <option value="updated_at">Sort: Updated Date</option>
+                                <option value="created_at:desc">Sort: Newest First</option>
+                                <option value="created_at:asc">Sort: Oldest First</option>
+                                <option value="updated_at:desc">Sort: Recently Updated</option>
+                                <option value="hours:desc">Sort: Highest Hours</option>
                             </select>
 
-                            <select
-                                value={sortOrder}
-                                onChange={(e) => setSortOrder(e.target.value as 'asc' | 'desc')}
-                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
-                            >
-                                <option value="desc">Order: Newest First</option>
-                                <option value="asc">Order: Oldest First</option>
-                            </select>
-
+                            {/* Potential Change Flag Filter */}
                             <select
                                 value={changeFilter}
                                 onChange={(e) => setChangeFilter(e.target.value)}
-                                className="input-field w-full lg:!w-auto py-1 px-2 text-xs bg-slate-50 cursor-pointer font-medium border-slate-200"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-28 shrink-0"
                             >
-                                <option value="all">All Changes</option>
-                                <option value="true">⚠️ Flagged</option>
-                                <option value="false">✓ Not Flagged</option>
+                                <option value="all">All Flags</option>
+                                <option value="true">⚠️ Flagged CO</option>
+                                <option value="false">✓ Verified</option>
                             </select>
                         </div>
                     </div>
                 </div>
 
-                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-6 items-stretch overflow-visible lg:overflow-hidden">
-                    {/* Left Panel: Table List */}
-                    <div className={`transition-all duration-300 flex flex-col min-h-0 card overflow-hidden ${selectedBucketId ? 'w-full lg:w-7/12' : 'w-full'}`}>
-                        {/* Scrollable Table Container */}
-                        <div className="flex-1 min-h-0 overflow-x-auto overflow-y-auto">
-                            <table className="w-full text-left border-collapse min-w-[600px]">
-                                <thead className="bg-slate-50 border-b border-slate-200 sticky top-0 z-10">
+                {/* 3. Main Body: Compact Table + Slide-over Drawer */}
+                <div className="flex-1 min-h-0 flex flex-col lg:flex-row gap-2.5 items-stretch overflow-hidden">
+                    
+                    {/* Left Pane: Compact Table */}
+                    <div className="flex-1 min-h-0 flex flex-col card overflow-hidden border-slate-200 bg-white shadow-xs">
+                        {/* Scrollable Table View */}
+                        <div className="flex-1 min-h-0 overflow-auto">
+                            <table className="w-full text-left border-collapse min-w-[580px]">
+                                <thead className="bg-slate-50/90 border-b border-slate-200 sticky top-0 z-10 backdrop-blur-xs">
                                     <tr>
-                                        {selectionMode && <th className="p-3 w-10 text-center"></th>}
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-16">ID</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24">Worker</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-28">Date</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Project</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider">Summary</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-20 text-center">Hours</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-16 text-center">Flag</th>
-                                        <th className="p-3 text-xs font-semibold text-slate-500 uppercase tracking-wider w-24 text-center">Status</th>
+                                        {selectionMode && <th className="p-2.5 w-8 text-center"></th>}
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-16">ID</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Worker</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24">Date</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Project</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Summary / Raw</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-16 text-center">Hours</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-12 text-center">Flag</th>
+                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24 text-center">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 bg-white">
+                                <tbody className="divide-y divide-slate-100 bg-white text-xs">
                                     {buckets.map((bucket) => {
                                         const isSelected = selectedBucketId === bucket.id;
                                         const dateStr = formatDate(bucket.created_at);
@@ -463,57 +460,61 @@ export function Tickets() {
                                             <tr
                                                 key={bucket.id}
                                                 onClick={() => setSelectedBucketId(bucket.id)}
-                                                className={`hover:bg-slate-50 cursor-pointer transition-colors ${
-                                                    isSelected ? 'bg-indigo-50/70 hover:bg-indigo-50/90' : ''
+                                                className={`hover:bg-slate-50/80 cursor-pointer transition-colors ${
+                                                    isSelected ? 'bg-indigo-50/80 hover:bg-indigo-50 border-l-3 border-l-indigo-600' : ''
                                                 }`}
                                             >
                                                 {selectionMode && (
-                                                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedTickets.includes(bucket.id)}
-                                                            onChange={() => setSelectedTickets(prev => prev.includes(bucket.id) ? prev.filter(id => id !== bucket.id) : [...prev, bucket.id])}
-                                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                            onChange={() => setSelectedTickets(prev => 
+                                                                prev.includes(bucket.id) 
+                                                                    ? prev.filter(id => id !== bucket.id) 
+                                                                    : [...prev, bucket.id]
+                                                            )}
+                                                            className="w-3.5 h-3.5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="p-3 font-mono text-xs font-bold text-indigo-600">
+                                                <td className="p-2.5 font-mono text-[11px] font-bold text-indigo-600 whitespace-nowrap">
                                                     {formatTicketCode(bucket.node_name, bucket.id)}
                                                 </td>
-                                                <td className="p-3 text-sm text-slate-700 whitespace-nowrap">
+                                                <td className="p-2.5 text-slate-800 whitespace-nowrap">
                                                     <div className="flex items-center gap-1.5">
-                                                        <span className="bg-slate-200 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-slate-600 flex-shrink-0">
+                                                        <span className="bg-slate-200 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-slate-700 flex-shrink-0">
                                                             {bucket.member_name ? 
                                                                 bucket.member_name.split(' ').map(n => n[0]).join('').toUpperCase() :
                                                                 'U'
                                                             }
                                                         </span>
-                                                        <span className="truncate max-w-[80px] font-medium">
+                                                        <span className="truncate max-w-[90px] font-medium">
                                                             {bucket.member_name || 'Unknown'}
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="p-3 text-xs text-slate-500 whitespace-nowrap">
+                                                <td className="p-2.5 text-slate-500 whitespace-nowrap text-[11px]">
                                                     {dateStr}
                                                 </td>
-                                                <td className="p-3 text-sm text-slate-700 font-medium truncate max-w-[120px]">
+                                                <td className="p-2.5 text-slate-700 font-medium truncate max-w-[130px]">
                                                     {bucket.project_name || 'No Project'}
                                                 </td>
-                                                <td className="p-3 text-xs text-slate-600 italic truncate max-w-[200px]">
+                                                <td className="p-2.5 text-slate-600 italic truncate max-w-[220px]">
                                                     {bucket.summary || bucket.raw_text || '-'}
                                                 </td>
-                                                <td className="p-3 text-sm font-semibold text-slate-900 text-center whitespace-nowrap">
+                                                <td className="p-2.5 font-bold text-slate-900 text-center whitespace-nowrap">
                                                     {bucket.hours !== null ? `${bucket.hours} h` : '-'}
                                                 </td>
-                                                <td className="p-3 text-center">
+                                                <td className="p-2.5 text-center">
                                                     {bucket.potential_change ? (
-                                                        <span className="text-orange-600 text-base" title="Flagged Potential Change">⚠️</span>
+                                                        <span className="text-amber-600 text-sm" title="Flagged Potential Change">⚠️</span>
                                                     ) : (
-                                                        <span className="text-emerald-500 text-sm font-bold" title="Verified">✓</span>
+                                                        <span className="text-emerald-500 text-xs font-bold" title="Verified">✓</span>
                                                     )}
                                                 </td>
-                                                <td className="p-3 text-center whitespace-nowrap">
-                                                    <span className={`px-2 py-0.5 rounded text-[11px] font-bold tracking-wide uppercase ${getStatusColors(bucket.status)}`}>
+                                                <td className="p-2.5 text-center whitespace-nowrap">
+                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${getStatusColors(bucket.status)}`}>
                                                         {bucket.status.replace('_', ' ')}
                                                     </span>
                                                 </td>
@@ -525,81 +526,55 @@ export function Tickets() {
                         </div>
 
                         {buckets.length === 0 && (
-                            <div className="p-8 text-center text-gray-500">
-                                <p className="text-lg">No work entries found.</p>
-                                <p className="text-sm mt-2">Try adjusting your filters or search query.</p>
+                            <div className="p-8 text-center text-slate-500">
+                                <p className="text-sm font-medium">No work entries found.</p>
+                                <p className="text-xs text-slate-400 mt-1">Try adjusting your filters or search query.</p>
                             </div>
                         )}
 
-                        {/* Pagination Bar - Fixed at bottom of table card */}
+                        {/* Compact Pagination Bar */}
                         {totalPages > 1 && (
-                            <div className="flex-shrink-0 border-t border-slate-200 bg-white p-2.5 px-4 flex flex-col sm:flex-row justify-between items-center gap-2 z-10">
-                                <span className="text-xs text-gray-600">
-                                    Showing {buckets.length} of {total} work entries
+                            <div className="flex-shrink-0 border-t border-slate-200 bg-slate-50/80 px-3 py-2 flex justify-between items-center z-10 text-xs">
+                                <span className="text-slate-500 text-[11px]">
+                                    Showing {buckets.length} of {total} entries
                                 </span>
-                                <div className="flex gap-2">
+                                <div className="flex items-center gap-1.5">
                                     <button
                                         onClick={() => setPage(p => Math.max(1, p - 1))}
                                         disabled={page === 1}
-                                        className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
+                                        className="px-2 py-1 border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
                                     >
-                                        <SquareChevronLeft className="w-4 h-4" strokeWidth={3} />
-                                        Previous
+                                        <SquareChevronLeft className="w-3.5 h-3.5" />
+                                        Prev
                                     </button>
-                                    <span className="px-2.5 py-1 text-xs font-medium">
-                                        Page {page} of {totalPages}
+                                    <span className="px-2 py-1 text-xs font-semibold text-slate-700">
+                                        {page} / {totalPages}
                                     </span>
                                     <button
                                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                         disabled={page === totalPages}
-                                        className="px-2.5 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
+                                        className="px-2 py-1 border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
                                     >
                                         Next
-                                        <SquareChevronRight className="w-4 h-4" strokeWidth={3} />
+                                        <SquareChevronRight className="w-3.5 h-3.5" />
                                     </button>
                                 </div>
                             </div>
                         )}
                     </div>
 
-                    {/* Right Panel: Detail Drawer */}
-                    {selectedBucketId && (
-                        (() => {
-                            const selectedBucket = buckets.find(b => b.id === selectedBucketId);
-                            if (!selectedBucket) return null;
-
-                            return (
-                                <div className="w-full lg:w-5/12 min-h-0 flex flex-col border border-slate-200 bg-white rounded-xl shadow-lg overflow-hidden">
-                                    <div className="flex justify-between items-center px-4 py-3 bg-slate-50 border-b border-slate-200 flex-shrink-0">
-                                        <div className="flex items-center gap-2">
-                                            <span className="font-bold text-slate-800 font-mono text-lg">Ticket {formatTicketCode(selectedBucket.node_name, selectedBucket.id)}</span>
-                                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase ${getStatusColors(selectedBucket.status)}`}>
-                                                {selectedBucket.status.replace('_', ' ')}
-                                            </span>
-                                        </div>
-                                        <button 
-                                            onClick={() => setSelectedBucketId(null)} 
-                                            className="text-slate-400 hover:text-slate-600 text-2xl font-bold leading-none p-1"
-                                        >
-                                            &times;
-                                        </button>
-                                    </div>
-                                    <div className="p-4 overflow-y-auto flex-1 bg-slate-50/50">
-                                        <WorkEntryCard
-                                            bucket={selectedBucket}
-                                            isExpanded={true}
-                                            onToggleExpand={() => {}}
-                                            onEdit={() => handleEdit(selectedBucket)}
-                                            onSubmit={() => handleSubmit(selectedBucket.id)}
-                                            onReject={() => handleReject(selectedBucket.id)}
-                                            onToggleChange={() => handleTogglePotentialChange(selectedBucket.id, selectedBucket.potential_change)}
-                                            onUpdateHours={(hours) => handleUpdateHours(selectedBucket.id, hours)}
-                                            selectable={false}
-                                        />
-                                    </div>
-                                </div>
-                            );
-                        })()
+                    {/* Right Pane: Option A Slide-Over Drawer */}
+                    {selectedBucket && (
+                        <TicketDrawer
+                            bucket={selectedBucket}
+                            isOpen={true}
+                            onClose={() => setSelectedBucketId(null)}
+                            onEdit={() => handleEdit(selectedBucket)}
+                            onSubmit={() => handleSubmit(selectedBucket.id)}
+                            onReject={() => handleReject(selectedBucket.id)}
+                            onToggleChange={() => handleTogglePotentialChange(selectedBucket.id, selectedBucket.potential_change)}
+                            onUpdateHours={(hours) => handleUpdateHours(selectedBucket.id, hours)}
+                        />
                     )}
                 </div>
             </div>
@@ -614,4 +589,3 @@ export function Tickets() {
         </Layout>
     );
 }
-
