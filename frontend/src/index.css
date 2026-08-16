@@ -8,9 +8,7 @@
 
 /* Custom styles */
 @layer base {
-  html,
-  body,
-  #root {
+  html, body, #root {
     height: 100%;
     overflow: hidden;
   }
@@ -21,9 +19,23 @@
   }
 
   body {
-    @apply bg-slate-100 text-slate-900 text-base;
-    margin: 0;
-    overflow: hidden;
+    @apply bg-slate-100 text-slate-900 text-base; 
+  }
+
+  /* Thin sleek scrollbars */
+  ::-webkit-scrollbar {
+    width: 5px;
+    height: 5px;
+  }
+  ::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  ::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.4);
+    border-radius: 9999px;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.7);
   }
 
   /* Scale down heading sizes slightly to maintain good proportions */
