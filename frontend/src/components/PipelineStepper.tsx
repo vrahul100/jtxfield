@@ -18,13 +18,13 @@ export function PipelineStepper() {
         },
         {
             path: '/timesheets',
-            label: ' Timesheets',
+            label: 'Timesheets',
             icon: Clock,
             stepNum: 2,
         },
         {
             path: '/copackets',
-            label: ' Change Orders',
+            label: 'Change Orders',
             icon: FileText,
             stepNum: 3,
         },
@@ -60,7 +60,7 @@ export function PipelineStepper() {
                                 : 'bg-slate-200 text-slate-700 hover:bg-slate-300 font-medium'
                         }`}
                     > 
-                        <span className="truncate">{step.label}</span>
+                        <span className="truncate pl-3">{step.label}</span>
                     </Link>
                 );
             })}

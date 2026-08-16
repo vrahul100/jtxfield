@@ -267,17 +267,17 @@ export function Tickets() {
     };
 
     const getStatusColors = (status: string) => {
-        switch (status) {
+        switch (status?.toLowerCase()) {
             case 'open':
-                return 'bg-indigo-50 text-indigo-700 border-indigo-200';
+                return 'bg-indigo-600 text-white font-bold border-indigo-700 shadow-2xs';
             case 'submitted':
-                return 'bg-emerald-500 text-white border-emerald-500 font-bold';
+                return 'bg-emerald-600 text-white font-bold border-emerald-700 shadow-2xs';
             case 'pending_review':
-                return 'bg-amber-100 text-amber-800 border-amber-300';
+                return 'bg-amber-500 text-white font-bold border-amber-600 shadow-2xs';
             case 'rejected':
-                return 'bg-rose-100 text-rose-800 border-rose-200';
+                return 'bg-rose-600 text-white font-bold border-rose-700 shadow-2xs';
             default:
-                return 'bg-slate-100 text-slate-700 border-slate-200';
+                return 'bg-slate-700 text-white font-bold border-slate-800 shadow-2xs';
         }
     };
 
