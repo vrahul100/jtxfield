@@ -17,6 +17,7 @@ import { getTransactions, updateTransaction } from './controllers/transactions.j
 import { submitIntegrationInterest } from './controllers/integrations.js'
 import { getCOPackets, createCOPacket, generateCOPacketPDF } from './controllers/copackets.js'
 import { getTimesheets, getTimesheetDetails, approveTimesheet, exportTimesheetsCSV } from './controllers/timesheets.js'
+import { getRateCards, upsertRateCard, deleteRateCard, updateBaseRate } from './controllers/rateCards.js'
 import { requireAuth, requireOM, requireSU } from './middleware/auth.js'
 import { initWhatsAppSummaryScheduler, runBatchSummaryCron } from './cron/whatsappSummaryCron.js'
 
@@ -122,7 +123,13 @@ export const createApp = (sql: Sql) => {
     app.get('/api/timesheets/:memberId/details', requireOM(sql), (c) => getTimesheetDetails(c, sql))
     app.post('/api/timesheets/approve', requireOM(sql), (c) => approveTimesheet(c, sql))
 
-    // 14. CRON TRIGGER API (for external schedulers / tests)
+    // 14. RATE CARDS API (OM & SU)
+    app.get('/api/rate-cards', requireOM(sql), (c) => getRateCards(c, sql))
+    app.post('/api/rate-cards', requireOM(sql), (c) => upsertRateCard(c, sql))
+    app.delete('/api/rate-cards/:id', requireOM(sql), (c) => deleteRateCard(c, sql))
+    app.put('/api/rate-cards/base-rate', requireOM(sql), (c) => updateBaseRate(c, sql))
+
+    // 15. CRON TRIGGER API (for external schedulers / tests)
     app.post('/api/cron/whatsapp-summary', async (c) => {
         const type = (c.req.query('type') === 'midday' ? 'midday' : 'end_of_shift') as 'midday' | 'end_of_shift';
         const result = await runBatchSummaryCron(sql, type);

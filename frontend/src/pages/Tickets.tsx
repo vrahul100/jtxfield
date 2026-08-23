@@ -435,23 +435,22 @@ export function Tickets() {
                     
                     {/* Left Pane: Compact Table */}
                     <div className="flex-1 min-h-0 flex flex-col card overflow-hidden border-slate-200 bg-white shadow-xs">
-                        {/* Scrollable Table View */}
                         <div className="flex-1 min-h-0 overflow-auto">
-                            <table className="w-full text-left border-collapse min-w-[580px]">
-                                <thead className="bg-slate-50/90 border-b border-slate-200 sticky top-0 z-10 backdrop-blur-xs">
+                            <table className="w-full text-left border-collapse min-w-[620px]">
+                                <thead className="bg-slate-50/95 border-b border-slate-200 sticky top-0 z-10 backdrop-blur-xs">
                                     <tr>
-                                        {selectionMode && <th className="p-2.5 w-8 text-center"></th>}
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-16">ID</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-28">Worker</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24">Date</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Project</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider">Summary / Raw</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-16 text-center">Hours</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-12 text-center">Flag</th>
-                                        <th className="p-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider w-24 text-center">Status</th>
+                                        {selectionMode && <th className="p-3 w-9 text-center"></th>}
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-20">ID</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-32">Worker</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-28">Date</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-40">Project</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider">Summary / Raw Task</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-20 text-center">Hours</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-14 text-center">Flag</th>
+                                        <th className="p-3 text-xs font-bold text-slate-600 uppercase tracking-wider w-28 text-center">Status</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-slate-100 bg-white text-xs">
+                                <tbody className="divide-y divide-slate-100 bg-white">
                                     {buckets.map((bucket) => {
                                         const isSelected = selectedBucketId === bucket.id;
                                         const dateStr = formatDate(bucket.created_at);
@@ -460,12 +459,12 @@ export function Tickets() {
                                             <tr
                                                 key={bucket.id}
                                                 onClick={() => setSelectedBucketId(bucket.id)}
-                                                className={`hover:bg-slate-50/80 cursor-pointer transition-colors ${
-                                                    isSelected ? 'bg-indigo-50/80 hover:bg-indigo-50 border-l-3 border-l-indigo-600' : ''
+                                                className={`hover:bg-indigo-50/40 cursor-pointer transition-colors ${
+                                                    isSelected ? 'bg-indigo-50/90 hover:bg-indigo-50 border-l-4 border-l-indigo-600 shadow-xs' : ''
                                                 }`}
                                             >
                                                 {selectionMode && (
-                                                    <td className="p-2.5 text-center" onClick={(e) => e.stopPropagation()}>
+                                                    <td className="p-3 text-center" onClick={(e) => e.stopPropagation()}>
                                                         <input
                                                             type="checkbox"
                                                             checked={selectedTickets.includes(bucket.id)}
@@ -474,47 +473,49 @@ export function Tickets() {
                                                                     ? prev.filter(id => id !== bucket.id) 
                                                                     : [...prev, bucket.id]
                                                             )}
-                                                            className="w-3.5 h-3.5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="p-2.5 font-mono text-[11px] font-bold text-indigo-600 whitespace-nowrap">
+                                                <td className="p-3 font-mono text-xs font-bold text-indigo-700 whitespace-nowrap">
                                                     {formatTicketCode(bucket.node_name, bucket.id)}
                                                 </td>
-                                                <td className="p-2.5 text-slate-800 whitespace-nowrap">
-                                                    <div className="flex items-center gap-1.5">
-                                                        <span className="bg-slate-200 rounded-full w-5 h-5 flex items-center justify-center text-[10px] font-bold text-slate-700 flex-shrink-0">
+                                                <td className="p-3 text-slate-900 whitespace-nowrap">
+                                                    <div className="flex items-center gap-2">
+                                                        <span className="bg-slate-200/90 rounded-full w-6 h-6 flex items-center justify-center text-[11px] font-bold text-slate-800 flex-shrink-0 shadow-2xs">
                                                             {bucket.member_name ? 
                                                                 bucket.member_name.split(' ').map(n => n[0]).join('').toUpperCase() :
                                                                 'U'
                                                             }
                                                         </span>
-                                                        <span className="truncate max-w-[90px] font-medium">
+                                                        <span className="truncate max-w-[110px] text-sm font-semibold text-slate-900">
                                                             {bucket.member_name || 'Unknown'}
                                                         </span>
                                                     </div>
                                                 </td>
-                                                <td className="p-2.5 text-slate-500 whitespace-nowrap text-[11px]">
+                                                <td className="p-3 text-slate-600 whitespace-nowrap text-xs font-medium">
                                                     {dateStr}
                                                 </td>
-                                                <td className="p-2.5 text-slate-700 font-medium truncate max-w-[130px]">
+                                                <td className="p-3 text-slate-800 text-sm font-semibold truncate max-w-[160px]">
                                                     {bucket.project_name || 'No Project'}
                                                 </td>
-                                                <td className="p-2.5 text-slate-600 italic truncate max-w-[220px]">
-                                                    {bucket.summary || bucket.raw_text || '-'}
+                                                <td className="p-3 text-slate-900 text-sm font-medium leading-snug max-w-[340px]">
+                                                    <span className="line-clamp-2" title={bucket.summary || bucket.raw_text || ''}>
+                                                        {bucket.summary || bucket.raw_text || '-'}
+                                                    </span>
                                                 </td>
-                                                <td className="p-2.5 font-bold text-slate-900 text-center whitespace-nowrap">
+                                                <td className="p-3 font-extrabold text-slate-950 text-sm text-center whitespace-nowrap">
                                                     {bucket.hours !== null ? `${bucket.hours} h` : '-'}
                                                 </td>
-                                                <td className="p-2.5 text-center">
+                                                <td className="p-3 text-center">
                                                     {bucket.potential_change ? (
-                                                        <span className="text-amber-600 text-sm" title="Flagged Potential Change">⚠️</span>
+                                                        <span className="inline-flex items-center justify-center px-1.5 py-0.5 rounded bg-amber-100 text-amber-800 text-xs font-bold border border-amber-300" title="Flagged Potential Change">⚠️ CO</span>
                                                     ) : (
-                                                        <span className="text-emerald-500 text-xs font-bold" title="Verified">✓</span>
+                                                        <span className="inline-flex items-center justify-center w-5 h-5 rounded-full bg-emerald-100 text-emerald-700 text-xs font-extrabold" title="Verified">✓</span>
                                                     )}
                                                 </td>
-                                                <td className="p-2.5 text-center whitespace-nowrap">
-                                                    <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide border ${getStatusColors(bucket.status)}`}>
+                                                <td className="p-3 text-center whitespace-nowrap">
+                                                    <span className={`px-2.5 py-1 rounded-md text-xs font-bold uppercase tracking-wide border shadow-2xs ${getStatusColors(bucket.status)}`}>
                                                         {bucket.status.replace('_', ' ')}
                                                     </span>
                                                 </td>

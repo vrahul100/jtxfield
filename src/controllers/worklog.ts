@@ -117,12 +117,17 @@ export async function getWorklog(c: Context, sql: Sql) {
                 p.name as project_name,
                 m.full_name as member_name,
                 m.phone_number as member_phone,
+                m.role as worker_role,
                 n.name as node_name,
-                n.default_hourly_rate as node_rate
+                n.default_hourly_rate as base_rate,
+                COALESCE(rc.hourly_rate, n.default_hourly_rate, 85.00)::numeric as node_rate,
+                COALESCE(rc.hourly_rate, n.default_hourly_rate, 85.00)::numeric as worker_rate
             FROM buckets b
             LEFT JOIN projects p ON b.project_id = p.id
             LEFT JOIN members m ON b.member_id = m.id
             LEFT JOIN nodes n ON b.node_id = n.id
+            LEFT JOIN rate_cards rc ON rc.company_id = b.node_id 
+                AND LOWER(rc.position_name) = LOWER(COALESCE(m.role, 'General Labor'))
             ${whereClause}
             ${orderClause}
             LIMIT ${limit} OFFSET ${offset}
@@ -161,8 +166,11 @@ export async function getWorklogById(c: Context, sql: Sql) {
                 p.name as project_name,
                 m.full_name as member_name,
                 m.phone_number as member_phone,
+                m.role as worker_role,
                 n.name as node_name,
-                n.default_hourly_rate as node_rate,
+                n.default_hourly_rate as base_rate,
+                COALESCE(rc.hourly_rate, n.default_hourly_rate, 85.00)::numeric as node_rate,
+                COALESCE(rc.hourly_rate, n.default_hourly_rate, 85.00)::numeric as worker_rate,
                 t.location,
                 t.material,
                 t.labor
@@ -170,6 +178,8 @@ export async function getWorklogById(c: Context, sql: Sql) {
             LEFT JOIN projects p ON b.project_id = p.id
             LEFT JOIN members m ON b.member_id = m.id
             LEFT JOIN nodes n ON b.node_id = n.id
+            LEFT JOIN rate_cards rc ON rc.company_id = b.node_id 
+                AND LOWER(rc.position_name) = LOWER(COALESCE(m.role, 'General Labor'))
             LEFT JOIN txns t ON b.id = t.bucket_id
             WHERE ${conditions.join(' AND ')}
         `);

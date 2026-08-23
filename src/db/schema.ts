@@ -27,6 +27,7 @@ export const members = pgTable('members', {
     fullName: varchar('full_name', { length: 100 }),
     languagePreference: varchar('language_preference', { length: 10 }).default('en'), // en, es, etc.
     domain: varchar('domain', { length: 50 }),
+    role: varchar('role', { length: 50 }).default('General Labor'),
 
     // Onboarding
     status: varchar('status', { length: 20 }).default('pending'), // pending, active, inactive

@@ -8,7 +8,8 @@ import {
     Shield,
     ChartBar,
     Menu,
-    Settings2
+    Settings2,
+    BadgeDollarSign
 } from 'lucide-react';
 
 export function Sidebar() {
@@ -94,12 +95,7 @@ export function Sidebar() {
                         </div>
                     )}
 
-                    <div className="bg-slate-500 rounded-xl p-2 border border-slate-800/80 shadow-inner relative space-y-2">
-                        {/* Connecting Line
-                        {!isCollapsed && (
-                            <div className="absolute left-[27px] top-6 bottom-6 w-[2px] bg-slate-800 z-0" />
-                        )} */}
-
+                    <div className="bg-slate-800/80 rounded-xl p-2.5 border border-slate-700/60 shadow-lg relative space-y-2">
                         {pipelineSteps.map((step) => {
                             const state = getStepState(step.path);
                             const isActive = state === 'active';
@@ -111,12 +107,12 @@ export function Sidebar() {
                                     to={step.path}
                                     title={step.label}
                                     onClick={() => isMobile && setIsCollapsed(true)}
-                                    className={`flex items-center gap-3 p-2.5 rounded-lg border transition-all relative z-10 ${
+                                    className={`flex items-center gap-3 p-3 rounded-lg border transition-all relative z-10 ${
                                         isActive
-                                            ? 'bg-indigo-600 border-indigo-400 text-white shadow-lg shadow-indigo-600/40'
+                                            ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-400/80 text-white shadow-lg shadow-indigo-900/50'
                                             : isPassed
-                                            ? 'bg-emerald-600 border-emerald-400 text-white shadow-md shadow-emerald-600/30'
-                                            : 'bg-slate-900/90 border-slate-800 text-slate-300 hover:border-slate-700 opacity-70 hover:opacity-100'
+                                            ? 'bg-emerald-600/90 border-emerald-500/80 text-white shadow-md shadow-emerald-900/40'
+                                            : 'bg-slate-900/60 border-slate-700/60 text-slate-300 hover:bg-slate-700/60 hover:text-white hover:border-slate-600'
                                     }`}
                                 >
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-xs font-extrabold transition-all flex-shrink-0 ${
@@ -124,18 +120,18 @@ export function Sidebar() {
                                             ? 'bg-white text-indigo-700 border-white shadow-sm'
                                             : isPassed
                                             ? 'bg-white text-emerald-700 border-white shadow-sm'
-                                            : 'bg-slate-800 border-slate-700 text-slate-400'
+                                            : 'bg-slate-800 border-slate-600 text-slate-300'
                                     }`}>
                                         {step.stepNum}
                                     </div>
                                     <div className={`flex flex-col min-w-0 ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>
-                                        <span className={`text-sm font-bold truncate ${
-                                            isActive || isPassed ? 'text-white' : 'text-slate-200'
+                                        <span className={`text-sm font-bold tracking-tight truncate ${
+                                            isActive || isPassed ? 'text-white' : 'text-slate-100'
                                         }`}>
                                             {step.label}
                                         </span>
-                                        <span className={`text-[10px] truncate ${
-                                            isActive ? 'text-indigo-100 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
+                                        <span className={`text-[11px] truncate ${
+                                            isActive ? 'text-indigo-200 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
                                         }`}>
                                             {step.sub}
                                         </span>
@@ -163,6 +159,11 @@ export function Sidebar() {
                         <NavLink to="/members" className={navLinkClass} title="Members" onClick={() => isMobile && setIsCollapsed(true)}>
                             <Users className="w-5 h-5 flex-shrink-0" />
                             <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Members</span>
+                        </NavLink>
+
+                        <NavLink to="/rate-card" className={navLinkClass} title="Rate Card" onClick={() => isMobile && setIsCollapsed(true)}>
+                            <BadgeDollarSign className="w-5 h-5 flex-shrink-0" />
+                            <span className={`text-base ${!isMobile && isCollapsed ? 'hidden' : 'block'}`}>Rate Card</span>
                         </NavLink>
 
                         <NavLink to="/reports" className={navLinkClass} title="Reports" onClick={() => isMobile && setIsCollapsed(true)}>

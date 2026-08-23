@@ -14,7 +14,8 @@ import {
     Maximize2,
     ChevronLeft,
     ChevronRight,
-    Volume2
+    Volume2,
+    Copy,
 } from 'lucide-react';
 import { AudioPlayerChip } from './AudioPlayerChip';
 import { ImageLightbox } from './ImageLightbox';
@@ -48,6 +49,9 @@ export interface Bucket {
     created_at: string;
     updated_at?: string;
     node_rate?: number;
+    worker_rate?: number;
+    worker_role?: string;
+    base_rate?: number;
     type?: string;
     wa_sent_timestamp?: string;
     wa_received_timestamp?: string;
@@ -84,6 +88,7 @@ export function TicketDrawer({
     const [lightboxOpen, setLightboxOpen] = useState(false);
     const [lightboxIndex, setLightboxIndex] = useState(0);
     const [mediaSliderIndex, setMediaSliderIndex] = useState(0);
+    const [copiedTranscript, setCopiedTranscript] = useState(false);
 
     // Parse image URLs safely
     const parsedImages: string[] = useMemo(() => {
@@ -182,7 +187,7 @@ export function TicketDrawer({
 
     const showReviewActions = ['pending_review', 'processing', 'open', 'flagged'].includes(bucket.status);
     const integrity = getTimeIntegrity();
-    const rate = bucket.node_rate || 85;
+    const rate = bucket.worker_rate || bucket.node_rate || 85;
     const hours = bucket.hours || 0;
     const laborCost = hours * rate;
     const billableTotal = laborCost * 1.2;
@@ -320,7 +325,7 @@ export function TicketDrawer({
                                 }}
                             >
                                 <div className="text-center">
-                                    <span className="inline-block px-3 py-0.5 rounded-full bg-white/90 text-[10px] font-bold text-slate-700 shadow-2xs border border-slate-200">
+                                    <span className="inline-block px-3.5 py-1 rounded-full bg-white/95 text-xs font-bold text-slate-800 shadow-xs border border-slate-200">
                                         WhatsApp Conversation • {formatDate(bucket.created_at)}
                                     </span>
                                 </div>
@@ -334,20 +339,20 @@ export function TicketDrawer({
                                                 className={`flex flex-col ${isUser ? 'items-start' : 'items-end'}`}
                                             >
                                                 <div
-                                                    className={`max-w-[85%] rounded-2xl px-3.5 py-2 text-xs shadow-xs space-y-1.5 ${
+                                                    className={`max-w-[88%] rounded-2xl px-4 py-2.5 shadow-xs space-y-1.5 ${
                                                         isUser
                                                             ? 'bg-white text-slate-950 rounded-tl-xs border border-slate-300'
                                                             : 'bg-[#DCF8C6] text-slate-950 rounded-tr-xs border border-emerald-300'
                                                     }`}
                                                 >
                                                     {/* Sender tag */}
-                                                    <div className="flex items-center justify-between gap-2 text-[10px] font-bold">
-                                                        <span className={isUser ? 'text-indigo-900' : 'text-emerald-900'}>
+                                                    <div className="flex items-center justify-between gap-2 text-xs font-bold">
+                                                        <span className={isUser ? 'text-indigo-900' : 'text-emerald-950 font-black'}>
                                                             {isUser ? (bucket.member_name || bucket.member_phone || 'Worker') : 'Jentyx Assistant'}
                                                         </span>
                                                     </div>
 
-                                                    <p className="whitespace-pre-wrap leading-relaxed text-[13px] font-medium text-slate-950">
+                                                    <p className="whitespace-pre-wrap leading-relaxed text-sm font-normal text-slate-950">
                                                         {msg.content}
                                                     </p>
 
@@ -355,7 +360,7 @@ export function TicketDrawer({
                                                     {isUser && i === 0 && (
                                                         <>
                                                             {parsedAudio.length > 0 && (
-                                                                <div className="pt-1 space-y-1">
+                                                                <div className="pt-1.5 space-y-1.5">
                                                                     {parsedAudio.map((audioUrl, aIdx) => (
                                                                         <AudioPlayerChip key={aIdx} src={audioUrl} label={`Voice Note ${aIdx + 1}`} />
                                                                     ))}
@@ -363,13 +368,13 @@ export function TicketDrawer({
                                                             )}
 
                                                             {parsedImages.length > 0 && (
-                                                                <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                                                <div className="grid grid-cols-2 gap-2 pt-1.5">
                                                                     {parsedImages.map((imgUrl, imgIdx) => (
                                                                         <button
                                                                             key={imgIdx}
                                                                             type="button"
                                                                             onClick={() => openLightbox(imgIdx)}
-                                                                            className="relative group overflow-hidden rounded-lg border border-slate-300 aspect-4/3 cursor-pointer"
+                                                                            className="relative group overflow-hidden rounded-lg border border-slate-300 aspect-4/3 cursor-pointer shadow-xs"
                                                                         >
                                                                             <img
                                                                                 src={imgUrl}
@@ -385,7 +390,7 @@ export function TicketDrawer({
                                                     )}
 
                                                     {msg.timestamp && (
-                                                        <div className="text-[10px] text-slate-600 font-semibold text-right leading-none pt-0.5">
+                                                        <div className="text-[11px] text-slate-600 font-medium text-right leading-none pt-0.5">
                                                             {formatTimeOnly(msg.timestamp)}
                                                         </div>
                                                     )}
@@ -397,17 +402,17 @@ export function TicketDrawer({
                                     /* Fallback when conversation_history is not structured */
                                     <div className="space-y-3">
                                         <div className="flex flex-col items-start">
-                                            <div className="max-w-[85%] rounded-2xl rounded-tl-xs px-3.5 py-2 text-xs shadow-xs bg-white text-slate-950 border border-slate-300 space-y-1.5">
-                                                <div className="flex items-center justify-between gap-2 text-[10px] font-bold text-indigo-900">
+                                            <div className="max-w-[88%] rounded-2xl rounded-tl-xs px-4 py-2.5 shadow-xs bg-white text-slate-950 border border-slate-300 space-y-1.5">
+                                                <div className="flex items-center justify-between gap-2 text-xs font-bold text-indigo-900">
                                                     <span>{bucket.member_name || bucket.member_phone || 'Worker'}</span>
                                                 </div>
 
-                                                <p className="whitespace-pre-wrap leading-relaxed text-[13px] font-medium text-slate-950">
+                                                <p className="whitespace-pre-wrap leading-relaxed text-sm font-normal text-slate-950">
                                                     {bucket.raw_text || '(No text content)'}
                                                 </p>
 
                                                 {parsedAudio.length > 0 && (
-                                                    <div className="pt-1 space-y-1">
+                                                    <div className="pt-1.5 space-y-1.5">
                                                         {parsedAudio.map((audioUrl, aIdx) => (
                                                             <AudioPlayerChip key={aIdx} src={audioUrl} label={`Voice Note ${aIdx + 1}`} />
                                                         ))}
@@ -415,13 +420,13 @@ export function TicketDrawer({
                                                 )}
 
                                                 {parsedImages.length > 0 && (
-                                                    <div className="grid grid-cols-2 gap-1.5 pt-1">
+                                                    <div className="grid grid-cols-2 gap-2 pt-1.5">
                                                         {parsedImages.map((imgUrl, imgIdx) => (
                                                             <button
                                                                 key={imgIdx}
                                                                 type="button"
                                                                 onClick={() => openLightbox(imgIdx)}
-                                                                className="relative group overflow-hidden rounded-lg border border-slate-300 aspect-4/3 cursor-pointer"
+                                                                className="relative group overflow-hidden rounded-lg border border-slate-300 aspect-4/3 cursor-pointer shadow-xs"
                                                             >
                                                                 <img
                                                                     src={imgUrl}
@@ -434,7 +439,7 @@ export function TicketDrawer({
                                                     </div>
                                                 )}
 
-                                                <div className="text-[10px] text-slate-600 font-semibold text-right leading-none pt-0.5">
+                                                <div className="text-[11px] text-slate-600 font-medium text-right leading-none pt-0.5">
                                                     {formatTimeOnly(bucket.created_at)}
                                                 </div>
                                             </div>
@@ -442,14 +447,14 @@ export function TicketDrawer({
 
                                         {bucket.summary && (
                                             <div className="flex flex-col items-end">
-                                                <div className="max-w-[85%] rounded-2xl rounded-tr-xs px-3.5 py-2 text-xs shadow-xs bg-[#DCF8C6] text-slate-950 border border-emerald-300 space-y-1">
-                                                    <div className="text-[10px] text-emerald-900 font-bold">
+                                                <div className="max-w-[88%] rounded-2xl rounded-tr-xs px-4 py-2.5 shadow-xs bg-[#DCF8C6] text-slate-950 border border-emerald-300 space-y-1">
+                                                    <div className="text-xs text-emerald-950 font-black">
                                                         Jentyx Confirmation
                                                     </div>
-                                                    <p className="text-[13px] leading-relaxed font-medium text-slate-950">
+                                                    <p className="text-sm leading-relaxed font-normal text-slate-950">
                                                         {bucket.summary}
                                                     </p>
-                                                    <div className="text-[10px] text-slate-600 font-semibold text-right leading-none pt-0.5">
+                                                    <div className="text-[11px] text-slate-600 font-medium text-right leading-none pt-0.5">
                                                         {formatTimeOnly(bucket.updated_at || bucket.created_at)}
                                                     </div>
                                                 </div>
@@ -459,18 +464,46 @@ export function TicketDrawer({
                                 )}
                             </div>
 
-                            {/* Voice Transcriptions Callout if present */}
+                            {/* Voice Transcriptions Card */}
                             {parsedTranscripts.length > 0 && (
-                                <div className="p-3 bg-purple-100/80 rounded-xl border border-purple-300">
-                                    <div className="flex items-center gap-1.5 text-purple-950 text-xs font-bold mb-1">
-                                        <Mic className="w-3.5 h-3.5 text-purple-700" />
-                                        Voice Transcript
+                                <div className="p-4 bg-purple-50/80 rounded-xl border border-purple-200 shadow-xs space-y-2.5">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-purple-950 text-xs font-bold uppercase tracking-wider">
+                                            <div className="w-5 h-5 rounded-full bg-purple-200 flex items-center justify-center">
+                                                <Mic className="w-3 h-3 text-purple-800" />
+                                            </div>
+                                            <span>Voice Transcription</span>
+                                        </div>
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                navigator.clipboard.writeText(parsedTranscripts.join('\n\n'));
+                                                setCopiedTranscript(true);
+                                                setTimeout(() => setCopiedTranscript(false), 2000);
+                                            }}
+                                            className="inline-flex items-center gap-1 text-xs font-semibold text-purple-800 hover:text-purple-950 bg-purple-100 hover:bg-purple-200 px-2 py-1 rounded-md transition-colors cursor-pointer"
+                                            title="Copy full transcript"
+                                        >
+                                            {copiedTranscript ? (
+                                                <>
+                                                    <Check className="w-3.5 h-3.5 text-emerald-600" />
+                                                    <span className="text-emerald-700 font-bold">Copied!</span>
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Copy className="w-3.5 h-3.5" />
+                                                    <span>Copy</span>
+                                                </>
+                                            )}
+                                        </button>
                                     </div>
-                                    <div className="space-y-1">
+                                    <div className="space-y-2">
                                         {parsedTranscripts.map((t, idx) => (
-                                            <p key={idx} className="text-xs text-purple-950 font-medium italic">
-                                                "{t}"
-                                            </p>
+                                            <div key={idx} className="p-3 bg-white rounded-lg border border-purple-200/80 shadow-2xs">
+                                                <p className="text-sm text-slate-900 leading-relaxed font-normal">
+                                                    "{t}"
+                                                </p>
+                                            </div>
                                         ))}
                                     </div>
                                 </div>
@@ -582,32 +615,32 @@ export function TicketDrawer({
 
                                 {/* Right: User Text & AI Analysis Card */}
                                 <div className="card p-2.5 bg-white border-2 border-indigo-200/90 shadow-2xs flex flex-col justify-between h-auto space-y-1.5">
-                                    <div className="space-y-1.5">
+                                    <div className="space-y-2">
                                         {/* 1. User Entered Raw Text */}
-                                        <div className="bg-slate-50 p-2 rounded-md border border-slate-200">
-                                            <div className="flex items-center gap-1.5 text-slate-700 text-[10px] font-black uppercase tracking-wider mb-0.5">
-                                                <MessageSquare className="w-3 h-3 text-slate-500" />
+                                        <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
+                                            <div className="flex items-center gap-1.5 text-slate-700 text-xs font-bold uppercase tracking-wider mb-1">
+                                                <MessageSquare className="w-3.5 h-3.5 text-slate-500" />
                                                 <span>User Entered Text</span>
                                             </div>
-                                            <p className="text-xs text-slate-900 font-medium italic line-clamp-2">
+                                            <p className="text-sm text-slate-900 font-normal leading-relaxed">
                                                 "{bucket.raw_text || 'No raw text provided'}"
                                             </p>
                                         </div>
 
                                         {/* 2. AI Work Summary */}
-                                        <div className="bg-indigo-50/70 p-2 rounded-md border border-indigo-200/90">
-                                            <div className="flex items-center justify-between gap-1 mb-0.5">
-                                                <div className="flex items-center gap-1 text-indigo-950 text-[10px] font-black uppercase tracking-wider">
-                                                    <Sparkles className="w-3 h-3 text-indigo-600" />
+                                        <div className="bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-200">
+                                            <div className="flex items-center justify-between gap-1 mb-1">
+                                                <div className="flex items-center gap-1 text-indigo-950 text-xs font-bold uppercase tracking-wider">
+                                                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
                                                     <span>AI Scope Summary</span>
                                                 </div>
                                                 {bucket.clarity_score !== null && bucket.clarity_score !== undefined && (
-                                                    <span className="text-[9px] font-extrabold text-emerald-800 bg-emerald-100 border border-emerald-300 px-1.5 py-0.2 rounded-full">
+                                                    <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100 border border-emerald-300 px-2 py-0.5 rounded-full">
                                                         {Math.round(bucket.clarity_score * 100)}% Match
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-xs text-indigo-950 font-bold line-clamp-2">
+                                            <p className="text-sm text-indigo-950 font-semibold leading-relaxed">
                                                 {bucket.summary || 'Awaiting classification'}
                                             </p>
                                         </div>
@@ -693,7 +726,9 @@ export function TicketDrawer({
                                 {/* Row 2: 3 Financial Metrics */}
                                 <div className="pt-1.5 border-t border-slate-200 grid grid-cols-3 gap-1.5 text-center">
                                     <div className="p-1.5 bg-slate-100 rounded-md border border-slate-200">
-                                        <span className="text-[9px] font-bold text-slate-600 uppercase tracking-wider block leading-none mb-0.5">Rate</span>
+                                        <span className="text-[9px] font-bold text-slate-600 uppercase tracking-wider block leading-none mb-0.5">
+                                            Rate {bucket.worker_role ? `(${bucket.worker_role})` : ''}
+                                        </span>
                                         <span className="text-xs font-black text-slate-900">${rate}/hr</span>
                                     </div>
                                     <div className="p-1.5 bg-indigo-50 rounded-md border border-indigo-200">

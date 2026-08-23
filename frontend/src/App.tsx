@@ -12,6 +12,7 @@ import { Users } from './pages/Users';
 import { Integrations } from './pages/Integrations';
 import { COPackets } from './pages/COPackets';
 import { TicketDetail } from './pages/TicketDetail';
+import { RateCard } from './pages/RateCard';
 import './index.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -51,6 +52,14 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Members />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/rate-card"
+                        element={
+                            <ProtectedRoute>
+                                <RateCard />
                             </ProtectedRoute>
                         }
                     />

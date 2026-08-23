@@ -12,6 +12,9 @@ interface Member {
     node_name?: string;
     language_preference?: string;
     domain?: string;
+    role?: string;
+    effective_rate?: number;
+    base_rate?: number;
     created_at: string;
 }
 
@@ -23,7 +26,7 @@ export function Members() {
     const [sortBy, setSortBy] = useState('name');
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingMember, setEditingMember] = useState<Member | null>(null);
-    const [formData, setFormData] = useState({ name: '', phone: '', language: 'en', domain: 'construction' });
+    const [formData, setFormData] = useState({ name: '', phone: '', language: 'en', domain: 'construction', role: 'General Labor' });
     const [formError, setFormError] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [search, setSearch] = useState('');
@@ -144,13 +147,14 @@ export function Members() {
                 body: JSON.stringify({
                     phoneNumber: formData.phone,
                     fullName: formData.name,
+                    role: formData.role,
                 }),
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                setFormData({ name: '', phone: '', language: 'en', domain: 'construction', role: 'General Labor' });
                 setShowAddForm(false);
                 fetchMembers();
                 alert(data.message || 'Member added successfully!');
@@ -177,13 +181,14 @@ export function Members() {
                     fullName: formData.name,
                     language: formData.language,
                     domain: formData.domain,
+                    role: formData.role,
                 }),
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                setFormData({ name: '', phone: '', language: 'en', domain: 'construction', role: 'General Labor' });
                 setEditingMember(null);
                 fetchMembers();
                 alert('Member updated successfully!');
@@ -203,6 +208,7 @@ export function Members() {
             phone: member.phone_number,
             language: member.language_preference || 'en',
             domain: member.domain || 'construction',
+            role: member.role || 'General Labor',
         });
         setShowAddForm(false);
         window.scrollTo(0, 0);
@@ -298,7 +304,7 @@ export function Members() {
                                 onClick={() => {
                                     setShowAddForm(false);
                                     setEditingMember(null);
-                                    setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                                    setFormData({ name: '', phone: '', language: 'en', domain: 'construction', role: 'General Labor' });
                                 }}
                                 className="text-gray-500 hover:text-gray-700"
                             >
@@ -377,13 +383,40 @@ export function Members() {
                                     </div>
                                 </>
                             )}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Role / Trade Position (Determines Rate)
+                                </label>
+                                <input
+                                    type="text"
+                                    list="member-roles-list"
+                                    value={formData.role}
+                                    onChange={(e) => setFormData({ ...formData, role: e.target.value })}
+                                    placeholder="e.g. Foreman, Journeyman, General Labor"
+                                    className="input-field w-full"
+                                />
+                                <datalist id="member-roles-list">
+                                    <option value="Foreman" />
+                                    <option value="Journeyman" />
+                                    <option value="Apprentice" />
+                                    <option value="General Labor" />
+                                    <option value="Equipment Operator" />
+                                    <option value="Carpenter" />
+                                    <option value="Electrician" />
+                                    <option value="Plumber" />
+                                    <option value="Welder" />
+                                </datalist>
+                                <p className="text-xs text-gray-500 mt-1">
+                                    Worker rate will automatically calculate from the node's <a href="/rate-card" className="text-indigo-600 font-semibold hover:underline">Rate Card</a>.
+                                </p>
+                            </div>
                             <div className="flex gap-2 justify-end">
                                 <button
                                     type="button"
                                     onClick={() => {
                                         setShowAddForm(false);
                                         setEditingMember(null);
-                                        setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                                        setFormData({ name: '', phone: '', language: 'en', domain: 'construction', role: 'General Labor' });
                                     }}
                                     className="btn-secondary"
                                 >
@@ -456,6 +489,12 @@ export function Members() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Status
                                     </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Role / Position
+                                    </th>
+                                    <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        Rate ($/hr)
+                                    </th>
                                     {user?.role === 'SU' && (
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Node
@@ -489,6 +528,17 @@ export function Members() {
                                                 className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${getStatusBadge(member.status)}`}
                                             >
                                                 {getStatusLabel(member.status)}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                                {member.role || 'General Labor'}
+                                            </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap text-center">
+                                            <span className="text-sm font-bold text-slate-900">
+                                                ${parseFloat(member.effective_rate?.toString() || '85.00').toFixed(2)}
+                                                <span className="text-[11px] font-normal text-slate-500">/hr</span>
                                             </span>
                                         </td>
                                         {user?.role === 'SU' && (

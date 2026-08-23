@@ -52,6 +52,7 @@ async function run() {
     // ========================================================================
     const memberColumns = [
         { name: 'domain', type: "varchar(50) DEFAULT 'construction'" },
+        { name: 'role', type: "varchar(50) DEFAULT 'General Labor'" },
         { name: 'language_preference', type: "varchar(10) DEFAULT 'en'" },
         { name: 'last_confirmed_project_id', type: 'integer' },
         { name: 'project_confirmed_at', type: 'timestamp' },
@@ -228,7 +229,33 @@ async function run() {
     }
 
     // ========================================================================
-    // 7. FOREIGN KEYS
+    // 7. RATE CARDS TABLE
+    // ========================================================================
+    console.log('→ Creating rate_cards table...');
+    try {
+        await sql`
+            CREATE TABLE IF NOT EXISTS "rate_cards" (
+                "id" serial PRIMARY KEY NOT NULL,
+                "company_id" integer NOT NULL,
+                "position_name" varchar(50) NOT NULL,
+                "hourly_rate" decimal(10, 2) NOT NULL,
+                "created_at" timestamp DEFAULT now(),
+                "updated_at" timestamp DEFAULT now()
+            )
+        `;
+        await addColumn('rate_cards', 'updated_at', 'timestamp DEFAULT now()');
+        await addColumn('rate_cards', 'created_at', 'timestamp DEFAULT now()');
+        await addColumn('rate_cards', 'company_id', 'integer');
+        await addColumn('rate_cards', 'position_name', 'varchar(50)');
+        await addColumn('rate_cards', 'hourly_rate', 'decimal(10, 2)');
+        await sql`CREATE UNIQUE INDEX IF NOT EXISTS "idx_rate_cards_company_position" ON "rate_cards" ("company_id", "position_name")`;
+        console.log('  ✅ OK\n');
+    } catch (e: any) {
+        console.log('  ⚠️', e.message, '\n');
+    }
+
+    // ========================================================================
+    // 8. FOREIGN KEYS
     // ========================================================================
     console.log('→ Adding foreign keys...');
     const fks = [
@@ -240,6 +267,7 @@ async function run() {
         { name: 'txns_project_id_projects_id_fk', table: 'txns', col: 'project_id', ref: 'projects' },
         { name: 'members_last_confirmed_project_id_fk', table: 'members', col: 'last_confirmed_project_id', ref: 'projects' },
         { name: 'users_node_id_nodes_id_fk', table: 'users', col: 'node_id', ref: 'nodes' },
+        { name: 'rate_cards_company_id_nodes_id_fk', table: 'rate_cards', col: 'company_id', ref: 'nodes' },
     ];
 
     for (const fk of fks) {

@@ -70,11 +70,18 @@ export async function getMembers(c: Context, sql: Sql) {
         `);
         const total = countResult[0]?.total || 0;
 
-        // Get members with pagination
+        // Get members with pagination and effective rate
         const members = await sql.unsafe(`
-            SELECT m.*, n.name as node_name
+            SELECT 
+                m.*, 
+                n.name as node_name,
+                n.default_hourly_rate as base_rate,
+                COALESCE(rc.hourly_rate, n.default_hourly_rate, 85.00)::numeric as effective_rate,
+                rc.position_name as matched_rate_role
             FROM members m
             LEFT JOIN nodes n ON COALESCE(m.company_id, m.pending_node_id) = n.id
+            LEFT JOIN rate_cards rc ON rc.company_id = COALESCE(m.company_id, m.pending_node_id) 
+                AND LOWER(rc.position_name) = LOWER(COALESCE(m.role, 'General Labor'))
             ${whereClause}
             ORDER BY m.created_at DESC
             LIMIT ${limit} OFFSET ${offset}
@@ -192,7 +199,7 @@ export async function inviteMember(c: Context, sql: Sql) {
         // VERCEL ADAPTER FIX: Check if body is pre-parsed
         // VERCEL ADAPTER FIX: Use helper to handle pre-parsed body
         const body = await getRequestBody(c);
-        const { phoneNumber, fullName } = body;
+        const { phoneNumber } = body;
 
         if (!phoneNumber) {
             return c.json({ error: 'Phone number is required' }, 400);
@@ -207,6 +214,8 @@ export async function inviteMember(c: Context, sql: Sql) {
         if (!targetNodeId) {
             return c.json({ error: 'Node ID is required' }, 400);
         }
+        const fullName = body.fullName || body.name;
+        const role = body.role ? body.role.trim() : 'General Labor';
 
         // Check if member already exists with this company_id (already in this node)
         const existingInNode = await sql`
@@ -246,6 +255,7 @@ export async function inviteMember(c: Context, sql: Sql) {
                 SET pending_node_id = ${targetNodeId},
                     invited_by = ${user.id},
                     full_name = COALESCE(${fullName || null}, full_name),
+                    role = COALESCE(${role || null}, role),
                     status = 'pending'
                 WHERE id = ${member.id}
             `;
@@ -254,8 +264,8 @@ export async function inviteMember(c: Context, sql: Sql) {
         } else {
             // No existing member - create a new pending member record
             const [newMember] = await sql`
-                INSERT INTO members (phone_number, full_name, pending_node_id, invited_by, status, domain)
-                VALUES (${normalizedPhone}, ${fullName || null}, ${targetNodeId}, ${user.id}, 'pending', 'construction')
+                INSERT INTO members (phone_number, full_name, role, pending_node_id, invited_by, status, domain)
+                VALUES (${normalizedPhone}, ${fullName || null}, ${role}, ${targetNodeId}, ${user.id}, 'pending', 'construction')
                 RETURNING *
             `;
             member = newMember;
@@ -301,6 +311,7 @@ export async function updateMember(c: Context, sql: Sql) {
         // Convert undefined to null for postgres.js compatibility
         const fullName = body.fullName ?? null;
         const domain = body.domain ?? null;
+        const role = body.role ?? null;
         const status = body.status ?? null;
         const languagePreference = body.language ?? null;
 
@@ -308,6 +319,7 @@ export async function updateMember(c: Context, sql: Sql) {
             UPDATE members
             SET full_name = COALESCE(${fullName}, full_name),
                 domain = COALESCE(${domain}, domain),
+                role = COALESCE(${role}, role),
                 status = COALESCE(${status}, status),
                 language_preference = COALESCE(${languagePreference}, language_preference)
             WHERE id = ${memberId}
