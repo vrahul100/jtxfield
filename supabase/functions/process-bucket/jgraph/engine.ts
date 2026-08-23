@@ -183,9 +183,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                         }).eq('id', bucket.id)
 
                         const response = composeUpdated(targetRec, pMatch.name, { bucketId: targetBucketId, companyCode })
-                        if (member?.subscription_tier !== 'basic') {
-                            await sendMessage(bucket.from_phone, response, bucket.source)
-                        }
+                        await sendMessage(bucket.from_phone, response, bucket.source)
                         return { status: 'cancelled', action: 'edit_applied', response }
                     }
                 }
@@ -213,9 +211,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                         }).eq('id', bucket.id)
 
                         const response = composeUpdated(targetRec, targetRec.projectName || 'General Work', { bucketId: targetBucketId, companyCode })
-                        if (member?.subscription_tier !== 'basic') {
-                            await sendMessage(bucket.from_phone, response, bucket.source)
-                        }
+                        await sendMessage(bucket.from_phone, response, bucket.source)
                         return { status: 'cancelled', action: 'edit_applied', response }
                     }
                 }
@@ -229,9 +225,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         }).eq('id', bucket.id)
 
         const errorResponse = `❓ Could not find ticket to update. To log new work, send a photo or describe your work.`
-        if (member?.subscription_tier !== 'basic') {
-            await sendMessage(bucket.from_phone, errorResponse, bucket.source)
-        }
+        await sendMessage(bucket.from_phone, errorResponse, bucket.source)
         return { status: 'cancelled', action: 'edit_cancelled', response: errorResponse }
     }
 

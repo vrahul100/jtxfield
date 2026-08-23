@@ -303,15 +303,13 @@ export async function updateMember(c: Context, sql: Sql) {
         const domain = body.domain ?? null;
         const status = body.status ?? null;
         const languagePreference = body.language ?? null;
-        const subscriptionTier = body.subscriptionTier ?? body.subscription_tier ?? null;
 
         const [member] = await sql`
             UPDATE members
             SET full_name = COALESCE(${fullName}, full_name),
                 domain = COALESCE(${domain}, domain),
                 status = COALESCE(${status}, status),
-                language_preference = COALESCE(${languagePreference}, language_preference),
-                subscription_tier = COALESCE(${subscriptionTier}, subscription_tier)
+                language_preference = COALESCE(${languagePreference}, language_preference)
             WHERE id = ${memberId}
             ${user.role === 'OM' ? sql`AND company_id = ${user.nodeId}` : sql``}
             RETURNING *
