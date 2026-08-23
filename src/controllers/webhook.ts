@@ -19,7 +19,16 @@ import {
   Bucket
 } from '../services/bucketService.js'
 import { handleJoinRequest } from './joinHandler.js'
-import { confirmMemberByPhone } from './members.js'
+import {
+  fastIntakeValidation,
+  formatTemplateA,
+  formatTemplateB,
+  formatTemplateC,
+  formatTemplateD,
+  formatTemplateProjectSelect,
+  parseProjectSelection,
+  parseHoursOnly
+} from '../services/fastIntakeService.js'
 
 const validator = getMediaValidator();
 
@@ -261,13 +270,139 @@ Your message has been saved. An admin will add you to your project soon!`;
   // which transcribes voice notes itself — so a spoken "yes"/"no" at the work-confirmation
   // step is already multimodal.
 
+  // 6a-1. CHECK IF MESSAGE IS RESOLVING A PENDING PROJECT SELECTION
+  const activeCompanyProjectsList = await sql`
+    SELECT id, name FROM projects 
+    WHERE node_id = ${member.company_id} AND is_active = true AND is_inbox = false
+    ORDER BY name
+  `;
+
+  const chosenProj = parseProjectSelection(intentText || normalized.text || '', activeCompanyProjectsList);
+  if (chosenProj && !hasMedia) {
+    const draftProjBuckets = await sql`
+      SELECT * FROM buckets 
+      WHERE member_id = ${member.id} 
+        AND status IN ('draft_project', 'draft_hours_pending', 'open', 'pending')
+        AND created_at >= NOW() - INTERVAL '4 hours'
+      ORDER BY created_at DESC
+      LIMIT 1
+    `;
+    if (draftProjBuckets.length > 0) {
+      const draft = draftProjBuckets[0];
+      const scopeLine = draft.summary || 'General Work';
+      const rawDraftHours = draft.hours != null ? parseFloat(String(draft.hours)) : null;
+      const hasHours = rawDraftHours != null && !isNaN(rawDraftHours) && rawDraftHours > 0;
+      const finalHours = hasHours ? rawDraftHours : null;
+
+      // Cache confirmed project on member for 6 hours
+      await sql`
+        UPDATE members 
+        SET last_confirmed_project_id = ${chosenProj.id},
+            project_confirmed_at = NOW(),
+            last_inbound_at = NOW()
+        WHERE id = ${member.id}
+      `;
+
+      if (hasHours && finalHours != null) {
+        await sql`
+          UPDATE buckets 
+          SET project_id = ${chosenProj.id},
+              hours = ${finalHours},
+              status = 'submitted',
+              updated_at = NOW()
+          WHERE id = ${draft.id}
+        `;
+
+        await sql`
+          INSERT INTO txns (bucket_id, company_id, user_id, project_id, job, scope_description, labor, time, potential_change, status)
+          VALUES (${draft.id}, ${member.company_id}, ${member.id}, ${chosenProj.id}, ${scopeLine + ' - ' + finalHours + 'h'}, ${scopeLine}, ${scopeLine + ' for ' + finalHours + 'h'}, ${finalHours}, false, 'COMPLETED')
+        `;
+
+        const ackMsg = formatTemplateA({
+          task: scopeLine,
+          durationHours: finalHours,
+          projectName: chosenProj.name,
+          confirmationId: draft.id,
+          language: member.language_preference || 'en',
+        });
+
+        console.log(`[WEBHOOK] Confirmed project "${chosenProj.name}" for draft #${draft.id} with ${finalHours}h. Sending Template A acknowledgement.`);
+        return c.text(`<Response><Message>${ackMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      } else {
+        await sql`
+          UPDATE buckets 
+          SET project_id = ${chosenProj.id},
+              status = 'draft_hours_pending',
+              updated_at = NOW()
+          WHERE id = ${draft.id}
+        `;
+
+        const promptHoursMsg = formatTemplateB({
+          projectName: chosenProj.name,
+          task: scopeLine,
+          language: member.language_preference || 'en',
+        });
+
+        console.log(`[WEBHOOK] Confirmed project "${chosenProj.name}" for draft #${draft.id}. Prompting for hours (Template B).`);
+        return c.text(`<Response><Message>${promptHoursMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+      }
+    }
+  }
+
+  // 6a-2. CHECK IF MESSAGE IS RESOLVING A PENDING HOURS PROMPT (Template B Follow-up)
+  const hoursOnly = parseHoursOnly(intentText || normalized.text || voiceTranscript || '');
+  if (hoursOnly && !hasMedia) {
+    const draftBuckets = await sql`
+      SELECT b.*, p.name as project_name FROM buckets b
+      LEFT JOIN projects p ON p.id = b.project_id
+      WHERE b.member_id = ${member.id} AND b.status = 'draft_hours_pending'
+      ORDER BY b.created_at DESC
+      LIMIT 1
+    `;
+    if (draftBuckets.length > 0) {
+      const draft = draftBuckets[0];
+      const projName = draft.project_name || 'General Project';
+      const scopeLine = draft.summary || 'General Work';
+
+      await sql`
+        UPDATE buckets 
+        SET hours = ${hoursOnly},
+            status = 'submitted',
+            updated_at = NOW()
+        WHERE id = ${draft.id}
+      `;
+
+      await sql`
+        INSERT INTO txns (bucket_id, company_id, user_id, project_id, job, scope_description, labor, time, potential_change, status)
+        VALUES (${draft.id}, ${member.company_id}, ${member.id}, ${draft.project_id}, ${scopeLine + ' - ' + hoursOnly + 'h'}, ${scopeLine}, ${scopeLine + ' for ' + hoursOnly + 'h'}, ${hoursOnly}, false, 'COMPLETED')
+      `;
+
+      await sql`
+        UPDATE members 
+        SET last_inbound_at = NOW()
+        WHERE id = ${member.id}
+      `;
+
+      const ackMsg = formatTemplateA({
+        task: scopeLine,
+        durationHours: hoursOnly,
+        projectName: projName,
+        confirmationId: draft.id,
+        language: member.language_preference || 'en',
+      });
+
+      console.log(`[WEBHOOK] Resolved draft #${draft.id} with ${hoursOnly}h. Sending Template A acknowledgement:\n"${ackMsg}"`);
+      return c.text(`<Response><Message>${ackMsg}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+    }
+  }
+
   // 6b. PRE-CHECK: Skip bucket creation for non-work text-only messages (greetings, etc.)
   // Only applies when: no media attached AND no existing open bucket (not mid-conversation)
   if (!hasMedia && normalized.text.trim()) {
     const inboxProjectId = await ensureInboxProject(sql, member.company_id);
     const existingBucket = await findOpenBucket(sql, member.id, inboxProjectId);
 
-    if (!existingBucket) {
+    if (!existingBucket && hoursOnly === null) {
       // No open bucket — check if this is a non-work message before creating one
       const text = normalized.text.toLowerCase().trim();
       const nonWorkPatterns = [
@@ -279,7 +414,7 @@ Your message has been saved. An admin will add you to your project soon!`;
         'test', 'testing', 'prueba',
       ];
       const isNonWork = nonWorkPatterns.some(p => text === p || text === p + '!' || text === p + '?')
-        || text.length < 4; // Very short messages like "hi", "yo"
+        || (text.length < 4 && !/^\d/.test(text)); // Very short messages like "hi", "yo" (exclude numbers)
 
       if (isNonWork) {
         console.log(`[WEBHOOK] Non-work message detected ("${normalized.text}"), skipping bucket creation`);
@@ -292,7 +427,6 @@ Your message has been saved. An admin will add you to your project soon!`;
         return c.text(`<Response><Message>${greeting}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
       }
     }
-    // If existingBucket exists, let it flow through — user is mid-conversation
   }
 
   // 6c. DIRECT EDIT COMMAND INTERCEPTOR FOR LOGGED TICKETS (Zero bucket creation)
@@ -523,8 +657,6 @@ Your message has been saved. An admin will add you to your project soon!`;
 
 
   // 7. USE TRANSACTION WITH ROW-LEVEL LOCK TO PREVENT RACE CONDITIONS
-  // Lock the member row - this blocks concurrent requests for the same member
-  // until this transaction completes
   console.log(`[WEBHOOK] Starting transaction with row lock for member ${member.id}`);
   
   let bucket: Bucket | undefined;
@@ -556,7 +688,6 @@ Your message has been saved. An admin will add you to your project soon!`;
         rawText: normalized.text,
         imageUrls,
         audioUrls,
-        // Reuse the transcript we already computed for command detection (avoids a 2nd Whisper call)
         transcripts: voiceTranscript ? [voiceTranscript] : [],
         messageSid,
       });
@@ -570,34 +701,159 @@ Your message has been saved. An admin will add you to your project soon!`;
     return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
   }
 
-
-  // 9. MARK BUCKET FOR ASYNC PROCESSING (triggers DB function)
-  // Only update if bucket is NOT already completed/submitted
-  await sql`
-    UPDATE buckets 
-    SET status = 'pending_processing', updated_at = NOW()
-    WHERE id = ${bucket.id}
-      AND status NOT IN ('submitted', 'flagged', 'pending_review')
+  // 8b. PROJECT CACHE RESOLUTION (6-Hour Window Session Cache)
+  const activeCompanyProjects = await sql`
+    SELECT id, name FROM projects 
+    WHERE node_id = ${member.company_id} AND is_active = true AND is_inbox = false
+    ORDER BY name
   `;
 
-  console.log(`[WEBHOOK] Bucket #${bucket.id} marked for processing`);
+  let activeProject: { id: number; name: string } | null = null;
+  const ageHours = member.project_confirmed_at
+    ? (Date.now() - new Date(member.project_confirmed_at).getTime()) / (1000 * 60 * 60)
+    : 999;
 
-  // 10. EDGE FUNCTION IS TRIGGERED BY DATABASE TRIGGER
-  // The process_bucket_trigger on the buckets table handles Edge Function invocation
-  // This ensures single-source triggering and prevents duplicate processing
-  console.log(`[WEBHOOK] DB trigger will handle Edge Function for bucket #${bucket.id}`);
-
-  // 11. SEND IMMEDIATE RECEIPT (So user isn't ghosted)
-  // Only for new buckets or if we are appending to one that was just created
-  try {
-    const statusMsg = "🤖 Received! Processing your work...";
-    // await sendTwilioMessage(normalized.sender, statusMsg, normalized.source as any);
-  } catch (e) {
-    console.error('[WEBHOOK] Failed to send receipt:', e);
+  if (member.last_confirmed_project_id && ageHours < 6) {
+    const cached = activeCompanyProjects.find((p: any) => p.id === member.last_confirmed_project_id);
+    if (cached) {
+      activeProject = cached;
+      console.log(`[WEBHOOK ProjectCache] Reusing active cached project for member #${member.id}: "${activeProject.name}" (Age: ${ageHours.toFixed(1)}h)`);
+    }
   }
 
-  // 12. RETURN IMMEDIATE ACKNOWLEDGMENT
-  return c.text('<Response></Response>', 200, { 'Content-Type': 'text/xml' });
+  // If company only has 1 active project, auto-assign and cache for 6 hours
+  if (!activeProject && activeCompanyProjects.length === 1) {
+    activeProject = activeCompanyProjects[0];
+    await sql`
+      UPDATE members 
+      SET last_confirmed_project_id = ${activeProject.id},
+          project_confirmed_at = NOW()
+      WHERE id = ${member.id}
+    `;
+    console.log(`[WEBHOOK ProjectCache] Auto-assigned sole company project "${activeProject.name}" to member #${member.id}`);
+  }
+
+  // 9. FAST INTAKE VALIDATION (Evaluates hours, theme, and contradiction)
+  const fastResult = await fastIntakeValidation({
+    rawText: normalized.text,
+    transcript: voiceTranscript,
+    imageUrl: imageUrls[0] || null,
+    projectName: activeProject?.name || 'General Project',
+    ticketId: bucket.id,
+    availableProjects: activeCompanyProjects,
+  });
+
+  // If worker mentioned a specific known project in text/audio, override and cache it for 6 hours
+  if (fastResult.mentionedProjectId) {
+    const mentioned = activeCompanyProjects.find((p: any) => p.id === fastResult.mentionedProjectId);
+    if (mentioned) {
+      activeProject = mentioned;
+      await sql`
+        UPDATE members 
+        SET last_confirmed_project_id = ${mentioned.id},
+            project_confirmed_at = NOW()
+        WHERE id = ${member.id}
+      `;
+      console.log(`[WEBHOOK ProjectCache] Worker explicitly mentioned project "${mentioned.name}", cached for 6h`);
+    }
+  }
+
+  console.log(`[WEBHOOK FastIntake] Bucket #${bucket.id}: Template=${fastResult.templateType}, Theme="${fastResult.theme}", Hours=${fastResult.hours}, Project="${activeProject?.name || 'NONE'}"`);
+
+  // 9b. IF NO ACTIVE PROJECT AND MULTIPLE PROJECTS EXIST -> PROMPT FOR PROJECT CONFIRMATION
+  if (!activeProject && activeCompanyProjects.length > 1) {
+    const selectPrompt = formatTemplateProjectSelect({
+      task: fastResult.theme,
+      projects: activeCompanyProjects,
+      language: fastResult.language,
+    });
+
+    await sql`
+      UPDATE buckets 
+      SET summary = COALESCE(summary, ${fastResult.theme}::text),
+          hours = ${fastResult.hours != null ? Number(fastResult.hours) : sql`hours`},
+          status = 'draft_project',
+          updated_at = NOW()
+      WHERE id = ${bucket.id}
+    `;
+
+    await sql`
+      UPDATE members 
+      SET last_inbound_at = NOW()
+      WHERE id = ${member.id}
+    `;
+
+    console.log(`[WEBHOOK] Prompting member #${member.id} for project selection across ${activeCompanyProjects.length} projects.`);
+    return c.text(`<Response><Message>${selectPrompt}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
+  }
+
+  // 10. ROUTING LOGIC & STATE MACHINE WITH CONFIRMED PROJECT
+  const finalProjectId = activeProject?.id || bucket.project_id;
+  const finalProjectName = activeProject?.name || 'General Project';
+
+  const isMismatch = Boolean(fastResult.isMismatch);
+  const mismatchReason = fastResult.mismatchReason || null;
+  const hasHours = fastResult.hasExplicitHours && fastResult.hours != null && fastResult.hours > 0;
+
+  let targetStatus = 'submitted';
+  let responseTemplate = '';
+
+  if (isMismatch) {
+    targetStatus = 'pending_review';
+    responseTemplate = formatTemplateC({
+      projectName: finalProjectName,
+      submissionId: bucket.id,
+      language: fastResult.language,
+    });
+  } else if (!hasHours) {
+    targetStatus = 'draft_hours_pending';
+    responseTemplate = formatTemplateB({
+      projectName: finalProjectName,
+      task: fastResult.theme,
+      language: fastResult.language,
+    });
+  } else {
+    targetStatus = 'submitted';
+    responseTemplate = formatTemplateA({
+      task: fastResult.theme,
+      durationHours: fastResult.hours || 8,
+      projectName: finalProjectName,
+      confirmationId: bucket.id,
+      language: fastResult.language,
+    });
+  }
+
+  await sql`
+    UPDATE buckets 
+    SET summary = COALESCE(summary, ${fastResult.theme}::text),
+        hours = ${fastResult.hours ? fastResult.hours : sql`hours`},
+        project_id = ${finalProjectId},
+        potential_change = ${isMismatch ? true : sql`potential_change`},
+        flag_reason = ${isMismatch && mismatchReason ? mismatchReason : sql`flag_reason`},
+        status = ${targetStatus},
+        updated_at = NOW()
+    WHERE id = ${bucket.id}
+  `;
+
+  // If complete, insert transaction into txns table immediately
+  if (targetStatus === 'submitted') {
+    const hoursVal = fastResult.hours || 8;
+    const scopeLine = fastResult.theme || 'General Work';
+    await sql`
+      INSERT INTO txns (bucket_id, company_id, user_id, project_id, job, scope_description, labor, time, potential_change, status)
+      VALUES (${bucket.id}, ${member.company_id}, ${member.id}, ${finalProjectId}, ${scopeLine + ' - ' + hoursVal + 'h'}, ${scopeLine}, ${scopeLine + ' for ' + hoursVal + 'h'}, ${hoursVal}, false, 'COMPLETED')
+    `;
+  }
+
+  // 11. UNIFIED UTILITY TEMPLATE RESPONSE
+  await sql`
+    UPDATE members 
+    SET last_inbound_at = NOW()
+    WHERE id = ${member.id}
+  `;
+
+  console.log(`[WEBHOOK] Member #${member.id}: Sending Meta Utility Template:\n"${responseTemplate}"`);
+  return c.text(`<Response><Message>${responseTemplate}</Message></Response>`, 200, { 'Content-Type': 'text/xml' });
 }
 
 /**

@@ -259,38 +259,26 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
 
 // ============================================================================
 // POLICY — decide the next action purely from the record
+// Fast & Cost-Optimized: Auto-defaults hours to 8 and proceeds directly to SUBMIT
+// without multi-turn chatty interrogation loops.
 // ============================================================================
 
 export function decideNextAction(rec: WorkRecord): Action {
     if (!rec.isWorkRelated && isEmpty(rec)) return { type: 'GREET' }
 
-    // 1. Consistency check (Ask ONLY ONCE)
-    if (rec.inconsistency && rec.lastAsked !== 'clarify') {
-        return { type: 'CLARIFY_INCONSISTENCY', reason: rec.inconsistency }
-    }
-
-    // 2. Hours missing or invalid?
+    // Auto-default hours if missing or invalid (no chatty ASK_HOURS loops)
     if (!rec.hours || rec.hours <= 0) {
-        if (rec.lastAsked === 'hours' && rec.askCount >= 2) {
-            // Auto-default to 8 hours if asked twice without answer — NEVER HOLD THE USER!
-            rec.hours = 8
-        } else {
-            return { type: 'ASK_HOURS' }
-        }
+        rec.hours = 8
     }
 
-    // 4. Project selection missing?
+    // If project is explicitly rejected or missing, pick from options or Inbox
     if (!rec.projectId || rec.projectRejected) {
         return { type: 'SELECT_PROJECT' }
     }
 
     if (rec.needsFix) return { type: 'ASK_FIX' }
 
-    // 5. Confirmation prompt outside 6-hr window (Ask ONLY ONCE)
-    if (!rec.confirmed && !rec.isFreshProject && rec.lastAsked !== 'confirm') {
-        return { type: 'CONFIRM' }
-    }
-
+    // Proceed directly to SUBMIT (zero chat loops, zero confirmation prompts)
     return { type: 'SUBMIT' }
 }
 

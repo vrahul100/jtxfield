@@ -57,6 +57,11 @@ async function run() {
         { name: 'last_confirmed_project_id', type: 'integer' },
         { name: 'project_confirmed_at', type: 'timestamp' },
         { name: 'pending_node_id', type: 'integer' },
+        { name: 'subscription_tier', type: "varchar(20) DEFAULT 'pro'" },
+        { name: 'last_inbound_at', type: 'timestamptz' },
+        { name: 'pending_item_count', type: 'integer DEFAULT 0' },
+        { name: 'pending_ticket_count', type: 'integer DEFAULT 0' },
+        { name: 'last_summary_sent_at', type: 'timestamptz' },
     ];
     for (const col of memberColumns) {
         await addColumn('members', col.name, col.type);
@@ -120,6 +125,11 @@ async function run() {
 
     // Add extended bucket columns (for multi-media, AI processing)
     console.log('→ Adding extended bucket columns...');
+    try {
+        await sql`ALTER TABLE "buckets" ALTER COLUMN "status" TYPE varchar(50)`;
+    } catch (e: any) {
+        console.log('  ⚠️', e.message);
+    }
     const bucketColumns = [
         { name: 'summary', type: 'text' },
         { name: 'extraction_json', type: 'text' },

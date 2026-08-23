@@ -15,55 +15,39 @@ const MESSAGES = {
     en: {
         greeting: '👋 Hello! Ready to log your work?\n\nSend a photo, voice note, or describe what you worked on.',
         collectWork: '🔧 *What kind of work did you do?*\n\nAlso tell me how many hours.\n(Example: "electrical for 6 hours")',
-        askHours: (wt: string) => wt && !isGenericWork(wt)
-            ? `⏱️ Got it: *${wt}*\n\nHow many hours did you work?\n(Example: 6.5 or "6 and a half")`
-            : `⏱️ How many hours did you work?\n(Example: 6.5 or "6 and a half")`,
-        clarify: (reason: string) => `⚠️ *NEEDS CLARIFICATION*\n\n${reason}\n\nCan you confirm what you actually worked on?`,
-        askFix: '🤔 No problem — what should I change: the *work*, the *hours*, or the *project*?',
-        confirm: (wt: string, h: number, proj: string, materials?: string, location?: string) => {
-            let m = `📝 *CONFIRM YOUR WORK*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${h} hours\n📍 *Project:* ${proj}`
-            if (materials) m += `\n🧰 *Materials:* ${materials}`
-            if (location) m += `\n📌 *Location:* ${location}`
-            return m + `\n\nIs this correct? Reply *Y* or *N*`
+        askHours: (wt: string, proj: string) =>
+            `📸 Work photo and details received for project: ${proj || 'General Project'}.\n\nTask logged: ${wt}\n\nPlease reply with the number of hours spent on this task to finalize the ticket.`,
+        clarify: (proj: string, id: number | string) =>
+            `✅ Field Update Received.\n\nProject: ${proj || 'General Project'}\nSubmission ID: #${id}\n\nYour photo and task notes have been securely uploaded to the supervisor dashboard.`,
+        askFix: '🤔 What should I change?',
+        confirm: (wt: string, h: number, proj: string) => `📝 ${wt}, ${h}h — ${proj}`,
+        selectProject: (_wt: string, _h: number, list: string, _count: number) =>
+            `📌 *SELECT PROJECT*\n\n${list}`,
+        success: (wt: string, h: number, proj: string, id: number | string) => {
+            const formattedHours = h % 1 === 0 ? `${h}` : h.toFixed(1)
+            return `✅ Daily Work Log Updated.\n\nTask: ${wt}\nDuration: ${formattedHours} hours\nProject: ${proj || 'General Project'}\nConfirmation ID: #${id}\n\nYour submission has been recorded in the daily site report.`
         },
-        selectProject: (wt: string, h: number, list: string, count: number) =>
-            `📌 *SELECT PROJECT*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nReply with number (${numberHint(count, 'or')})`,
-        success: (wt: string, h: number, proj: string, materials?: string, location?: string, summary?: string) => {
-            let m = `✅ *LOGGED*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${h} hours\n📍 *Project:* ${proj}`
-            if (materials) m += `\n🧰 *Materials:* ${materials}`
-            if (location) m += `\n📌 *Location:* ${location}`
-            if (summary) m += `\n\n_"${summary}"_`
-            m += `\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`
-            return m
-        },
-        flagged: '🙋 Thanks — I\'ve flagged this for your foreman to review. They\'ll follow up.',
+        flagged: (proj: string, id: number | string) =>
+            `✅ Field Update Received.\n\nProject: ${proj || 'General Project'}\nSubmission ID: #${id}\n\nYour photo and task notes have been securely uploaded to the supervisor dashboard.`,
         noProjects: '❌ No projects available',
     },
     es: {
-        greeting: '👋 ¡Hola! ¿Listo para registrar tu trabajo?\n\nEnvía una foto, nota de voz, o describe lo que trabajaste.',
-        collectWork: '🔧 *¿Qué tipo de trabajo hiciste?*\n\nTambién dime cuántas horas.\n(Ejemplo: "eléctrico por 6 horas")',
-        askHours: (wt: string) => wt && !isGenericWork(wt)
-            ? `⏱️ Entendido: *${wt}*\n\n¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`
-            : `⏱️ ¿Cuántas horas trabajaste?\n(Ejemplo: 6.5 o "6 y media")`,
-        clarify: (reason: string) => `⚠️ *NECESITA ACLARACIÓN*\n\n${reason}\n\n¿Puedes confirmar qué trabajo hiciste realmente?`,
-        askFix: '🤔 Sin problema — ¿qué quieres cambiar: el *trabajo*, las *horas*, o el *proyecto*?',
-        confirm: (wt: string, h: number, proj: string, materials?: string, location?: string) => {
-            let m = `📝 *CONFIRMA TU TRABAJO*\n\n🔧 *Trabajo:* ${wt}\n⏱️ *Tiempo:* ${h} horas\n📍 *Proyecto:* ${proj}`
-            if (materials) m += `\n🧰 *Materiales:* ${materials}`
-            if (location) m += `\n📌 *Ubicación:* ${location}`
-            return m + `\n\n¿Es correcto? Responde *S* o *N*`
+        greeting: '👋 ¡Hola! Envía una foto, nota de voz o describe tu trabajo.',
+        collectWork: '🔧 Describe tu trabajo y horas.',
+        askHours: (wt: string, proj: string) =>
+            `📸 Foto y detalles de trabajo recibidos para el proyecto: ${proj || 'General Project'}.\n\nTarea registrada: ${wt}\n\nPor favor responde con el número de horas trabajadas para finalizar el ticket.`,
+        clarify: (proj: string, id: number | string) =>
+            `✅ Actualización de Campo Recibida.\n\nProyecto: ${proj || 'General Project'}\nID de Envío: #${id}\n\nTu foto y notas de la tarea han sido enviadas al panel del supervisor.`,
+        askFix: '🤔 ¿Qué quieres cambiar?',
+        confirm: (wt: string, h: number, proj: string) => `📝 ${wt}, ${h}h — ${proj}`,
+        selectProject: (_wt: string, _h: number, list: string, _count: number) =>
+            `📌 *SELECCIONA PROYECTO*\n\n${list}`,
+        success: (wt: string, h: number, proj: string, id: number | string) => {
+            const formattedHours = h % 1 === 0 ? `${h}` : h.toFixed(1)
+            return `✅ Registro de Trabajo Actualizado.\n\nTarea: ${wt}\nDuración: ${formattedHours} horas\nProyecto: ${proj || 'General Project'}\nID de Confirmación: #${id}\n\nTu reporte ha sido registrado en el informe diario de la obra.`
         },
-        selectProject: (wt: string, h: number, list: string, count: number) =>
-            `📌 *SELECCIONA PROYECTO*\n\n🔧 ${wt} • ${h}h\n\n${list}\n\nResponde con número (${numberHint(count, 'o')})`,
-        success: (wt: string, h: number, proj: string, materials?: string, location?: string, summary?: string) => {
-            let m = `✅ *REGISTRADO*\n\n🔧 *Trabajo:* ${wt}\n⏱️ *Tiempo:* ${h} horas\n📍 *Proyecto:* ${proj}`
-            if (materials) m += `\n🧰 *Materiales:* ${materials}`
-            if (location) m += `\n📌 *Ubicación:* ${location}`
-            if (summary) m += `\n\n_"${summary}"_`
-            m += `\n\n💡 _¿Necesitas ajustar? Responde "cambiar proyecto a <Nombre>" o "cambiar horas a 8"._`
-            return m
-        },
-        flagged: '🙋 Gracias — lo he marcado para que tu supervisor lo revise. Te contactarán.',
+        flagged: (proj: string, id: number | string) =>
+            `✅ Actualización de Campo Recibida.\n\nProyecto: ${proj || 'General Project'}\nID de Envío: #${id}\n\nTu foto y notas de la tarea han sido enviadas al panel del supervisor.`,
         noProjects: '❌ No hay proyectos disponibles',
     },
 }
@@ -79,21 +63,12 @@ function formatTicketCode(bucketId: number, companyCode?: string): string {
     return `${prefix}-${10000 + bucketId}`
 }
 
-function withTicket(bucketId: number, response: string, companyCode?: string): string {
-    return `*TICKET ${formatTicketCode(bucketId, companyCode)}*\n${response}`
+function withTicket(_bucketId: number, response: string, _companyCode?: string): string {
+    return response
 }
 
-function withDev(bucketId: number, response: string, action: Action, rec: WorkRecord, companyCode?: string, elapsedMs?: number): string {
-    let result = response.includes('*TICKET') ? response : withTicket(bucketId, response, companyCode)
-    if (DEV_MODE) {
-        let devStr = `[DEV: ${action.type} work:${stripThinking(rec.workType) || '-'} hrs:${rec.hours ?? '-'} proj:${stripThinking(rec.projectName) || '-'} asked:${rec.lastAsked ?? '-'}×${rec.askCount}`
-        if (elapsedMs) {
-            devStr += ` | ⚡ ${elapsedMs}ms`
-        }
-        devStr += `]`
-        result += `\n\n_${devStr}_`
-    }
-    return result
+function withDev(_bucketId: number, response: string, _action: Action, _rec: WorkRecord, _companyCode?: string, _elapsedMs?: number): string {
+    return response
 }
 
 export interface ComposeExtras {
@@ -108,12 +83,9 @@ export interface ComposeExtras {
 export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
     const rawWt = stripThinking(rec.summary || rec.workType)
-    const wt = isGenericWork(rawWt) ? 'work' : rawWt
+    const wt = isGenericWork(rawWt) ? 'Field Work' : rawWt
     const h = rec.hours || 0
-    const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
-    const location = stripThinking(rec.location) || undefined
-    const proj = stripThinking(rec.projectName) || 'your project'
-    const cleanReason = action.type === 'CLARIFY_INCONSISTENCY' ? stripThinking(action.reason) : ''
+    const proj = stripThinking(rec.projectName) || 'General Project'
 
     let body: string
     switch (action.type) {
@@ -121,16 +93,16 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
             body = m.greeting
             break
         case 'ASK_HOURS':
-            body = m.askHours(wt)
+            body = m.askHours(wt, proj)
             break
         case 'CLARIFY_INCONSISTENCY':
-            body = m.clarify(cleanReason)
+            body = m.clarify(proj, extras.bucketId)
             break
         case 'ASK_FIX':
             body = m.askFix
             break
         case 'CONFIRM':
-            body = m.confirm(wt, h, proj, materials, location)
+            body = m.confirm(wt, h, proj)
             break
         case 'SELECT_PROJECT': {
             const list = extras.projects.length
@@ -140,33 +112,34 @@ export function composeReply(action: Action, rec: WorkRecord, extras: ComposeExt
             break
         }
         case 'FLAG_FOR_REVIEW':
-            body = m.flagged
+            body = m.flagged(proj, extras.bucketId)
             break
         default:
-            body = m.askHours(wt)
+            body = m.askHours(wt, proj)
     }
     return withDev(extras.bucketId, body, action, rec, extras.companyCode, extras.elapsedMs)
 }
 
-// The final "logged!" confirmation after a successful submit.
+// The final "logged!" confirmation after a successful submit (Template A).
 export function composeSuccess(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
     const m = MESSAGES[rec.language]
     const rawWt = stripThinking(rec.summary || rec.workType)
-    const wt = rawWt && !isGenericWork(rawWt) ? rawWt : (rawWt || 'Work')
-    const proj = stripThinking(projectName) || 'your project'
-    const summary = stripThinking(rec.summary) && !isGenericWork(rec.summary) ? stripThinking(rec.summary) : undefined
-    const materials = rec.materials.length ? rec.materials.map(mat => stripThinking(mat)).join(', ') : undefined
-    const body = m.success(wt, rec.hours || 0, proj, materials, stripThinking(rec.location) || undefined, summary)
+    const wt = rawWt && !isGenericWork(rawWt) ? rawWt : (rawWt || 'Field Work')
+    const proj = stripThinking(projectName) || 'General Project'
+    const body = m.success(wt, rec.hours || 8, proj, extras.bucketId)
     return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode, extras.elapsedMs)
 }
 
 export function composeUpdated(rec: WorkRecord, projectName: string, extras: ComposeExtras): string {
     const rawWt = stripThinking(rec.summary || rec.workType)
-    const wt = rawWt && !isGenericWork(rawWt) ? rawWt : (rawWt || 'Work')
-    const proj = stripThinking(projectName) || 'your project'
-    const ticketNum = extras.bucketId > 10000 ? extras.bucketId : extras.bucketId + 10000
-    const ticketId = `${extras.companyCode || 'ACE'}-${ticketNum}`
+    const wt = rawWt && !isGenericWork(rawWt) ? rawWt : (rawWt || 'Field Work')
+    const proj = stripThinking(projectName) || 'General Project'
+    const hours = rec.hours || 8
+    const hoursStr = hours % 1 === 0 ? `${hours}` : hours.toFixed(1)
 
-    const body = `*TICKET ${ticketId}*\n✏️ *UPDATED*\n\n🔧 *Work:* ${wt}\n⏱️ *Time:* ${rec.hours || 0} hours\n📍 *Project:* ${proj}\n\n💡 _Need to adjust? Reply "change project to <Name>" or "change hours to 8"._`
+    const body = rec.language === 'es'
+        ? `✅ Registro de Trabajo Actualizado.\n\nTarea: ${wt}\nDuración: ${hoursStr} horas\nProyecto: ${proj}\nID de Confirmación: #${extras.bucketId}\n\nTu reporte ha sido actualizado en el informe diario de la obra.`
+        : `✅ Daily Work Log Updated.\n\nTask: ${wt}\nDuration: ${hoursStr} hours\nProject: ${proj}\nConfirmation ID: #${extras.bucketId}\n\nYour submission has been updated in the daily site report.`
+
     return withDev(extras.bucketId, body, { type: 'SUBMIT' }, rec, extras.companyCode, extras.elapsedMs)
 }

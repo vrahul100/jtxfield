@@ -97,7 +97,7 @@ export const buckets = pgTable('buckets', {
     suspectedProjectName: text('suspected_project_name'), // AI-extracted project tag for Inbox sorting
 
     // Status: open | closed | processing | completed | failed | holding
-    status: varchar('status', { length: 20 }).default('open').notNull(),
+    status: varchar('status', { length: 50 }).default('open').notNull(),
 
     // Validation
     validationErrors: text('validation_errors'),  // JSON array of issues

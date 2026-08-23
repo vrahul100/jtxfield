@@ -183,7 +183,9 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                         }).eq('id', bucket.id)
 
                         const response = composeUpdated(targetRec, pMatch.name, { bucketId: targetBucketId, companyCode })
-                        await sendMessage(bucket.from_phone, response, bucket.source)
+                        if (member?.subscription_tier !== 'basic') {
+                            await sendMessage(bucket.from_phone, response, bucket.source)
+                        }
                         return { status: 'cancelled', action: 'edit_applied', response }
                     }
                 }
@@ -210,8 +212,10 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
                             conversation_state: 'cancelled'
                         }).eq('id', bucket.id)
 
-                        const response = composeUpdated(targetRec, targetRec.projectName || 'Inbox', { bucketId: targetBucketId, companyCode })
-                        await sendMessage(bucket.from_phone, response, bucket.source)
+                        const response = composeUpdated(targetRec, targetRec.projectName || 'General Work', { bucketId: targetBucketId, companyCode })
+                        if (member?.subscription_tier !== 'basic') {
+                            await sendMessage(bucket.from_phone, response, bucket.source)
+                        }
                         return { status: 'cancelled', action: 'edit_applied', response }
                     }
                 }
@@ -225,7 +229,9 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         }).eq('id', bucket.id)
 
         const errorResponse = `❓ Could not find ticket to update. To log new work, send a photo or describe your work.`
-        await sendMessage(bucket.from_phone, errorResponse, bucket.source)
+        if (member?.subscription_tier !== 'basic') {
+            await sendMessage(bucket.from_phone, errorResponse, bucket.source)
+        }
         return { status: 'cancelled', action: 'edit_cancelled', response: errorResponse }
     }
 
@@ -359,6 +365,7 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
     // --- Act ---
     const elapsedMs = Date.now() - startTime
     const extras = { bucketId, companyCode, projects, imageAnalysis, elapsedMs }
+
     if (action.type === 'SUBMIT') {
         return await submit(record, bucket, member, inbox, extras)
     }
@@ -367,7 +374,6 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         record.lastAsked = null
         record.askCount = 0
         const response = composeReply(action, record, extras)
-        await sendMessage(bucket.from_phone, response, bucket.source)
         await supabase.from('buckets').update({
             extracted_data: JSON.stringify(record),
             conversation_state: action.type,
@@ -379,22 +385,21 @@ export async function runStateMachine(bucketId: number): Promise<{ status: strin
         return { status: 'pending_review', action: 'flagged', response }
     }
 
-    // --- Non-terminal: ask the next question and wait ---
+    // --- Non-terminal / Missing Info: update bucket ---
     record.lastAsked = slotOf(action)
     record.askCount = capped.askCount
     const response = composeReply(action, record, extras)
 
-    await sendMessage(bucket.from_phone, response, bucket.source)
     await supabase.from('buckets').update({
         extracted_data: JSON.stringify(record),
         conversation_state: action.type,
         state_attempts: record.askCount,
         project_id: record.projectId,
         ai_response: response,
-        status: 'open',
+        status: 'draft_hours_pending',
     }).eq('id', bucketId)
 
-    return { status: 'open', action: 'waiting', response }
+    return { status: 'draft_hours_pending', action: 'waiting', response }
 }
 
 // Reuse a project the member confirmed recently (<8h) as the current candidate, so repeat
@@ -423,11 +428,19 @@ async function submit(
     const supabase = getSupabase()
     const { bucketId } = extras
 
+    // Auto-default hours if unstated (guarantees zero chat loops)
+    if (!record.hours || record.hours <= 0) {
+        record.hours = 8
+    }
+
     // Project name for the receipt.
-    let projectName = 'Inbox'
+    let projectName = 'General Work'
     if (record.projectId) {
         const { data: proj } = await supabase.from('projects').select('name').eq('id', record.projectId).single()
-        projectName = proj?.name || record.projectName || 'Inbox'
+        projectName = proj?.name || record.projectName || 'General Work'
+    } else if (inbox) {
+        record.projectId = inbox.id
+        projectName = inbox.name
     }
 
     // Store summaries in English (users may log in Spanish).
@@ -443,16 +456,16 @@ async function submit(
         project_id: record.projectId,
     }).eq('id', bucketId)
 
-    const finalHours = record.hours ?? null
+    const finalHours = record.hours ?? 8
     const scopeLine = englishSummary || record.scopeDescription || (record.workType ? `${record.workType}${record.location ? ` — ${record.location}` : ''}` : 'General Work')
     const txn = {
         bucket_id: bucketId,
         company_id: bucket.node_id,
         user_id: bucket.member_id,
         project_id: record.projectId,
-        job: `${scopeLine} - ${finalHours || 0}h`,
+        job: `${scopeLine} - ${finalHours}h`,
         scope_description: scopeLine,
-        labor: `${scopeLine} for ${finalHours || 0}h`,
+        labor: `${scopeLine} for ${finalHours}h`,
         material: record.materials.length ? record.materials.join(', ') : null,
         location: record.location || null,
         time: finalHours,
@@ -463,7 +476,6 @@ async function submit(
     if (txnError) console.error('[Engine] txn insert error:', txnError)
 
     // Remember the project for this member's next log — but NOT when it went to Inbox
-    // (Inbox is "unassigned", so it shouldn't seed the recent-project inference).
     if (member?.id) {
         const updateData: any = {
             language_preference: record.language,
@@ -472,6 +484,10 @@ async function submit(
             updateData.last_confirmed_project_id = record.projectId
             updateData.project_confirmed_at = new Date().toISOString()
         }
+        if (isSilent) {
+            updateData.pending_item_count = (member.pending_item_count || 0) + 1
+            updateData.pending_ticket_count = (member.pending_ticket_count || 0) + 1
+        }
         await supabase.from('members').update(updateData).eq('id', member.id)
     }
 
@@ -479,7 +495,12 @@ async function submit(
     record.lastAsked = null
     record.askCount = 0
     const response = composeSuccess(record, projectName, extras)
-    await sendMessage(bucket.from_phone, response, bucket.source)
+
+    // Only send outbound message if NOT in silent mode (Basic tier is 100% silent)
+    if (!isSilent) {
+        await sendMessage(bucket.from_phone, response, bucket.source)
+    }
+
     await supabase.from('buckets').update({
         extracted_data: JSON.stringify(record),
         conversation_state: 'complete',
@@ -488,6 +509,6 @@ async function submit(
         status: 'submitted',
     }).eq('id', bucketId)
 
-    console.log(`[Engine] Submitted bucket #${bucketId}`)
+    console.log(`[Engine] Submitted bucket #${bucketId} (silent=${isSilent})`)
     return { status: 'submitted', action: 'success', response }
 }

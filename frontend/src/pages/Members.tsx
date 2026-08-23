@@ -12,6 +12,8 @@ interface Member {
     node_name?: string;
     language_preference?: string;
     domain?: string;
+    subscription_tier?: 'basic' | 'pro';
+    pending_item_count?: number;
     created_at: string;
 }
 
@@ -23,7 +25,7 @@ export function Members() {
     const [sortBy, setSortBy] = useState('name');
     const [showAddForm, setShowAddForm] = useState(false);
     const [editingMember, setEditingMember] = useState<Member | null>(null);
-    const [formData, setFormData] = useState({ name: '', phone: '', language: 'en', domain: 'construction' });
+    const [formData, setFormData] = useState({ name: '', phone: '', language: 'en', domain: 'construction', subscription_tier: 'pro' as 'basic' | 'pro' });
     const [formError, setFormError] = useState('');
     const [actionLoading, setActionLoading] = useState<number | null>(null);
     const [search, setSearch] = useState('');
@@ -150,7 +152,7 @@ export function Members() {
             const data = await response.json();
 
             if (response.ok) {
-                setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                setFormData({ name: '', phone: '', language: 'en', domain: 'construction', subscription_tier: 'pro' });
                 setShowAddForm(false);
                 fetchMembers();
                 alert(data.message || 'Member added successfully!');
@@ -177,13 +179,14 @@ export function Members() {
                     fullName: formData.name,
                     language: formData.language,
                     domain: formData.domain,
+                    subscriptionTier: formData.subscription_tier,
                 }),
             });
 
             const data = await response.json();
 
             if (response.ok) {
-                setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                setFormData({ name: '', phone: '', language: 'en', domain: 'construction', subscription_tier: 'pro' });
                 setEditingMember(null);
                 fetchMembers();
                 alert('Member updated successfully!');
@@ -203,6 +206,7 @@ export function Members() {
             phone: member.phone_number,
             language: member.language_preference || 'en',
             domain: member.domain || 'construction',
+            subscription_tier: member.subscription_tier || 'pro',
         });
         setShowAddForm(false);
         window.scrollTo(0, 0);
@@ -298,7 +302,7 @@ export function Members() {
                                 onClick={() => {
                                     setShowAddForm(false);
                                     setEditingMember(null);
-                                    setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                                    setFormData({ name: '', phone: '', language: 'en', domain: 'construction', subscription_tier: 'pro' });
                                 }}
                                 className="text-gray-500 hover:text-gray-700"
                             >
@@ -375,6 +379,22 @@ export function Members() {
                                             <option value="recovery">Recovery</option>
                                         </select>
                                     </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                                            WhatsApp Messaging Tier
+                                        </label>
+                                        <select
+                                            value={formData.subscription_tier}
+                                            onChange={(e) => setFormData({ ...formData, subscription_tier: e.target.value as 'basic' | 'pro' })}
+                                            className="input-field"
+                                        >
+                                            <option value="pro">⚡ Pro (Instant Confirmation & Utility Reply)</option>
+                                            <option value="basic">📦 Basic (Async — 2 Batch Summaries / Day)</option>
+                                        </select>
+                                        <p className="text-xs text-gray-500 mt-1">
+                                            Basic tier holds messages silently and dispatches batch summaries at 12:00 PM and 5:00 PM.
+                                        </p>
+                                    </div>
                                 </>
                             )}
                             <div className="flex gap-2 justify-end">
@@ -383,7 +403,7 @@ export function Members() {
                                     onClick={() => {
                                         setShowAddForm(false);
                                         setEditingMember(null);
-                                        setFormData({ name: '', phone: '', language: 'en', domain: 'construction' });
+                                        setFormData({ name: '', phone: '', language: 'en', domain: 'construction', subscription_tier: 'pro' });
                                     }}
                                     className="btn-secondary"
                                 >
@@ -456,6 +476,9 @@ export function Members() {
                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                         Status
                                     </th>
+                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                                        WhatsApp Tier
+                                    </th>
                                     {user?.role === 'SU' && (
                                         <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                                             Node
@@ -490,6 +513,22 @@ export function Members() {
                                             >
                                                 {getStatusLabel(member.status)}
                                             </span>
+                                        </td>
+                                        <td className="px-6 py-4 whitespace-nowrap">
+                                            {member.subscription_tier === 'basic' ? (
+                                                <span className="px-2 py-0.5 inline-flex items-center gap-1 text-[11px] font-bold rounded bg-slate-100 text-slate-800 border border-slate-300">
+                                                    <span>📦 Basic (Async)</span>
+                                                    {member.pending_item_count && member.pending_item_count > 0 ? (
+                                                        <span className="bg-amber-100 text-amber-900 text-[10px] px-1 rounded-full border border-amber-300 font-extrabold">
+                                                            {member.pending_item_count} pending
+                                                        </span>
+                                                    ) : null}
+                                                </span>
+                                            ) : (
+                                                <span className="px-2 py-0.5 inline-flex items-center gap-1 text-[11px] font-bold rounded bg-indigo-50 text-indigo-900 border border-indigo-200">
+                                                    <span>⚡ Pro (Instant)</span>
+                                                </span>
+                                            )}
                                         </td>
                                         {user?.role === 'SU' && (
                                             <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
