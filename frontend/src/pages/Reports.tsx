@@ -1,5 +1,14 @@
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { Layout } from '../components/Layout';
+import { ProjectProgressReportView } from '../components/ProjectProgressReportView';
+import { 
+    FileText, 
+    FolderKanban, 
+    Users, 
+    ChevronRight,
+    RotateCw
+} from 'lucide-react';
 
 interface ProjectSummary {
     project_id: number;
@@ -29,12 +38,55 @@ interface SummaryData {
 }
 
 export function Reports() {
+    const [searchParams, setSearchParams] = useSearchParams();
+    const urlTab = searchParams.get('tab');
+    const urlProjectId = searchParams.get('projectId');
+
+    const [activeTab, setActiveTab] = useState<'project-report' | 'project' | 'member'>(() => {
+        if (urlTab === 'project' || urlTab === 'member' || urlTab === 'project-report') {
+            return urlTab;
+        }
+        return 'project-report';
+    });
+
+    const [selectedProjectId, setSelectedProjectId] = useState<number | null>(() => {
+        return urlProjectId ? Number(urlProjectId) : null;
+    });
+
     const [data, setData] = useState<SummaryData | null>(null);
-    const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'project' | 'member'>('project');
     const [dateRange, setDateRange] = useState<string>('month');
     const [refreshTrigger, setRefreshTrigger] = useState(0);
     const [refreshing, setRefreshing] = useState(false);
+
+    // Sync tab and projectId with URL params
+    useEffect(() => {
+        if (urlTab && (urlTab === 'project-report' || urlTab === 'project' || urlTab === 'member')) {
+            setActiveTab(urlTab);
+        }
+        if (urlProjectId) {
+            setSelectedProjectId(Number(urlProjectId));
+        }
+    }, [urlTab, urlProjectId]);
+
+    const handleTabChange = (tab: 'project-report' | 'project' | 'member') => {
+        setActiveTab(tab);
+        const params: Record<string, string> = { tab };
+        if (selectedProjectId) {
+            params.projectId = selectedProjectId.toString();
+        }
+        setSearchParams(params);
+    };
+
+    const handleSelectProject = (projectId: number) => {
+        setSelectedProjectId(projectId);
+        setSearchParams({ tab: 'project-report', projectId: projectId.toString() });
+    };
+
+    const handleViewProjectProgress = (projectId: number) => {
+        setSelectedProjectId(projectId);
+        setActiveTab('project-report');
+        setSearchParams({ tab: 'project-report', projectId: projectId.toString() });
+    };
 
     const getDateRange = () => {
         const now = new Date();
@@ -61,18 +113,15 @@ export function Reports() {
     };
 
     const fetchSummary = async () => {
-        setLoading(true);
         setRefreshing(true);
         try {
             const { startDate, endDate } = getDateRange();
-            console.log('Fetching summary with dates:', startDate, endDate);
             const response = await fetch(
                 `/api/reports/summary?startDate=${startDate}&endDate=${endDate}`,
                 { credentials: 'include' }
             );
             if (response.ok) {
                 const summary = await response.json();
-                console.log('Summary data:', summary);
                 setData(summary);
             } else {
                 console.error('Failed to fetch summary:', response.status);
@@ -80,7 +129,6 @@ export function Reports() {
         } catch (error) {
             console.error('Failed to fetch summary:', error);
         } finally {
-            setLoading(false);
             setRefreshing(false);
         }
     };
@@ -90,27 +138,27 @@ export function Reports() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [dateRange, refreshTrigger]);
 
-    if (loading) {
-        return (
-            <Layout>
-                <div className="flex items-center justify-center h-64">
-                    <div className="text-gray-600">Loading...</div>
-                </div>
-            </Layout>
-        );
-    }
-
     return (
         <Layout>
-            <div className="relative">
-                <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-3 mb-4">
-                    <div className="flex justify-between items-center">
-                        <h1 className="text-3xl font-bold text-gray-900">Reports</h1>
-                        <div className="flex items-center gap-3">
+            <div className="relative space-y-6 max-w-7xl w-full mx-auto pb-16 px-2 sm:px-4">
+                
+                {/* Page Header */}
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 pt-1">
+                    <div>
+                        <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
+                            Reports & Analytics
+                        </h1>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                            Executive project progress summaries, labor rollups, and crew activity reporting.
+                        </p>
+                    </div>
+
+                    {activeTab !== 'project-report' && (
+                        <div className="flex items-center gap-3 w-full sm:w-auto justify-end">
                             <select
                                 value={dateRange}
                                 onChange={(e) => setDateRange(e.target.value)}
-                                className="input-field"
+                                className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
                             >
                                 <option value="week">Last 7 Days</option>
                                 <option value="month">Last 30 Days</option>
@@ -119,165 +167,218 @@ export function Reports() {
                             <button
                                 onClick={() => setRefreshTrigger(prev => prev + 1)}
                                 disabled={refreshing}
-                                className="btn-primary flex items-center gap-2"
-                                style={refreshing ? { cursor: 'wait' } : {}}
+                                className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 cursor-pointer shadow-2xs"
                             >
-                                {refreshing && (
-                                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
-                                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                                    </svg>
-                                )}
-                                {refreshing ? 'Loading...' : 'Refresh'}
+                                <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
+                                <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
                             </button>
                         </div>
-                    </div>
+                    )}
                 </div>
 
-                {/* Summary Cards */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                    <div className="card p-6">
-                        <div className="text-sm text-gray-500 mb-1">Total Hours</div>
-                        <div className="text-3xl font-bold text-indigo-600">
-                            {data?.summary.totalHours?.toFixed(1) || '0'}
-                        </div>
-                    </div>
-                    <div className="card p-6">
-                        <div className="text-sm text-gray-500 mb-1">Active Projects</div>
-                        <div className="text-3xl font-bold text-green-600">
-                            {data?.summary.activeProjects || 0}
-                        </div>
-                    </div>
-                    <div className="card p-6">
-                        <div className="text-sm text-gray-500 mb-1">Active Members</div>
-                        <div className="text-3xl font-bold text-blue-600">
-                            {data?.summary.activeMembers || 0}
-                        </div>
-                    </div>
-                </div>
-
-                {/* Tabs */}
-                <div className="border-b border-gray-200 mb-6">
-                    <nav className="-mb-px flex gap-8">
+                {/* Primary Navigation Tabs */}
+                <div className="border-b border-slate-200">
+                    <nav className="-mb-px flex gap-2 sm:gap-6 overflow-x-auto">
                         <button
-                            onClick={() => setActiveTab('project')}
-                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'project'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            onClick={() => handleTabChange('project-report')}
+                            className={`py-3 px-3 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                                activeTab === 'project-report'
+                                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
+                                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                            }`}
                         >
-                            By Project
+                            <FileText className="w-4 h-4" />
+                            <span>Project Progress Report</span>
                         </button>
                         <button
-                            onClick={() => setActiveTab('member')}
-                            className={`py-2 px-1 border-b-2 font-medium text-sm ${activeTab === 'member'
-                                ? 'border-indigo-500 text-indigo-600'
-                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                                }`}
+                            onClick={() => handleTabChange('project')}
+                            className={`py-3 px-3 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                                activeTab === 'project'
+                                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
+                                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                            }`}
                         >
-                            By Member
+                            <FolderKanban className="w-4 h-4" />
+                            <span>Overview by Project</span>
+                        </button>
+                        <button
+                            onClick={() => handleTabChange('member')}
+                            className={`py-3 px-3 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                                activeTab === 'member'
+                                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
+                                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                            }`}
+                        >
+                            <Users className="w-4 h-4" />
+                            <span>Overview by Member</span>
                         </button>
                     </nav>
                 </div>
 
-                {/* By Project Table */}
+                {/* TAB 1: Project Progress Report */}
+                {activeTab === 'project-report' && (
+                    <ProjectProgressReportView 
+                        initialProjectId={selectedProjectId}
+                        onProjectChange={handleSelectProject}
+                    />
+                )}
+
+                {/* TAB 2: Overview by Project */}
                 {activeTab === 'project' && (
-                    <div className="card overflow-hidden">
-                        <table className="table-auto w-full">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Project
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Total Hours
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Workers
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Entries
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {data?.byProject.map((project) => (
-                                    <tr key={project.project_id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 text-sm font-medium text-gray-900">
-                                            {project.project_name}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {project.total_hours.toFixed(1)}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {project.member_count}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {project.transaction_count}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {(!data?.byProject || data.byProject.length === 0) && (
-                                    <tr>
-                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                                            No data for selected period
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="space-y-6">
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Rollup Hours</div>
+                                <div className="text-2xl sm:text-3xl font-black text-indigo-600">
+                                    {data?.summary.totalHours?.toFixed(1) || '0'} <span className="text-xs font-normal text-slate-400">hrs</span>
+                                </div>
+                            </div>
+                            <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Active Projects</div>
+                                <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+                                    {data?.summary.activeProjects || 0}
+                                </div>
+                            </div>
+                            <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Active Crew Members</div>
+                                <div className="text-2xl sm:text-3xl font-black text-blue-600">
+                                    {data?.summary.activeMembers || 0}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Projects Table */}
+                        <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                            <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                <span className="text-xs font-black uppercase tracking-wider text-slate-700">Project Hours & Worker Distribution</span>
+                                <span className="text-xs text-slate-500 font-medium">{data?.byProject.length || 0} projects listed</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="table-auto w-full text-left">
+                                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-600 uppercase tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-3.5">Project</th>
+                                            <th className="px-6 py-3.5">Total Hours</th>
+                                            <th className="px-6 py-3.5">Workers</th>
+                                            <th className="px-6 py-3.5">Entries</th>
+                                            <th className="px-6 py-3.5 text-right">Action</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 text-sm">
+                                        {data?.byProject.map((project) => (
+                                            <tr key={project.project_id} className="hover:bg-slate-50/80 transition-colors">
+                                                <td className="px-6 py-4 font-bold text-slate-950">
+                                                    {project.project_name}
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-900 font-semibold">
+                                                    {project.total_hours.toFixed(1)} hrs
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-700">
+                                                    {project.member_count}
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-700">
+                                                    {project.transaction_count}
+                                                </td>
+                                                <td className="px-6 py-4 text-right">
+                                                    <button
+                                                        onClick={() => handleViewProjectProgress(project.project_id)}
+                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                                                    >
+                                                        <FileText className="w-3.5 h-3.5" />
+                                                        <span>View Progress Report</span>
+                                                        <ChevronRight className="w-3.5 h-3.5" />
+                                                    </button>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {(!data?.byProject || data.byProject.length === 0) && (
+                                            <tr>
+                                                <td colSpan={5} className="px-6 py-8 text-center text-slate-400">
+                                                    No project activity recorded for the selected date range.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
 
-                {/* By Member Table */}
+                {/* TAB 3: Overview by Member */}
                 {activeTab === 'member' && (
-                    <div className="card overflow-hidden">
-                        <table className="table-auto w-full">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Member
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Total Hours
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Projects
-                                    </th>
-                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
-                                        Entries
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody className="divide-y divide-gray-200">
-                                {data?.byMember.map((member) => (
-                                    <tr key={member.member_id} className="hover:bg-gray-50">
-                                        <td className="px-6 py-4 text-sm">
-                                            <div className="font-medium text-gray-900">{member.member_name}</div>
-                                            <div className="text-xs text-gray-500">{member.member_phone}</div>
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {member.total_hours.toFixed(1)}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {member.project_count}
-                                        </td>
-                                        <td className="px-6 py-4 text-sm text-gray-900">
-                                            {member.transaction_count}
-                                        </td>
-                                    </tr>
-                                ))}
-                                {(!data?.byMember || data.byMember.length === 0) && (
-                                    <tr>
-                                        <td colSpan={4} className="px-6 py-8 text-center text-gray-500">
-                                            No data for selected period
-                                        </td>
-                                    </tr>
-                                )}
-                            </tbody>
-                        </table>
+                    <div className="space-y-6">
+                        {/* Summary Cards */}
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Rollup Hours</div>
+                                <div className="text-2xl sm:text-3xl font-black text-indigo-600">
+                                    {data?.summary.totalHours?.toFixed(1) || '0'} <span className="text-xs font-normal text-slate-400">hrs</span>
+                                </div>
+                            </div>
+                            <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Active Projects</div>
+                                <div className="text-2xl sm:text-3xl font-black text-emerald-600">
+                                    {data?.summary.activeProjects || 0}
+                                </div>
+                            </div>
+                            <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
+                                <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Active Crew Members</div>
+                                <div className="text-2xl sm:text-3xl font-black text-blue-600">
+                                    {data?.summary.activeMembers || 0}
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Member Table */}
+                        <div className="card bg-white border border-slate-200 rounded-xl overflow-hidden shadow-xs">
+                            <div className="p-4 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+                                <span className="text-xs font-black uppercase tracking-wider text-slate-700">Member Work Allocation</span>
+                                <span className="text-xs text-slate-500 font-medium">{data?.byMember.length || 0} crew members listed</span>
+                            </div>
+                            <div className="overflow-x-auto">
+                                <table className="table-auto w-full text-left">
+                                    <thead className="bg-slate-50 border-b border-slate-200 text-[11px] font-black text-slate-600 uppercase tracking-wider">
+                                        <tr>
+                                            <th className="px-6 py-3.5">Member</th>
+                                            <th className="px-6 py-3.5">Total Hours</th>
+                                            <th className="px-6 py-3.5">Projects</th>
+                                            <th className="px-6 py-3.5">Entries</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody className="divide-y divide-slate-100 text-sm">
+                                        {data?.byMember.map((member) => (
+                                            <tr key={member.member_id} className="hover:bg-slate-50/80 transition-colors">
+                                                <td className="px-6 py-4">
+                                                    <div className="font-bold text-slate-950">{member.member_name}</div>
+                                                    <div className="text-xs text-slate-400">{member.member_phone}</div>
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-900 font-semibold">
+                                                    {member.total_hours.toFixed(1)} hrs
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-700">
+                                                    {member.project_count}
+                                                </td>
+                                                <td className="px-6 py-4 text-slate-700">
+                                                    {member.transaction_count}
+                                                </td>
+                                            </tr>
+                                        ))}
+                                        {(!data?.byMember || data.byMember.length === 0) && (
+                                            <tr>
+                                                <td colSpan={4} className="px-6 py-8 text-center text-slate-400">
+                                                    No member activity recorded for the selected date range.
+                                                </td>
+                                            </tr>
+                                        )}
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
                     </div>
                 )}
+
             </div>
         </Layout>
     );

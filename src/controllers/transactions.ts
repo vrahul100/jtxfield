@@ -34,9 +34,9 @@ export async function getTransactions(c: Context, sql: Sql) {
             conditions.push(`t.project_id = ${parseInt(projectId)}`);
         }
         if (potentialChange === 'true') {
-            conditions.push(`b.potential_change = true`);
+            conditions.push(`b.potential_change::text IN ('true', 't', '1')`);
         } else if (potentialChange === 'false') {
-            conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
+            conditions.push(`(b.potential_change::text NOT IN ('true', 't', '1') OR b.potential_change IS NULL)`);
         }
 
         // Search across all text fields including AI summary

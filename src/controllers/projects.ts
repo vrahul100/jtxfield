@@ -226,7 +226,7 @@ export async function getProjectSummary(c: Context, sql: Sql) {
                 ), 0)::numeric as total_labor_cost,
                 COUNT(DISTINCT b.member_id)::int as active_workers_count,
                 COUNT(b.id) FILTER (WHERE b.image_urls IS NOT NULL AND b.image_urls != '[]' AND b.image_urls != '')::int as total_photos_count,
-                COUNT(b.id) FILTER (WHERE b.is_flagged = true OR b.potential_change = true)::int as flagged_count,
+                COUNT(b.id) FILTER (WHERE b.is_flagged::text IN ('true', 't', '1') OR b.potential_change::text IN ('true', 't', '1'))::int as flagged_count,
                 MIN(b.created_at) as first_activity_at,
                 MAX(b.created_at) as latest_activity_at
             FROM buckets b
@@ -499,11 +499,15 @@ export async function generateProjectDailyRollup(c: Context, sql: Sql) {
         `;
 
         if (periodLogs.length === 0) {
+            const noWorkMsg = `No field work was recorded for ${project.name} during ${displayPeriod}.`;
             return c.json({
                 period: displayPeriod,
-                summary: `No field work was recorded for ${project.name} during ${displayPeriod}.`,
-                milestones: [],
-                tradeBreakdown: [],
+                projectId: project.id,
+                projectName: project.name,
+                nodeName: project.node_name,
+                overallSummary: noWorkMsg,
+                overallBullets: [noWorkMsg],
+                workerReports: [],
                 totalHours: 0,
                 workersCount: 0,
                 totalCost: 0

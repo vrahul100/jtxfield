@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../hooks/useAuth';
-import { PencilIcon, TrashIcon, Clock } from 'lucide-react';
+import { PencilIcon, TrashIcon, FileText } from 'lucide-react';
 interface Project {
     id: number;
     name: string;
@@ -408,12 +408,12 @@ export function Projects() {
                                 </div>
                                 <div className="flex items-center gap-2">
                                     <Link
-                                        to={`/projects/${project.id}/timeline`}
+                                        to={`/reports?tab=project-report&projectId=${project.id}`}
                                         className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-colors"
-                                        title="View Chronological Work Timeline"
+                                        title="View Project Progress Report"
                                     >
-                                        <Clock className="w-3.5 h-3.5" />
-                                        <span>Timeline</span>
+                                        <FileText className="w-3.5 h-3.5" />
+                                        <span>Progress Report</span>
                                     </Link>
                                     <button
                                         onClick={() => handleEdit(project)}

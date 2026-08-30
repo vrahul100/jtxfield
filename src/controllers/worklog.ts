@@ -51,9 +51,9 @@ export async function getWorklog(c: Context, sql: Sql) {
             conditions.push(`b.member_id = ${parseInt(memberId)}`);
         }
         if (potentialChange === 'true') {
-            conditions.push(`b.potential_change = true`);
+            conditions.push(`b.potential_change::text IN ('true', 't', '1')`);
         } else if (potentialChange === 'false') {
-            conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
+            conditions.push(`(b.potential_change::text NOT IN ('true', 't', '1') OR b.potential_change IS NULL)`);
         }
         if (isFlagged === 'true') {
             conditions.push(`b.is_flagged = true`);
