@@ -9,7 +9,7 @@ import { getInbox, bulkAssign, addAlias } from './controllers/inbox.js'
 import { login, logout, checkSession } from './controllers/auth.js'
 import { getWorklog, getWorklogById, approveBucket, updateBucket, rejectBucket } from './controllers/worklog.js'
 import { getMembers, approveMember, inviteMember, updateMember, deleteMember, resendConfirmation } from './controllers/members.js'
-import { getProjects, createProject, updateProject, deleteProject } from './controllers/projects.js'
+import { getProjects, createProject, updateProject, deleteProject, getProjectSummary, getProjectTimeline, generateProjectDailyRollup } from './controllers/projects.js'
 import { getNodes, createNode, updateNode, deleteNode } from './controllers/nodes.js'
 import { getUsersList, createNewUser, updateUserInfo, deleteUser } from './controllers/users.js'
 import { getSummaryReport, getHeaderStats } from './controllers/reports.js'
@@ -78,6 +78,9 @@ export const createApp = (sql: Sql) => {
     // 5. PROJECTS API (OM & SU)
     app.get('/api/projects', requireOM(sql), (c) => getProjects(c, sql))
     app.post('/api/projects', requireOM(sql), (c) => createProject(c, sql))
+    app.get('/api/projects/:id/summary', requireOM(sql), (c) => getProjectSummary(c, sql))
+    app.get('/api/projects/:id/timeline', requireOM(sql), (c) => getProjectTimeline(c, sql))
+    app.post('/api/projects/:id/daily-summary', requireOM(sql), (c) => generateProjectDailyRollup(c, sql))
     app.put('/api/projects/:id', requireOM(sql), (c) => updateProject(c, sql))
     app.delete('/api/projects/:id', requireOM(sql), (c) => deleteProject(c, sql))
 

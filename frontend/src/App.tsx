@@ -13,6 +13,7 @@ import { Integrations } from './pages/Integrations';
 import { COPackets } from './pages/COPackets';
 import { TicketDetail } from './pages/TicketDetail';
 import { RateCard } from './pages/RateCard';
+import { ProjectTimeline } from './pages/ProjectTimeline';
 import './index.css';
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -76,6 +77,14 @@ function App() {
                         element={
                             <ProtectedRoute>
                                 <Projects />
+                            </ProtectedRoute>
+                        }
+                    />
+                    <Route
+                        path="/projects/:id/timeline"
+                        element={
+                            <ProtectedRoute>
+                                <ProjectTimeline />
                             </ProtectedRoute>
                         }
                     />

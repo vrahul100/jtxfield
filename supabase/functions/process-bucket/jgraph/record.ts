@@ -25,6 +25,9 @@ export interface WorkRecord {
     isWorkRelated: boolean
     inconsistency: string | null   // image/text mismatch awaiting clarification
     confidence: 'high' | 'medium' | 'low'
+    isFlagged?: boolean
+    flagType?: string | null
+    flagReason?: string | null
 
     // Confirmation lifecycle
     confirmed: boolean             // user gave the final yes on the full record
@@ -58,6 +61,9 @@ export interface TurnInterpretation {
     language: 'en' | 'es'
     isWorkRelated: boolean
     consistencyIssue?: string | null
+    isFlagged?: boolean
+    flagType?: string | null
+    flagReason?: string | null
     confidence?: 'high' | 'medium' | 'low' | null
     intent: 'provide' | 'correct' | 'confirm' | 'reject' | 'select' | 'question' | 'chitchat'
 }
@@ -226,9 +232,16 @@ export function applyPatch(rec: WorkRecord, p: TurnInterpretation, projectRef: P
     const anySlot = !!(next.workType || next.hours || next.materials.length || next.location || next.summary)
     next.isWorkRelated = anySlot || p.isWorkRelated || !isEmpty(rec)
 
-    // --- Consistency (Clarify ONLY ONCE) ---
+    // --- Consistency & Flagging ---
     if (p.consistencyIssue && rec.lastAsked !== 'clarify') {
         next.inconsistency = p.consistencyIssue
+        next.isFlagged = true
+        next.flagType = p.flagType || 'trade_mismatch'
+        next.flagReason = p.flagReason || p.consistencyIssue
+    } else if (p.isFlagged) {
+        next.isFlagged = true
+        next.flagType = p.flagType || 'anomaly'
+        next.flagReason = p.flagReason || 'Flagged for review'
     } else if (rec.inconsistency && rec.lastAsked === 'clarify') {
         next.inconsistency = null   // User responded to the single clarification prompt
     }

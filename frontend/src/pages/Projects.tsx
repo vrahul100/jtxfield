@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { useAuth } from '../hooks/useAuth';
-import { PencilIcon, TrashIcon } from 'lucide-react';
+import { PencilIcon, TrashIcon, Clock } from 'lucide-react';
 interface Project {
     id: number;
     name: string;
@@ -405,18 +406,28 @@ export function Projects() {
                                         <p className="text-sm text-gray-500 mb-2">📍 Radius: {project.radius}m</p>
                                     )}
                                 </div>
-                                <div className="flex gap-2">
+                                <div className="flex items-center gap-2">
+                                    <Link
+                                        to={`/projects/${project.id}/timeline`}
+                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-colors"
+                                        title="View Chronological Work Timeline"
+                                    >
+                                        <Clock className="w-3.5 h-3.5" />
+                                        <span>Timeline</span>
+                                    </Link>
                                     <button
                                         onClick={() => handleEdit(project)}
-                                        className="px-3 py-1 text-sm text-primary-600 hover:bg-primary-50 rounded"
+                                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                        title="Edit Project"
                                     >
-                                        <PencilIcon className="w-6 h-6" strokeWidth={3} />
+                                        <PencilIcon className="w-4 h-4" />
                                     </button>
                                     <button
                                         onClick={() => handleDelete(project.id)}
-                                        className="px-3 py-1 text-sm text-red-600 hover:bg-red-50 rounded"
+                                        className="p-1.5 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        title="Delete Project"
                                     >
-                                        <TrashIcon className="w-6 h-6" strokeWidth={3} />
+                                        <TrashIcon className="w-4 h-4" />
                                     </button>
                                 </div>
                             </div>

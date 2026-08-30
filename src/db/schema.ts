@@ -114,10 +114,14 @@ export const buckets = pgTable('buckets', {
     hours: decimal('hours', { precision: 10, scale: 2 }), // Extracted hours for editing
 
     // Flags & auditing
+    isFlagged: boolean('is_flagged').default(false),
+    flagType: varchar('flag_type', { length: 50 }),
     flagCategory: varchar('flag_category', { length: 50 }),
     flagReason: text('flag_reason'),
     flagResolution: varchar('flag_resolution', { length: 50 }),
     coPacketId: integer('co_packet_id'),
+    reviewedBy: integer('reviewed_by'),
+    reviewedAt: timestamp('reviewed_at'),
 
     // Location
     latitude: decimal('latitude', { precision: 10, scale: 7 }),

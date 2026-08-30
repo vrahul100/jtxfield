@@ -77,9 +77,10 @@ omit or null it otherwise (do not repeat unchanged values).
   "projectHint": string | null,    // the project the user means. If it resembles a KNOWN PROJECT above (even misspelled, e.g. "city hall"→"City Mall", "the mall"→"City Mall"), return that project's EXACT name. Else their raw words, OR the number they picked. NOTE: Site locations like "Parapet" or "2nd floor" are locations, NOT project hints!
   "confirm": boolean,              // true ONLY if they affirmed what we asked to confirm (yes/correct/sí/right)
   "rejectField": "work"|"hours"|"project"|"all"|null,  // if they rejected something, which part. "wrong project"→"project"; bare "no"→"all".
-  "language": "en" | "es",         // language to reply in
   "isWorkRelated": boolean,        // false for greetings/spam/off-topic with no work content
   "consistencyIssue": string | null, // MANDATORY CONTRADICTION VALIDATION: Compare Image Analysis & Audio Transcript against the stated text/trade. Set ONLY if the Image Analysis or Audio clearly contradicts the stated work type or hours (e.g. photo is brickwork/masonry but text says electrical, or photo is plumbing pipes but text says roofing). Otherwise null. Give benefit of the doubt.
+  "flagType": "trade_mismatch" | "hours_anomaly" | "scope_change" | "project_mismatch" | null,
+  "flagReason": string | null,     // Plain-English explanation of the inconsistency (e.g., "Photo shows electrical panel/wiring, but text states soil excavation")
   "confidence": "high" | "medium" | "low", // "high" if workType, hours, and project/scope are explicit & unambiguous; "medium" if inferred; "low" if uncertain.
   "intent": "provide"|"correct"|"confirm"|"reject"|"select"|"question"|"chitchat"
 }
@@ -89,7 +90,9 @@ RULES:
 - CRITICAL: Extract ALL unprompted materials (e.g. "4 logs") into the materials array!
 - Do not collapse specific construction tasks ("parapet railing") into generic trade labels ("carpentry"). Format summary as "Trade — Specific Task/Detail".
 - Do not mistake location terms ("parapet", "roof") for project hints unless it matches a known project name.
-- CRITICAL CONTRADICTION VALIDATION: If Image Analysis describes a visible trade or work objects (e.g., electrical panel, wiring, breaker box, masonry bricks, plumbing pipes, roofing) that does NOT match the stated work in the text/caption (e.g. text says "soil work", "painting", "plumbing"), YOU MUST set consistencyIssue to describe the trade mismatch (e.g., "Photo shows electrical panel/wiring, but text states soil work") AND set confidence to "low"!
+- CRITICAL CONTRADICTION VALIDATION: If Image Analysis describes a visible trade or work objects (e.g., electrical panel, wiring, breaker box, masonry bricks, plumbing pipes, roofing) that does NOT match the stated work in the text/caption (e.g. text says "soil work", "painting", "plumbing"), YOU MUST set consistencyIssue and flagReason to describe the trade mismatch (e.g., "Photo shows electrical panel/wiring, but text states soil work"), set flagType to "trade_mismatch", AND set confidence to "low"!
+- HOURS ANOMALY: If stated hours exceed 14 or contradict audio/text, set flagType="hours_anomaly" and flagReason.
+- SCOPE CHANGE: If the work described is out-of-contract or client add-on, set flagType="scope_change" and flagReason.
 - CONFIDENCE RULE: Set confidence to "high" ONLY when workType and hours are explicit AND there is NO contradiction with Image Analysis. If Image Analysis contradicts text, set confidence to "low".
 - If they are answering a confirmation and just say yes/no (or Y/N), set confirm/rejectField — do not re-extract the whole log.
 - At the fix step, a lone field name ("work"/"hours"/"project") is a request to CHANGE that field: set rejectField to it. Do NOT treat the word "project" as a new project name.
@@ -183,6 +186,9 @@ async function interpretExtraction(input: InterpretInput): Promise<TurnInterpret
 
     const locationSuffix = raw.location ? ' — ' + raw.location : ''
     const scopeDesc = raw.summary || (raw.workType ? (raw.workType + locationSuffix) : null)
+    const hasInconsistency = !!(raw.consistencyIssue || raw.flagType || (raw.hours && raw.hours > 14))
+    const determinedFlagType = raw.flagType || (raw.consistencyIssue ? 'trade_mismatch' : (raw.hours && raw.hours > 14 ? 'hours_anomaly' : null))
+    const determinedFlagReason = raw.flagReason || raw.consistencyIssue || (raw.hours && raw.hours > 14 ? 'High daily hours logged (>14h)' : null)
 
     return {
         workType: raw.workType ?? null,
@@ -197,6 +203,9 @@ async function interpretExtraction(input: InterpretInput): Promise<TurnInterpret
         language: raw.language === 'es' ? 'es' : 'en',
         isWorkRelated: raw.isWorkRelated !== false,
         consistencyIssue: raw.consistencyIssue ?? null,
+        isFlagged: hasInconsistency,
+        flagType: determinedFlagType,
+        flagReason: determinedFlagReason,
         confidence: ['high', 'medium', 'low'].includes(raw.confidence) ? raw.confidence : 'medium',
         intent: raw.intent ?? 'provide',
     }

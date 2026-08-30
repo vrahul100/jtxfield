@@ -152,9 +152,19 @@ async function run() {
         { name: 'wa_sent_timestamp', type: 'timestamp' },
         { name: 'wa_received_timestamp', type: 'timestamp' },
         { name: 'hours', type: 'numeric(10, 2)' },
+        { name: 'is_flagged', type: 'boolean DEFAULT false' },
+        { name: 'flag_type', type: 'varchar(50)' },
+        { name: 'flag_reason', type: 'text' },
+        { name: 'reviewed_by', type: 'integer' },
+        { name: 'reviewed_at', type: 'timestamptz' },
     ];
     for (const col of bucketColumns) {
         await addColumn('buckets', col.name, col.type);
+    }
+    try {
+        await sql`CREATE INDEX IF NOT EXISTS "idx_buckets_flagged" ON "buckets" ("node_id", "is_flagged", "status") WHERE "is_flagged" = true`;
+    } catch (e: any) {
+        console.log('  ⚠️', e.message);
     }
     console.log('  ✅ OK\n');
 

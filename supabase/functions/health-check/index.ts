@@ -34,6 +34,7 @@ Deno.serve(async (req) => {
         
         // Test 4: Groq API call (simple chat completion)
         const groqKey = Deno.env.get('GROQ_API_KEY')
+        const generalModel = Deno.env.get('GENERAL_MODEL') || 'openai/gpt-oss-20b'
         let groqDuration = 0
         let groqResult: any = null
         
@@ -47,7 +48,7 @@ Deno.serve(async (req) => {
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({
-                        model: 'llama-3.3-70b-versatile',
+                        model: generalModel,
                         messages: [{ role: 'user', content: 'Say "test" and nothing else' }],
                         temperature: 0.1,
                         max_tokens: 10,

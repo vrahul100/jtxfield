@@ -444,10 +444,17 @@ async function submit(
     }
 
     // Persist editable fields on the bucket, then insert the txn.
+    const isBucketFlagged = !!(record.isFlagged || record.inconsistency || bucket.potential_change || (record.hours && record.hours > 14))
+    const flagType = record.flagType || (bucket.potential_change ? 'scope_change' : (record.inconsistency ? 'trade_mismatch' : (record.hours && record.hours > 14 ? 'hours_anomaly' : null)))
+    const flagReason = record.flagReason || record.inconsistency || (bucket.potential_change ? 'Potential scope change / CO flagged' : (record.hours && record.hours > 14 ? 'High daily hours (>14h)' : null))
+
     await supabase.from('buckets').update({
         summary: englishSummary,
         hours: record.hours,
         project_id: record.projectId,
+        is_flagged: isBucketFlagged,
+        flag_type: flagType,
+        flag_reason: flagReason,
     }).eq('id', bucketId)
 
     const finalHours = record.hours ?? 8
@@ -463,8 +470,8 @@ async function submit(
         material: record.materials.length ? record.materials.join(', ') : null,
         location: record.location || null,
         time: finalHours,
-        potential_change: bucket.potential_change || false,
-        status: 'COMPLETED',
+        potential_change: bucket.potential_change || (flagType === 'scope_change'),
+        status: isBucketFlagged ? 'PENDING' : 'COMPLETED',
     }
     const { error: txnError } = await supabase.from('txns').insert(txn)
     if (txnError) console.error('[Engine] txn insert error:', txnError)
@@ -495,14 +502,19 @@ async function submit(
         await sendMessage(bucket.from_phone, response, bucket.source)
     }
 
+    const finalStatus = isBucketFlagged ? 'pending_review' : 'submitted'
+
     await supabase.from('buckets').update({
         extracted_data: JSON.stringify(record),
         conversation_state: 'complete',
         state_attempts: 0,
         ai_response: response,
-        status: 'submitted',
+        status: finalStatus,
+        is_flagged: isBucketFlagged,
+        flag_type: flagType,
+        flag_reason: flagReason,
     }).eq('id', bucketId)
 
-    console.log(`[Engine] Submitted bucket #${bucketId} (silent=${isSilent})`)
-    return { status: 'submitted', action: 'success', response }
+    console.log(`[Engine] Processed bucket #${bucketId} (status=${finalStatus}, flagged=${isBucketFlagged}, silent=${isSilent})`)
+    return { status: finalStatus, action: isBucketFlagged ? 'flagged' : 'success', response }
 }

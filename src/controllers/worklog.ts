@@ -18,15 +18,17 @@ export async function getWorklog(c: Context, sql: Sql) {
         const projectId = c.req.query('projectId');
         const memberId = c.req.query('memberId');
         const potentialChange = c.req.query('potentialChange');
-        const sortBy = c.req.query('sortBy') || 'created_at';
-        const order = c.req.query('order') || 'desc';
+        const isFlagged = c.req.query('isFlagged');
+        const flagType = c.req.query('flagType');
         const search = c.req.query('search') || '';
         const page = parseInt(c.req.query('page') || '1');
-        const limit = parseInt(c.req.query('limit') || '10');
+        const limit = parseInt(c.req.query('limit') || '20');
         const offset = (page - 1) * limit;
+        const sortBy = c.req.query('sortBy') || 'created_at';
+        const order = c.req.query('order') || 'desc';
 
         // Build WHERE clause based on role
-        let conditions = [];
+        let conditions: string[] = [];
         if (user.role === 'OM') {
             // OM can only see their node
             conditions.push(`b.node_id = ${user.nodeId}`);
@@ -36,7 +38,11 @@ export async function getWorklog(c: Context, sql: Sql) {
         }
 
         if (status) {
-            conditions.push(`b.status = '${status}'`);
+            if (status === 'flagged') {
+                conditions.push(`(b.is_flagged = true OR b.status = 'flagged' OR b.status = 'pending_review')`);
+            } else {
+                conditions.push(`b.status = '${status}'`);
+            }
         }
         if (projectId) {
             conditions.push(`b.project_id = ${parseInt(projectId)}`);
@@ -48,6 +54,14 @@ export async function getWorklog(c: Context, sql: Sql) {
             conditions.push(`b.potential_change = true`);
         } else if (potentialChange === 'false') {
             conditions.push(`(b.potential_change = false OR b.potential_change IS NULL)`);
+        }
+        if (isFlagged === 'true') {
+            conditions.push(`b.is_flagged = true`);
+        } else if (isFlagged === 'false') {
+            conditions.push(`(b.is_flagged = false OR b.is_flagged IS NULL)`);
+        }
+        if (flagType) {
+            conditions.push(`b.flag_type = '${flagType.replace(/'/g, "''")}'`);
         }
 
         // Search across ID, member name, project name, raw text, AI summary, and transcripts
@@ -107,6 +121,11 @@ export async function getWorklog(c: Context, sql: Sql) {
                 b.extracted_data,
                 b.potential_change,
                 b.hours,
+                b.is_flagged,
+                b.flag_type,
+                b.flag_reason,
+                b.reviewed_by,
+                b.reviewed_at,
                 b.created_at,
                 b.updated_at,
                 b.wa_sent_timestamp,
@@ -217,10 +236,13 @@ export async function approveBucket(c: Context, sql: Sql) {
             return c.json({ error: 'Forbidden' }, 403);
         }
 
-        // Update status to submitted
+        // Update status to submitted and resolve flag
         await sql`
             UPDATE buckets 
             SET status = 'submitted',
+                is_flagged = false,
+                reviewed_by = ${user.id},
+                reviewed_at = NOW(),
                 updated_at = NOW()
             WHERE id = ${bucketId}
         `;
@@ -250,7 +272,7 @@ export async function updateBucket(c: Context, sql: Sql) {
         const user: User = c.get('user');
         const bucketId = parseInt(c.req.param('id'));
         const body = await getRequestBody(c);
-        const { rawText, projectId, potential_change, hours } = body;
+        const { rawText, summary, projectId, potential_change, hours, is_flagged, flag_type, flag_reason } = body;
 
         // Get bucket
         const buckets = await sql`SELECT * FROM buckets WHERE id = ${bucketId}`;
@@ -274,6 +296,10 @@ export async function updateBucket(c: Context, sql: Sql) {
             updates.push(`raw_text = $${paramIndex++}`);
             values.push(rawText);
         }
+        if (summary !== undefined) {
+            updates.push(`summary = $${paramIndex++}`);
+            values.push(summary);
+        }
         if (projectId !== undefined) {
             updates.push(`project_id = $${paramIndex++}`);
             values.push(projectId);
@@ -285,6 +311,23 @@ export async function updateBucket(c: Context, sql: Sql) {
         if (hours !== undefined) {
             updates.push(`hours = $${paramIndex++}`);
             values.push(hours);
+        }
+        if (is_flagged !== undefined) {
+            updates.push(`is_flagged = $${paramIndex++}`);
+            values.push(is_flagged);
+            if (is_flagged === false) {
+                updates.push(`reviewed_by = $${paramIndex++}`);
+                values.push(user.id);
+                updates.push(`reviewed_at = NOW()`);
+            }
+        }
+        if (flag_type !== undefined) {
+            updates.push(`flag_type = $${paramIndex++}`);
+            values.push(flag_type);
+        }
+        if (flag_reason !== undefined) {
+            updates.push(`flag_reason = $${paramIndex++}`);
+            values.push(flag_reason);
         }
 
         if (updates.length === 0) {
