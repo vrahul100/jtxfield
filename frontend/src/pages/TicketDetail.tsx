@@ -65,7 +65,7 @@ export function TicketDetail() {
     return (
         <Layout>
             <div className="mb-6 flex items-center gap-4">
-                <button onClick={() => navigate(-1)} className="btn-secondary flex items-center gap-2">
+                <button onClick={() => navigate(-1)} className="btn-secondary btn-sm">
                     <ArrowLeft className="w-4 h-4" /> Back
                 </button>
                 <h1 className="text-3xl font-bold text-gray-900">Work Ticket #{bucket.id}</h1>
@@ -110,9 +110,9 @@ export function TicketDetail() {
 
                     {/* AI Summary Block */}
                     {bucket.summary && (
-                        <div className="card p-6 bg-indigo-50 border-indigo-100">
-                            <h3 className="text-lg font-bold text-indigo-900 mb-2 flex items-center gap-2">🤖 AI Summary</h3>
-                            <p className="text-indigo-800">{bucket.summary}</p>
+                        <div className="card p-6 bg-sky-50 border-sky-100">
+                            <h3 className="text-lg font-bold text-sky-900 mb-2 flex items-center gap-2">🤖 AI Summary</h3>
+                            <p className="text-sky-800">{bucket.summary}</p>
                         </div>
                     )}
 
@@ -133,7 +133,7 @@ export function TicketDetail() {
                         <div className="space-y-4">
                             {messages.map((msg: any, i: number) => (
                                 <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                                    <div className={`max-w-[80%] p-3 rounded-lg ${msg.role === 'user' ? 'bg-indigo-600 text-white' : 'bg-gray-100 text-gray-900'}`}>
+                                    <div className={`max-w-[80%] p-3 rounded-lg ${msg.role === 'user' ? 'bg-sky-500 text-white' : 'bg-gray-100 text-gray-900'}`}>
                                         <p>{msg.content}</p>
                                         {msg.media && msg.media.length > 0 && <span className="text-xs opacity-75 mt-1 block">📎 {msg.media.length} attachments</span>}
                                     </div>
@@ -183,7 +183,7 @@ export function TicketDetail() {
                         <h3 className="font-bold text-gray-900 mb-4">Actions</h3>
                         <div className="space-y-2">
                             <button className="btn-primary w-full">Approve Ticket</button>
-                            <button className="btn-secondary w-full text-red-600 border-red-200 hover:bg-red-50">Reject Ticket</button>
+                            <button className="btn-danger-outline w-full">Reject Ticket</button>
                             <button className="btn-secondary w-full">Flag for Review</button>
                         </div>
                     </div>
@@ -224,8 +224,8 @@ export function TicketDetail() {
                                 <span className="font-mono text-gray-900">1.20x</span>
                             </div>
                             <div className="flex justify-between items-center">
-                                <span className="text-indigo-600 font-medium">Billable Total</span>
-                                <span className="font-mono font-bold text-indigo-700">${billableCents.toFixed(2)}</span>
+                                <span className="text-sky-600 font-medium">Billable Total</span>
+                                <span className="font-mono font-bold text-sky-700">${billableCents.toFixed(2)}</span>
                             </div>
                         </div>
                     </div>

@@ -84,7 +84,7 @@ export function AudioPlayerChip({ src, label, className = '' }: AudioPlayerChipP
     return (
         <div 
             onClick={togglePlay}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-indigo-50/90 hover:bg-indigo-100/90 border border-indigo-200/80 transition-all cursor-pointer select-none text-slate-800 shadow-2xs ${className}`}
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-sky-50/90 hover:bg-sky-100/90 border border-sky-200/80 transition-all cursor-pointer select-none text-slate-800 shadow-2xs ${className}`}
             title={label || 'Voice Note'}
         >
             <button
@@ -95,8 +95,8 @@ export function AudioPlayerChip({ src, label, className = '' }: AudioPlayerChipP
                     hasError 
                         ? 'bg-rose-100 text-rose-600' 
                         : isPlaying 
-                        ? 'bg-indigo-600 text-white shadow-xs' 
-                        : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        ? 'bg-sky-500 text-white shadow-xs' 
+                        : 'bg-sky-500 text-white hover:bg-sky-600'
                 }`}
                 aria-label={isPlaying ? 'Pause voice message' : 'Play voice message'}
             >
@@ -119,8 +119,8 @@ export function AudioPlayerChip({ src, label, className = '' }: AudioPlayerChipP
                             key={i}
                             className={`w-1 rounded-full transition-all duration-150 ${
                                 isPlayed 
-                                    ? 'bg-indigo-600' 
-                                    : 'bg-indigo-200'
+                                    ? 'bg-sky-500' 
+                                    : 'bg-sky-200'
                             } ${isPlaying ? 'animate-pulse' : ''}`}
                             style={{ 
                                 height: `${Math.max(20, height)}%`,

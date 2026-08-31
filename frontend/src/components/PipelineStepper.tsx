@@ -54,7 +54,7 @@ export function PipelineStepper() {
                             idx === 0 ? 'pl-3 pr-4' : 'pl-4.5 pr-4'
                         } ${
                             isActive
-                                ? 'bg-indigo-600 text-white font-bold shadow-xs'
+                                ? 'bg-primary-600 text-white font-bold shadow-xs'
                                 : isPassed
                                 ? 'bg-emerald-600 text-white font-semibold hover:bg-emerald-700'
                                 : 'bg-slate-200 text-slate-700 hover:bg-slate-300 font-medium'

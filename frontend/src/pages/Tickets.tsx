@@ -269,7 +269,7 @@ export function Tickets() {
     const getStatusColors = (status: string) => {
         switch (status?.toLowerCase()) {
             case 'open':
-                return 'bg-indigo-600 text-white font-bold border-indigo-700 shadow-2xs';
+                return 'bg-sky-500 text-white font-bold border-sky-600 shadow-2xs';
             case 'submitted':
                 return 'bg-emerald-600 text-white font-bold border-emerald-700 shadow-2xs';
             case 'pending_review':
@@ -300,7 +300,7 @@ export function Tickets() {
             <Layout>
                 <div className="flex items-center justify-center h-64">
                     <div className="text-gray-600 font-medium flex items-center gap-2">
-                        <RotateCw className="w-5 h-5 animate-spin text-indigo-600" />
+                        <RotateCw className="w-5 h-5 animate-spin text-sky-600" />
                         Loading work entries...
                     </div>
                 </div>
@@ -324,13 +324,13 @@ export function Tickets() {
                             {selectionMode ? (
                                 <>
                                     <button 
-                                        className="btn-secondary text-xs py-1.5 px-3" 
+                                        className="btn-secondary btn-sm" 
                                         onClick={() => { setSelectionMode(false); setSelectedTickets([]); }}
                                     >
                                         Cancel
                                     </button>
                                     <button 
-                                        className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5" 
+                                        className="btn-primary btn-sm" 
                                         disabled={selectedTickets.length === 0 || creatingPacket} 
                                         onClick={handleCreatePacket}
                                     >
@@ -340,7 +340,7 @@ export function Tickets() {
                                 </>
                             ) : (
                                 <button 
-                                    className="btn-secondary text-xs py-1.5 px-3 flex items-center gap-1.5" 
+                                    className="btn-secondary btn-sm" 
                                     onClick={() => setSelectionMode(true)}
                                 >
                                     <PlusCircle className="w-3.5 h-3.5" />
@@ -351,7 +351,7 @@ export function Tickets() {
                             <button
                                 onClick={fetchBuckets}
                                 disabled={refreshing}
-                                className="btn-primary text-xs py-1.5 px-3 flex items-center gap-1.5"
+                                className="btn-primary btn-sm"
                                 style={refreshing ? { cursor: 'wait' } : {}}
                                 title="Refresh work logs"
                             >
@@ -373,7 +373,7 @@ export function Tickets() {
                                 placeholder="Search worker, project, notes..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
-                                className="w-full h-8 pl-8 pr-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all placeholder:text-slate-400"
+                                className="w-full h-8 pl-8 pr-2.5 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition-all placeholder:text-slate-400"
                             />
                         </div>
 
@@ -383,7 +383,7 @@ export function Tickets() {
                             <select
                                 value={statusFilter}
                                 onChange={(e) => setStatusFilter(e.target.value)}
-                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-28 shrink-0"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-700 font-medium cursor-pointer w-28 shrink-0"
                             >
                                 <option value="all">All Statuses</option>
                                 <option value="open">Open</option>
@@ -396,7 +396,7 @@ export function Tickets() {
                             <select
                                 value={projectFilter}
                                 onChange={(e) => setProjectFilter(e.target.value)}
-                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-32 shrink-0 truncate"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-700 font-medium cursor-pointer w-32 shrink-0 truncate"
                             >
                                 <option value="all">All Projects</option>
                                 {projects.map(p => (
@@ -408,7 +408,7 @@ export function Tickets() {
                             <select
                                 value={sortCombined}
                                 onChange={(e) => setSortCombined(e.target.value)}
-                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-36 shrink-0"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-700 font-medium cursor-pointer w-36 shrink-0"
                             >
                                 <option value="created_at:desc">Sort: Newest First</option>
                                 <option value="created_at:asc">Sort: Oldest First</option>
@@ -420,7 +420,7 @@ export function Tickets() {
                             <select
                                 value={changeFilter}
                                 onChange={(e) => setChangeFilter(e.target.value)}
-                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none text-slate-700 font-medium cursor-pointer w-28 shrink-0"
+                                className="h-8 px-2 text-xs bg-slate-50 border border-slate-200 rounded-md focus:bg-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none text-slate-700 font-medium cursor-pointer w-28 shrink-0"
                             >
                                 <option value="all">All Flags</option>
                                 <option value="true">⚠️ Flagged CO</option>
@@ -459,8 +459,8 @@ export function Tickets() {
                                             <tr
                                                 key={bucket.id}
                                                 onClick={() => setSelectedBucketId(bucket.id)}
-                                                className={`hover:bg-indigo-50/40 cursor-pointer transition-colors ${
-                                                    isSelected ? 'bg-indigo-50/90 hover:bg-indigo-50 border-l-4 border-l-indigo-600 shadow-xs' : ''
+                                                className={`hover:bg-sky-50/40 cursor-pointer transition-colors ${
+                                                    isSelected ? 'bg-sky-50/90 hover:bg-sky-50 border-l-4 border-l-sky-600 shadow-xs' : ''
                                                 }`}
                                             >
                                                 {selectionMode && (
@@ -473,11 +473,11 @@ export function Tickets() {
                                                                     ? prev.filter(id => id !== bucket.id) 
                                                                     : [...prev, bucket.id]
                                                             )}
-                                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                                            className="w-4 h-4 text-sky-600 rounded border-gray-300 focus:ring-sky-500 cursor-pointer"
                                                         />
                                                     </td>
                                                 )}
-                                                <td className="p-3 font-mono text-xs font-bold text-indigo-700 whitespace-nowrap">
+                                                <td className="p-3 font-mono text-xs font-bold text-sky-700 whitespace-nowrap">
                                                     {formatTicketCode(bucket.node_name, bucket.id)}
                                                 </td>
                                                 <td className="p-3 text-slate-900 whitespace-nowrap">
@@ -543,7 +543,7 @@ export function Tickets() {
                                     <button
                                         onClick={() => setPage(p => Math.max(1, p - 1))}
                                         disabled={page === 1}
-                                        className="px-2 py-1 border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
+                                        className="btn-secondary btn-xs"
                                     >
                                         <SquareChevronLeft className="w-3.5 h-3.5" />
                                         Prev
@@ -554,7 +554,7 @@ export function Tickets() {
                                     <button
                                         onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                         disabled={page === totalPages}
-                                        className="px-2 py-1 border border-slate-200 rounded hover:bg-white disabled:opacity-40 disabled:cursor-not-allowed flex items-center gap-1 text-xs"
+                                        className="btn-secondary btn-xs"
                                     >
                                         Next
                                         <SquareChevronRight className="w-3.5 h-3.5" />

@@ -222,7 +222,7 @@ export function Projects() {
                             <button
                                 onClick={() => fetchProjects()}
                                 disabled={refreshing}
-                                className="btn-primary flex items-center gap-2"
+                                className="btn-primary btn-sm"
                                 style={refreshing ? { cursor: 'wait' } : {}}
                             >
                                 {refreshing && (
@@ -235,7 +235,7 @@ export function Projects() {
                             </button>
                             <button
                                 onClick={() => setShowForm(!showForm)}
-                                className="btn-primary"
+                                className="btn-primary btn-sm"
                             >
                                 {showForm ? 'Cancel' : '+ Add Project'}
                             </button>
@@ -347,14 +347,14 @@ export function Projects() {
                                 </div>
                             )}
                             <div className="flex gap-2">
-                                <button type="submit" className="btn-primary">
+                                <button type="submit" className="btn-primary btn-sm">
                                     {editingId ? 'Update' : 'Create'} Project
                                 </button>
                                 {editingId && (
                                     <button
                                         type="button"
                                         onClick={resetForm}
-                                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                        className="btn-secondary btn-sm"
                                     >
                                         Cancel Edit
                                     </button>
@@ -392,7 +392,7 @@ export function Projects() {
                                             {parseAliases(project.aliases).map((alias, idx) => (
                                                 <span
                                                     key={idx}
-                                                    className="px-2 py-1 bg-indigo-50 text-indigo-700 text-xs rounded"
+                                                    className="badge-indigo"
                                                 >
                                                     {alias}
                                                 </span>
@@ -409,7 +409,7 @@ export function Projects() {
                                 <div className="flex items-center gap-2">
                                     <Link
                                         to={`/reports?tab=project-report&projectId=${project.id}`}
-                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-bold transition-colors"
+                                        className="btn-soft-primary"
                                         title="View Project Progress Report"
                                     >
                                         <FileText className="w-3.5 h-3.5" />
@@ -417,7 +417,7 @@ export function Projects() {
                                     </Link>
                                     <button
                                         onClick={() => handleEdit(project)}
-                                        className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                        className="p-1.5 text-slate-500 hover:text-sky-600 hover:bg-slate-100 rounded-lg transition-colors"
                                         title="Edit Project"
                                     >
                                         <PencilIcon className="w-4 h-4" />

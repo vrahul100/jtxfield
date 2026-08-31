@@ -11,16 +11,17 @@ export default {
             },
             colors: {
                 primary: {
-                    50: '#eff6ff',
-                    100: '#dbeafe',
-                    200: '#bfdbfe',
-                    300: '#93c5fd',
-                    400: '#60a5fa',
-                    500: '#3b82f6',
-                    600: '#2563eb',
-                    700: '#1d4ed8',
-                    800: '#1e40af',
-                    900: '#1e3a8a',
+                    50: '#EFF8FF',
+                    100: '#D1E9FF',
+                    200: '#B2DDFF',
+                    300: '#84CAFF',
+                    400: '#53B1FD',
+                    500: '#1570EF', // Cleaner brand primary (#1570EF / rgb(21, 112, 239))
+                    600: '#106EDC', // Closest to favicon render (#106EDC / rgb(16, 110, 220))
+                    700: '#0E54A8',
+                    800: '#0B3F7E',
+                    900: '#092E5C',
+                    950: '#051C3B',
                 },
             },
         },

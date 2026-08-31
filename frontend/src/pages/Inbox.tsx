@@ -172,14 +172,14 @@ export function Inbox() {
                             <button
                                 onClick={handleBulkAssign}
                                 disabled={!selectedProject}
-                                className="btn-primary disabled:opacity-50"
+                                className="btn-primary btn-sm"
                             >
                                 Bulk Assign
                             </button>
                             <button
                                 onClick={handleAddAlias}
                                 disabled={!selectedProject}
-                                className="px-4 py-2 border border-primary-600 text-primary-600 rounded-lg hover:bg-primary-50 disabled:opacity-50"
+                                className="btn-outline-primary btn-sm"
                             >
                                 + Add as Alias
                             </button>

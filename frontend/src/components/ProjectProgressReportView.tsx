@@ -232,7 +232,7 @@ ${workerLines}`;
         return (
             <div className="flex items-center justify-center p-12 bg-white rounded-xl border border-slate-200">
                 <div className="flex items-center gap-2 text-slate-500 font-medium">
-                    <RotateCw className="w-5 h-5 animate-spin text-indigo-600" />
+                    <RotateCw className="w-5 h-5 animate-spin text-sky-600" />
                     <span>Loading projects...</span>
                 </div>
             </div>
@@ -257,13 +257,13 @@ ${workerLines}`;
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
                     <label className="text-xs font-bold text-slate-700 whitespace-nowrap flex items-center gap-1.5">
-                        <FolderKanban className="w-4 h-4 text-indigo-600" />
+                        <FolderKanban className="w-4 h-4 text-sky-600" />
                         Select Project:
                     </label>
                     <select
                         value={selectedProjectId || ''}
                         onChange={(e) => handleSelectProject(Number(e.target.value))}
-                        className="w-full sm:w-72 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 cursor-pointer"
+                        className="w-full sm:w-72 px-3 py-2 bg-slate-50 border border-slate-300 rounded-lg text-sm font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-sky-400 focus:border-sky-500 cursor-pointer"
                     >
                         {projects.map((p) => (
                             <option key={p.id} value={p.id}>
@@ -289,7 +289,7 @@ ${workerLines}`;
                             }
                         }}
                         disabled={refreshing || isGeneratingReport}
-                        className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 cursor-pointer"
+                        className="btn-secondary btn-sm"
                     >
                         <RotateCw className={`w-3.5 h-3.5 ${(refreshing || isGeneratingReport) ? 'animate-spin' : ''}`} />
                         <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
@@ -298,7 +298,7 @@ ${workerLines}`;
                     <button
                         onClick={handleCopyCustomerReport}
                         disabled={!report}
-                        className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 bg-white border-slate-300 text-slate-800 hover:bg-slate-50 shadow-xs cursor-pointer"
+                        className="btn-secondary btn-sm"
                         title="Copy customer progress report"
                     >
                         {copiedReport ? (
@@ -308,7 +308,7 @@ ${workerLines}`;
                             </>
                         ) : (
                             <>
-                                <Share2 className="w-3.5 h-3.5 text-indigo-600" />
+                                <Share2 className="w-3.5 h-3.5 text-sky-600" />
                                 <span>Copy for Customer</span>
                             </>
                         )}
@@ -316,7 +316,7 @@ ${workerLines}`;
 
                     <button
                         onClick={() => window.print()}
-                        className="btn-secondary text-xs py-2 px-3 flex items-center gap-1.5 shadow-xs cursor-pointer"
+                        className="btn-secondary btn-sm"
                         title="Print / Save as PDF"
                     >
                         <Download className="w-3.5 h-3.5" />
@@ -332,7 +332,7 @@ ${workerLines}`;
                     <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Cumulative Hours</span>
-                            <Clock className="w-4 h-4 text-indigo-600" />
+                            <Clock className="w-4 h-4 text-sky-600" />
                         </div>
                         <div className="text-2xl font-black text-slate-950">{stats.totalHours.toFixed(1)} <span className="text-xs font-normal text-slate-500">hrs</span></div>
                         <span className="text-[11px] text-slate-500 mt-0.5 block">{stats.totalTickets} total work entries</span>
@@ -393,7 +393,7 @@ ${workerLines}`;
                             onClick={() => setDateFilter(preset)}
                             className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors capitalize cursor-pointer ${
                                 dateFilter === preset
-                                    ? 'bg-indigo-600 text-white shadow-2xs'
+                                    ? 'bg-sky-500 text-white shadow-sm'
                                     : 'bg-slate-100 text-slate-700 hover:bg-slate-200'
                             }`}
                         >
@@ -404,16 +404,16 @@ ${workerLines}`;
             </div>
 
             {/* GC-TO-CUSTOMER PROGRESS REPORT */}
-            <div className="card p-5 sm:p-7 bg-white border-2 border-indigo-300 rounded-2xl shadow-md space-y-5">
+            <div className="card p-5 sm:p-7 bg-white border-2 border-sky-200 rounded-2xl shadow-md space-y-5">
                 
                 {/* Header: From [Start] to [End] */}
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b-2 border-slate-100 pb-4">
                     <div>
-                        <span className="text-xs font-black uppercase tracking-wider text-indigo-600 block mb-1">
+                        <span className="text-xs font-black uppercase tracking-wider text-sky-600 block mb-1">
                             {projectName ? `${projectName} — Progress Report` : 'Project Progress Report'}
                         </span>
                         <h2 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight flex items-center gap-2">
-                            <Calendar className="w-5 h-5 text-indigo-600" />
+                            <Calendar className="w-5 h-5 text-sky-600" />
                             From {report?.period || 'Selected Timeframe'}
                         </h2>
                     </div>
@@ -428,7 +428,7 @@ ${workerLines}`;
                         <button
                             onClick={handleCopyCustomerReport}
                             disabled={!report}
-                            className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer"
+                            className="btn-primary btn-sm"
                         >
                             {copiedReport ? (
                                 <>
@@ -447,7 +447,7 @@ ${workerLines}`;
 
                 {/* Body Content */}
                 {isGeneratingReport ? (
-                    <div className="py-12 flex flex-col items-center justify-center gap-3 text-indigo-600">
+                    <div className="py-12 flex flex-col items-center justify-center gap-3 text-sky-600">
                         <RotateCw className="w-8 h-8 animate-spin" />
                         <span className="text-xs font-semibold">Synthesizing overall project and per-worker progress report...</span>
                     </div>
@@ -464,7 +464,7 @@ ${workerLines}`;
                                 <ul className="space-y-2">
                                     {report.overallBullets.map((bullet, idx) => (
                                         <li key={idx} className="flex items-start gap-2.5 text-sm text-slate-900 leading-relaxed font-medium">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-2 flex-shrink-0" />
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-2 flex-shrink-0" />
                                             <span>{bullet}</span>
                                         </li>
                                     ))}
@@ -473,7 +473,7 @@ ${workerLines}`;
                                 <div className="space-y-2 text-sm text-slate-900 font-medium leading-relaxed">
                                     {(report.overallSummary || (report as any).summary || 'No work recorded for this timeframe.').split('\n').filter(Boolean).map((line: string, idx: number) => (
                                         <div key={idx} className="flex items-start gap-2.5">
-                                            <span className="w-1.5 h-1.5 rounded-full bg-indigo-600 mt-2 flex-shrink-0" />
+                                            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-2 flex-shrink-0" />
                                             <span>{line}</span>
                                         </div>
                                     ))}
@@ -496,12 +496,12 @@ ${workerLines}`;
                                     {report.workerReports.map((w, idx) => (
                                         <div 
                                             key={idx} 
-                                            className="p-4 bg-white border-2 border-slate-200 hover:border-indigo-300 rounded-xl flex flex-col sm:flex-row justify-between items-start gap-3 transition-colors shadow-2xs"
+                                            className="p-4 bg-white border-2 border-slate-200 hover:border-sky-300 rounded-xl flex flex-col sm:flex-row justify-between items-start gap-3 transition-colors shadow-2xs"
                                         >
                                             <div className="flex-1 space-y-2">
                                                 <div className="flex items-center gap-2 flex-wrap">
                                                     <span className="text-sm font-black text-slate-950">{w.workerName}</span>
-                                                    <span className="px-2 py-0.2 rounded-full text-[11px] font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                                    <span className="badge-sky">
                                                         {w.role}
                                                     </span>
                                                     <span className="text-xs text-slate-400 font-medium">({w.ticketCount} tickets logged)</span>
@@ -511,7 +511,7 @@ ${workerLines}`;
                                                     <ul className="space-y-1.5 pl-1">
                                                         {w.bullets.map((b, bIdx) => (
                                                             <li key={bIdx} className="flex items-start gap-2 text-xs text-slate-700 leading-relaxed font-medium">
-                                                                <span className="w-1.5 h-1.5 rounded-full bg-indigo-500 mt-1.5 flex-shrink-0" />
+                                                                <span className="w-1.5 h-1.5 rounded-full bg-sky-500 mt-1.5 flex-shrink-0" />
                                                                 <span>{b}</span>
                                                             </li>
                                                         ))}

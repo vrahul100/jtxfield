@@ -57,17 +57,17 @@ export function COPackets() {
                 <div className="sticky top-0 z-10 bg-slate-100 pt-2 pb-2 mb-4">
                     <div className="flex justify-between items-center mb-4">
                         <h1 className="text-3xl font-bold text-gray-900">Change Order Packets</h1>
-                        <button onClick={fetchPackets} className="btn-secondary">Refresh</button>
+                        <button onClick={fetchPackets} className="btn-secondary btn-sm">Refresh</button>
                     </div>
 
-                    <div className="mb-0 flex gap-2 border-b border-gray-200">
+                    <div className="mb-0 flex gap-2 border-b border-gray-200 overflow-x-auto">
                         {['all', 'draft', 'submitted', 'approved', 'rejected', 'paid'].map(status => (
                             <button
                                 key={status}
-                                className={`px-4 py-2 border-b-2 font-medium capitalize ${
+                                className={`px-4 py-2 border-b-2 capitalize text-sm cursor-pointer ${
                                     statusFilter === status 
-                                    ? 'border-indigo-600 text-indigo-600' 
-                                    : 'border-transparent text-gray-500 hover:text-gray-700'
+                                    ? 'tab-nav-active' 
+                                    : 'tab-nav-inactive'
                                 }`}
                                 onClick={() => setStatusFilter(status)}
                             >
@@ -97,11 +97,11 @@ export function COPackets() {
                         </div>
                         <div className="pt-4 border-t border-gray-100 flex gap-2">
                             {packet.pdf_url ? (
-                                <a href={packet.pdf_url} target="_blank" rel="noreferrer" className="btn-primary flex-1 flex items-center justify-center gap-2 text-sm py-2">
+                                <a href={packet.pdf_url} target="_blank" rel="noreferrer" className="btn-primary flex-1 btn-sm">
                                     <Download className="w-4 h-4" /> Download PDF
                                 </a>
                             ) : (
-                                <button onClick={() => generatePdf(packet.id)} className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm py-2">
+                                <button onClick={() => generatePdf(packet.id)} className="btn-secondary flex-1 btn-sm">
                                     <FileText className="w-4 h-4" /> Generate PDF
                                 </button>
                             )}

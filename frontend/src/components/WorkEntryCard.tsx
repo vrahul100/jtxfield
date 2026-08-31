@@ -80,7 +80,7 @@ export function WorkEntryCard({
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'open':
-                return 'bg-indigo-100 text-indigo-800 border-indigo-200';
+                return 'bg-sky-100 text-sky-800 border-sky-200';
             case 'submitted':
                 return 'bg-emerald-500 text-white border-emerald-500 font-bold';
             case 'pending_review':
@@ -137,7 +137,7 @@ export function WorkEntryCard({
 
     return (
         <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${
-            isExpanded ? 'border-4 border-indigo-500' : ''
+            isExpanded ? 'border-4 border-sky-500' : ''
         }`}>
             {/* Card Header - Status Color Bar (hidden for submitted) */}
             {bucket.status !== 'submitted' && (
@@ -157,11 +157,11 @@ export function WorkEntryCard({
                                             type="checkbox" 
                                             checked={selected} 
                                             onChange={onSelectToggle}
-                                            className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500 cursor-pointer"
+                                            className="w-5 h-5 text-sky-600 rounded border-gray-300 focus:ring-sky-500 cursor-pointer"
                                         />
                                     </div>
                                 )}
-                                <Link to={`/tickets/${bucket.id}`} className="text-md font-mono text-indigo-600 hover:text-indigo-800 hover:underline">{formatTicketCode(bucket.node_name, bucket.id)}</Link>
+                                <Link to={`/tickets/${bucket.id}`} className="text-md font-mono text-sky-600 hover:text-sky-800 hover:underline">{formatTicketCode(bucket.node_name, bucket.id)}</Link>
                                 <span className={`px-2 py-0.5 text-md font-semibold rounded border ${getStatusColor(bucket.status)}`}>
                                     {bucket.status?.toUpperCase().replace('_', ' ')}
                                 </span>
@@ -345,7 +345,7 @@ export function WorkEntryCard({
                                                 if (Array.isArray(urls)) {
                                                     return urls.map((url: string, i: number) => (
                                                         <div key={`audio-${i}`} className="flex items-center gap-2 bg-white px-3 py-2 rounded border shadow-sm">
-                                                            <Music className="w-4 h-4 text-indigo-600" />
+                                                            <Music className="w-4 h-4 text-sky-600" />
                                                             <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline text-md">Voice Note {i + 1}</a>
                                                         </div>
                                                     ));

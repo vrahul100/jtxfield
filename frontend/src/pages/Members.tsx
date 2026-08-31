@@ -272,7 +272,7 @@ export function Members() {
                             <button
                                 onClick={() => fetchMembers()}
                                 disabled={refreshing}
-                                className="btn-primary flex items-center gap-2"
+                                className="btn-primary btn-sm"
                                 style={refreshing ? { cursor: 'wait' } : {}}
                             >
                                 {refreshing && (
@@ -285,7 +285,7 @@ export function Members() {
                             </button>
                             <button
                                 onClick={() => setShowAddForm(!showAddForm)}
-                                className="btn-primary"
+                                className="btn-primary btn-sm"
                             >
                                 {showAddForm ? 'Cancel' : '+ Invite Member'}
                             </button>
@@ -407,7 +407,7 @@ export function Members() {
                                     <option value="Welder" />
                                 </datalist>
                                 <p className="text-xs text-gray-500 mt-1">
-                                    Worker rate will automatically calculate from the node's <a href="/rate-card" className="text-indigo-600 font-semibold hover:underline">Rate Card</a>.
+                                    Worker rate will automatically calculate from the node's <a href="/rate-card" className="text-sky-600 font-semibold hover:underline">Rate Card</a>.
                                 </p>
                             </div>
                             <div className="flex gap-2 justify-end">
@@ -418,11 +418,11 @@ export function Members() {
                                         setEditingMember(null);
                                         setFormData({ name: '', phone: '', language: 'en', domain: 'construction', role: 'General Labor' });
                                     }}
-                                    className="btn-secondary"
+                                    className="btn-secondary btn-sm"
                                 >
                                     Cancel
                                 </button>
-                                <button type="submit" className="btn-primary">
+                                <button type="submit" className="btn-primary btn-sm">
                                     {editingMember ? 'Update Member' : 'Send Invitation'}
                                 </button>
                             </div>
@@ -531,7 +531,7 @@ export function Members() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 whitespace-nowrap">
-                                            <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-50 text-indigo-800 border border-indigo-200">
+                                            <span className="badge-indigo">
                                                 {member.role || 'General Labor'}
                                             </span>
                                         </td>
@@ -583,7 +583,7 @@ export function Members() {
                                             <button
                                                 onClick={() => startEdit(member)}
                                                 disabled={actionLoading === member.id}
-                                                className="text-indigo-600 hover:text-indigo-900 disabled:opacity-50"
+                                                className="text-sky-600 hover:text-sky-900 disabled:opacity-50"
                                             >
                                                 <PencilIcon className="w-6 h-6" strokeWidth={3} />
                                             </button>
@@ -610,7 +610,7 @@ export function Members() {
                             <button
                                 onClick={() => setPage(p => Math.max(1, p - 1))}
                                 disabled={page === 1}
-                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="btn-secondary btn-xs"
                             >
                                 Previous
                             </button>
@@ -620,7 +620,7 @@ export function Members() {
                             <button
                                 onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                                 disabled={page === totalPages}
-                                className="px-3 py-1 border rounded hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                className="btn-secondary btn-xs"
                             >
                                 Next
                             </button>

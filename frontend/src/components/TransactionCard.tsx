@@ -90,7 +90,7 @@ export function TransactionCard({
 
     return (
         <div className={`card overflow-hidden hover:shadow-lg transition-shadow bg-white ${
-            isExpanded ? 'border-4 border-indigo-500' : ''
+            isExpanded ? 'border-4 border-sky-500' : ''
         }`}>
             {/* Card Header - Status Color Bar (hidden for completed) */}
             {transaction.status !== 'COMPLETED' && (

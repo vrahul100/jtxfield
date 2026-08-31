@@ -158,7 +158,7 @@ export function Reports() {
                             <select
                                 value={dateRange}
                                 onChange={(e) => setDateRange(e.target.value)}
-                                className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-indigo-500 cursor-pointer shadow-2xs"
+                                className="px-3 py-2 bg-white border border-slate-300 rounded-lg text-xs font-semibold text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-sky-400 cursor-pointer shadow-2xs"
                             >
                                 <option value="week">Last 7 Days</option>
                                 <option value="month">Last 30 Days</option>
@@ -167,7 +167,7 @@ export function Reports() {
                             <button
                                 onClick={() => setRefreshTrigger(prev => prev + 1)}
                                 disabled={refreshing}
-                                className="btn-primary text-xs py-2 px-3 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                                className="btn-primary btn-sm shadow-2xs"
                             >
                                 <RotateCw className={`w-3.5 h-3.5 ${refreshing ? 'animate-spin' : ''}`} />
                                 <span>{refreshing ? 'Refreshing...' : 'Refresh'}</span>
@@ -181,10 +181,10 @@ export function Reports() {
                     <nav className="-mb-px flex gap-2 sm:gap-6 overflow-x-auto">
                         <button
                             onClick={() => handleTabChange('project-report')}
-                            className={`py-3 px-3 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                            className={`py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
                                 activeTab === 'project-report'
-                                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
-                                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                    ? 'tab-nav-active'
+                                    : 'tab-nav-inactive'
                             }`}
                         >
                             <FileText className="w-4 h-4" />
@@ -192,10 +192,10 @@ export function Reports() {
                         </button>
                         <button
                             onClick={() => handleTabChange('project')}
-                            className={`py-3 px-3 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                            className={`py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
                                 activeTab === 'project'
-                                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
-                                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                    ? 'tab-nav-active'
+                                    : 'tab-nav-inactive'
                             }`}
                         >
                             <FolderKanban className="w-4 h-4" />
@@ -203,10 +203,10 @@ export function Reports() {
                         </button>
                         <button
                             onClick={() => handleTabChange('member')}
-                            className={`py-3 px-3 border-b-2 font-bold text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
+                            className={`py-3 px-3 border-b-2 text-xs sm:text-sm flex items-center gap-2 transition-colors whitespace-nowrap cursor-pointer ${
                                 activeTab === 'member'
-                                    ? 'border-indigo-600 text-indigo-600 bg-indigo-50/50 rounded-t-lg'
-                                    : 'border-transparent text-slate-500 hover:text-slate-900 hover:border-slate-300'
+                                    ? 'tab-nav-active'
+                                    : 'tab-nav-inactive'
                             }`}
                         >
                             <Users className="w-4 h-4" />
@@ -230,7 +230,7 @@ export function Reports() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
                                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Rollup Hours</div>
-                                <div className="text-2xl sm:text-3xl font-black text-indigo-600">
+                                <div className="text-2xl sm:text-3xl font-black text-sky-600">
                                     {data?.summary.totalHours?.toFixed(1) || '0'} <span className="text-xs font-normal text-slate-400">hrs</span>
                                 </div>
                             </div>
@@ -283,7 +283,7 @@ export function Reports() {
                                                 <td className="px-6 py-4 text-right">
                                                     <button
                                                         onClick={() => handleViewProjectProgress(project.project_id)}
-                                                        className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-lg text-xs transition-colors cursor-pointer"
+                                                        className="btn-soft-primary"
                                                     >
                                                         <FileText className="w-3.5 h-3.5" />
                                                         <span>View Progress Report</span>
@@ -313,7 +313,7 @@ export function Reports() {
                         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                             <div className="card p-5 bg-white border border-slate-200 rounded-xl shadow-xs">
                                 <div className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Total Rollup Hours</div>
-                                <div className="text-2xl sm:text-3xl font-black text-indigo-600">
+                                <div className="text-2xl sm:text-3xl font-black text-sky-600">
                                     {data?.summary.totalHours?.toFixed(1) || '0'} <span className="text-xs font-normal text-slate-400">hrs</span>
                                 </div>
                             </div>

@@ -121,7 +121,7 @@ export function Nodes() {
                         <button
                             onClick={() => fetchNodes()}
                             disabled={refreshing}
-                            className="btn-primary flex items-center gap-2"
+                            className="btn-primary btn-sm"
                             style={refreshing ? { cursor: 'wait' } : {}}
                         >
                             {refreshing && (
@@ -134,14 +134,14 @@ export function Nodes() {
                         </button>
                         <button
                             onClick={() => setShowForm(!showForm)}
-                            className="btn-primary"
+                            className="btn-primary btn-sm"
                         >
                             {showForm ? 'Cancel' : '+ Add Node'}
                         </button>
                     </div>
                 </div>
 
-                <div className="card p-6 mb-6 bg-indigo-50 border-indigo-200">
+                <div className="card p-6 mb-6 bg-sky-50 border-sky-200">
                     <h2 className="text-lg font-semibold mb-2">🏢 Nodes Management</h2>
                     <p className="text-sm text-gray-700">
                         Nodes represent construction companies or entities. Each node has its own
@@ -170,14 +170,14 @@ export function Nodes() {
                                 />
                             </div>
                             <div className="flex gap-2">
-                                <button type="submit" className="btn-primary">
+                                <button type="submit" className="btn-primary btn-sm">
                                     {editingId ? 'Update' : 'Create'} Node
                                 </button>
                                 {editingId && (
                                     <button
                                         type="button"
                                         onClick={resetForm}
-                                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                        className="btn-secondary btn-sm"
                                     >
                                         Cancel Edit
                                     </button>
@@ -208,7 +208,7 @@ export function Nodes() {
                                 <div className="flex gap-2">
                                     <button
                                         onClick={() => handleEdit(node)}
-                                        className="btn-primary"
+                                        className="btn-secondary btn-sm"
                                     >
                                         Edit
                                     </button>

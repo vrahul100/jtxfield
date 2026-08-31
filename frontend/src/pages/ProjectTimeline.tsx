@@ -16,7 +16,7 @@ export function ProjectTimeline() {
                 <div className="flex items-center gap-3 pt-2">
                     <button
                         onClick={() => navigate('/reports')}
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                        className="btn-secondary btn-sm"
                         title="Back to Reports"
                     >
                         <ArrowLeft className="w-4 h-4" />

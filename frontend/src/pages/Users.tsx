@@ -156,7 +156,7 @@ export function Users() {
                         <button
                             onClick={() => fetchData()}
                             disabled={refreshing}
-                            className="btn-primary flex items-center gap-2"
+                            className="btn-primary btn-sm"
                             style={refreshing ? { cursor: 'wait' } : {}}
                         >
                             {refreshing && (
@@ -169,14 +169,14 @@ export function Users() {
                         </button>
                         <button
                             onClick={() => setShowForm(!showForm)}
-                            className="btn-primary"
+                            className="btn-primary btn-sm"
                         >
                             {showForm ? 'Cancel' : '+ Add User'}
                         </button>
                     </div>
                 </div>
 
-                <div className="card p-6 mb-6 bg-blue-50 border-blue-200">
+                <div className="card p-6 mb-6 bg-sky-50 border-sky-200">
                     <h2 className="text-lg font-semibold mb-2">🔐 Users Management</h2>
                     <p className="text-sm text-gray-700">
                         Create and manage Office Managers (OM) and Super Users (SU). OMs are assigned
@@ -251,14 +251,14 @@ export function Users() {
                                 </div>
                             )}
                             <div className="flex gap-2">
-                                <button type="submit" className="btn-primary">
+                                <button type="submit" className="btn-primary btn-sm">
                                     {editingId ? 'Update' : 'Create'} User
                                 </button>
                                 {editingId && (
                                     <button
                                         type="button"
                                         onClick={resetForm}
-                                        className="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50"
+                                        className="btn-secondary btn-sm"
                                     >
                                         Cancel Edit
                                     </button>

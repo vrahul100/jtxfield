@@ -69,7 +69,7 @@ export function Header() {
                             </div>
                         </div>
                         {/* Avatar */}
-                        <div className="w-8 h-8 bg-gradient-to-br from-indigo-500 to-slate-700 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-xs">
+                        <div className="w-8 h-8 bg-gradient-to-br from-sky-500 to-slate-700 rounded-full flex items-center justify-center text-white font-bold text-xs flex-shrink-0 shadow-xs">
                             {(user.fullName || user.email).charAt(0).toUpperCase()}
                         </div>
                         {/* Logout button */}

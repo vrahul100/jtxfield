@@ -51,7 +51,7 @@ export function Sidebar() {
 
     const navLinkClass = ({ isActive }: { isActive: boolean }) =>
         `flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${isActive
-            ? 'bg-indigo-600 text-white font-medium shadow-lg shadow-indigo-900/20'
+            ? 'sidebar-link-active shadow-lg shadow-sky-950/20'
             : 'text-slate-400 hover:bg-slate-800 hover:text-white'
         }`;
 
@@ -63,7 +63,7 @@ export function Sidebar() {
             {isMobile && (
                 <button
                     onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="fixed left-4 top-16 z-50 p-2.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-lg"
+                    className="fixed left-4 top-16 z-50 p-2.5 btn-primary shadow-lg"
                     aria-label="Toggle menu"
                 >
                     <Menu className="w-5 h-5" />
@@ -109,7 +109,7 @@ export function Sidebar() {
                                     onClick={() => isMobile && setIsCollapsed(true)}
                                     className={`flex items-center gap-3 p-3 rounded-lg border transition-all relative z-10 ${
                                         isActive
-                                            ? 'bg-gradient-to-r from-indigo-600 to-indigo-700 border-indigo-400/80 text-white shadow-lg shadow-indigo-900/50'
+                                            ? 'bg-gradient-to-r from-primary-600 to-primary-700 border-primary-400/80 text-white shadow-lg shadow-primary-950/50'
                                             : isPassed
                                             ? 'bg-emerald-600/90 border-emerald-500/80 text-white shadow-md shadow-emerald-900/40'
                                             : 'bg-slate-900/60 border-slate-700/60 text-slate-300 hover:bg-slate-700/60 hover:text-white hover:border-slate-600'
@@ -117,7 +117,7 @@ export function Sidebar() {
                                 >
                                     <div className={`w-8 h-8 rounded-full flex items-center justify-center border text-xs font-extrabold transition-all flex-shrink-0 ${
                                         isActive
-                                            ? 'bg-white text-indigo-700 border-white shadow-sm'
+                                            ? 'bg-white text-primary-700 border-white shadow-sm'
                                             : isPassed
                                             ? 'bg-white text-emerald-700 border-white shadow-sm'
                                             : 'bg-slate-800 border-slate-600 text-slate-300'
@@ -131,7 +131,7 @@ export function Sidebar() {
                                             {step.label}
                                         </span>
                                         <span className={`text-[11px] truncate ${
-                                            isActive ? 'text-indigo-200 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
+                                            isActive ? 'text-primary-200 font-medium' : isPassed ? 'text-emerald-100 font-medium' : 'text-slate-400'
                                         }`}>
                                             {step.sub}
                                         </span>

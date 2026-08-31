@@ -141,7 +141,7 @@ export function TicketDrawer({
     const getStatusColor = (status: string) => {
         switch (status?.toLowerCase()) {
             case 'open':
-                return 'bg-indigo-600 text-white font-bold border-indigo-700 shadow-2xs';
+                return 'bg-sky-500 text-white font-bold border-sky-600 shadow-2xs';
             case 'submitted':
                 return 'bg-emerald-600 text-white font-bold border-emerald-700 shadow-2xs';
             case 'pending_review':
@@ -305,11 +305,11 @@ export function TicketDrawer({
                         onClick={() => setActiveTab('data')}
                         className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-extrabold border-b-2 transition-all cursor-pointer ${
                             activeTab === 'data'
-                                ? 'border-indigo-600 text-indigo-900 bg-white rounded-t-md shadow-2xs'
+                                ? 'border-sky-500 text-sky-900 bg-white rounded-t-md shadow-2xs'
                                 : 'border-transparent text-slate-600 hover:text-slate-900 font-semibold'
                         }`}
                     >
-                        <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                        <Layers className="w-3.5 h-3.5 text-sky-600" />
                         Data & Evidence
                     </button>
                 </div>
@@ -354,7 +354,7 @@ export function TicketDrawer({
                                 <span>Manager Review: Verify whether to keep AI scope or adjust hours.</span>
                                 <button
                                     onClick={onEdit}
-                                    className="text-indigo-700 font-bold hover:underline cursor-pointer"
+                                    className="text-sky-700 font-bold hover:underline cursor-pointer"
                                 >
                                     Adjust Details →
                                 </button>
@@ -397,7 +397,7 @@ export function TicketDrawer({
                                                 >
                                                     {/* Sender tag */}
                                                     <div className="flex items-center justify-between gap-2 text-xs font-bold">
-                                                        <span className={isUser ? 'text-indigo-900' : 'text-emerald-950 font-black'}>
+                                                        <span className={isUser ? 'text-sky-900' : 'text-emerald-950 font-black'}>
                                                             {isUser ? (bucket.member_name || bucket.member_phone || 'Worker') : 'Jentyx Assistant'}
                                                         </span>
                                                     </div>
@@ -453,7 +453,7 @@ export function TicketDrawer({
                                     <div className="space-y-3">
                                         <div className="flex flex-col items-start">
                                             <div className="max-w-[88%] rounded-2xl rounded-tl-xs px-4 py-2.5 shadow-xs bg-white text-slate-950 border border-slate-300 space-y-1.5">
-                                                <div className="flex items-center justify-between gap-2 text-xs font-bold text-indigo-900">
+                                                <div className="flex items-center justify-between gap-2 text-xs font-bold text-sky-900">
                                                     <span>{bucket.member_name || bucket.member_phone || 'Worker'}</span>
                                                 </div>
 
@@ -571,7 +571,7 @@ export function TicketDrawer({
                                 <div className="card p-2 bg-white border-2 border-slate-200 shadow-2xs flex flex-col justify-between overflow-hidden">
                                     <div className="flex items-center justify-between gap-1 mb-1">
                                         <div className="flex items-center gap-1 text-[11px] font-black text-slate-900 uppercase tracking-wider">
-                                            <ImageIcon className="w-3.5 h-3.5 text-indigo-600" />
+                                            <ImageIcon className="w-3.5 h-3.5 text-sky-600" />
                                             <span>Media</span>
                                             {allMedia.length > 0 && (
                                                 <span className="text-[10px] text-slate-500 font-bold">
@@ -583,7 +583,7 @@ export function TicketDrawer({
                                             <button
                                                 type="button"
                                                 onClick={() => openLightbox(allMedia[mediaSliderIndex].imageIndex || 0)}
-                                                className="inline-flex items-center gap-1 text-[10px] font-bold text-white bg-indigo-600 hover:bg-indigo-700 px-2 py-0.5 rounded transition-colors cursor-pointer shadow-2xs"
+                                                className="btn-primary btn-xs"
                                                 title="Pop / Expand Fullscreen"
                                             >
                                                 <Maximize2 className="w-3 h-3" />
@@ -614,9 +614,9 @@ export function TicketDrawer({
                                                 </div>
                                             ) : (
                                                 /* Audio in slider */
-                                                <div className="w-full h-full p-2 bg-gradient-to-br from-indigo-950 to-slate-900 flex flex-col justify-center items-center text-center">
-                                                    <Volume2 className="w-4 h-4 text-indigo-400 mb-1" />
-                                                    <span className="text-[10px] font-bold text-indigo-200 mb-1">
+                                                <div className="w-full h-full p-2 bg-gradient-to-br from-sky-950 to-slate-900 flex flex-col justify-center items-center text-center">
+                                                    <Volume2 className="w-4 h-4 text-sky-400 mb-1" />
+                                                    <span className="text-[10px] font-bold text-sky-200 mb-1">
                                                         Voice Recording {(allMedia[mediaSliderIndex].audioIndex || 0) + 1}
                                                     </span>
                                                     <AudioPlayerChip 
@@ -664,7 +664,7 @@ export function TicketDrawer({
                                 </div>
 
                                 {/* Right: User Text & AI Analysis Card */}
-                                <div className="card p-2.5 bg-white border-2 border-indigo-200/90 shadow-2xs flex flex-col justify-between h-auto space-y-1.5">
+                                <div className="card p-2.5 bg-white border-2 border-sky-200/90 shadow-2xs flex flex-col justify-between h-auto space-y-1.5">
                                     <div className="space-y-2">
                                         {/* 1. User Entered Raw Text */}
                                         <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-200">
@@ -678,10 +678,10 @@ export function TicketDrawer({
                                         </div>
 
                                         {/* 2. AI Work Summary */}
-                                        <div className="bg-indigo-50/80 p-2.5 rounded-lg border border-indigo-200">
+                                        <div className="bg-sky-50/80 p-2.5 rounded-lg border border-sky-200">
                                             <div className="flex items-center justify-between gap-1 mb-1">
-                                                <div className="flex items-center gap-1 text-indigo-950 text-xs font-bold uppercase tracking-wider">
-                                                    <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                                <div className="flex items-center gap-1 text-sky-950 text-xs font-bold uppercase tracking-wider">
+                                                    <Sparkles className="w-3.5 h-3.5 text-sky-600" />
                                                     <span>AI Scope Summary</span>
                                                 </div>
                                                 {bucket.clarity_score !== null && bucket.clarity_score !== undefined && (
@@ -690,7 +690,7 @@ export function TicketDrawer({
                                                     </span>
                                                 )}
                                             </div>
-                                            <p className="text-sm text-indigo-950 font-semibold leading-relaxed">
+                                            <p className="text-sm text-sky-950 font-semibold leading-relaxed">
                                                 {bucket.summary || 'Awaiting classification'}
                                             </p>
                                         </div>
@@ -698,11 +698,13 @@ export function TicketDrawer({
 
                                     {/* Scope & Project Tags */}
                                     <div className="pt-1 border-t border-slate-100 flex items-center gap-1 flex-wrap">
-                                        <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-indigo-100 text-indigo-900 border border-indigo-300 truncate max-w-[140px]">
-                                            {bucket.project_name || 'General Work'}
-                                        </span>
+                                        {bucket.project_name && (
+                                            <span className="badge-sky truncate max-w-[140px]">
+                                                {bucket.project_name}
+                                            </span>
+                                        )}
                                         {bucket.potential_change && (
-                                            <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-amber-100 text-amber-900 border border-amber-300">
+                                            <span className="badge-amber">
                                                 Flagged Scope
                                             </span>
                                         )}
@@ -714,7 +716,7 @@ export function TicketDrawer({
                             <div className="card p-2.5 bg-white border-2 border-slate-200 shadow-xs space-y-2">
                                 <div className="flex items-center justify-between">
                                     <div className="flex items-center gap-1.5 text-slate-900 text-[11px] font-black uppercase tracking-wider">
-                                        <FileText className="w-3.5 h-3.5 text-indigo-600" />
+                                        <FileText className="w-3.5 h-3.5 text-sky-600" />
                                         Job & Financial Breakdown
                                     </div>
                                 </div>
@@ -739,8 +741,8 @@ export function TicketDrawer({
                                     </div>
 
                                     {/* Logged Hours */}
-                                    <div className="p-1.5 bg-indigo-50/70 rounded-md border border-indigo-200">
-                                        <span className="text-[9px] font-bold text-indigo-800 uppercase tracking-wider block leading-none mb-1">Logged Hours</span>
+                                    <div className="p-1.5 bg-sky-50/70 rounded-md border border-sky-200">
+                                        <span className="text-[9px] font-bold text-sky-800 uppercase tracking-wider block leading-none mb-1">Logged Hours</span>
                                         {onUpdateHours ? (
                                             <div className="flex items-center gap-1">
                                                 <input
@@ -752,13 +754,13 @@ export function TicketDrawer({
                                                         const val = e.target.value === '' ? null : parseFloat(e.target.value);
                                                         onUpdateHours(val);
                                                     }}
-                                                    className="w-14 px-1 py-0 text-xs font-black border border-indigo-300 rounded bg-white text-indigo-950 focus:ring-1 focus:ring-indigo-500 focus:outline-none"
+                                                    className="w-14 px-1 py-0 text-xs font-black border border-sky-300 rounded bg-white text-sky-950 focus:ring-1 focus:ring-sky-400 focus:outline-none"
                                                     placeholder="0"
                                                 />
-                                                <span className="text-indigo-900 font-bold text-[10px]">hrs</span>
+                                                <span className="text-sky-900 font-bold text-[10px]">hrs</span>
                                             </div>
                                         ) : (
-                                            <span className="font-black text-indigo-950 text-xs">
+                                            <span className="font-black text-sky-950 text-xs">
                                                 {bucket.hours !== null ? `${bucket.hours} hrs` : '-'}
                                             </span>
                                         )}
@@ -781,9 +783,9 @@ export function TicketDrawer({
                                         </span>
                                         <span className="text-xs font-black text-slate-900">${rate}/hr</span>
                                     </div>
-                                    <div className="p-1.5 bg-indigo-50 rounded-md border border-indigo-200">
-                                        <span className="text-[9px] font-bold text-indigo-800 uppercase tracking-wider block leading-none mb-0.5">Labor Cost</span>
-                                        <span className="text-xs font-black text-indigo-950">
+                                    <div className="p-1.5 bg-sky-50 rounded-md border border-sky-200">
+                                        <span className="text-[9px] font-bold text-sky-800 uppercase tracking-wider block leading-none mb-0.5">Labor Cost</span>
+                                        <span className="text-xs font-black text-sky-950">
                                             ${laborCost.toFixed(2)}
                                         </span>
                                     </div>

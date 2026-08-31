@@ -37,7 +37,7 @@ export function Integrations() {
             <div className="max-w-4xl mx-auto">
                 <div className="mb-8">
                     <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center gap-2">
-                        <Settings2 className="w-8 h-8 text-indigo-600" />
+                        <Settings2 className="w-8 h-8 text-sky-600" />
                         Integrations
                     </h1>
                     <p className="text-gray-500">Connect Jentyx with your existing tools. Let us know which connections you need first!</p>
@@ -45,7 +45,7 @@ export function Integrations() {
 
                 <div className="grid md:grid-cols-2 gap-6">
                     {INTEGRATIONS.map(int => (
-                        <div key={int.id} className="card p-6 border-2 border-transparent hover:border-indigo-100 transition-colors">
+                        <div key={int.id} className="card p-6 border-2 border-transparent hover:border-sky-100 transition-colors">
                             <div className="flex items-start gap-4">
                                 <div className="w-12 h-12 bg-gray-50 rounded-xl flex items-center justify-center text-2xl shrink-0">
                                     {int.icon}
@@ -63,7 +63,7 @@ export function Integrations() {
                                         <button 
                                             onClick={() => handleInterest(int.id, int.name)}
                                             disabled={submitting === int.id}
-                                            className="group flex items-center gap-2 text-indigo-600 font-medium hover:text-indigo-800 transition-colors"
+                                            className="group flex items-center gap-2 text-sky-600 font-medium hover:text-sky-800 transition-colors"
                                         >
                                             {submitting === int.id ? 'Registering...' : 'Request Early Access'}
                                             <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
