@@ -249,8 +249,8 @@ export async function fastIntakeValidation(params: {
         }
 
         const model = imageUrl
-            ? (process.env.VISION_MODEL || 'meta-llama/llama-4-scenic-17b-vision')
-            : (process.env.GENERAL_MODEL || 'openai/gpt-oss-20b');
+            ? (process.env.VISION_MODEL  )
+            : (process.env.GENERAL_MODEL  );
 
         const projectListPrompt = availableProjects.length > 0
             ? `\nKNOWN PROJECTS: ${availableProjects.map(p => `"${p.name}" (id: ${p.id})`).join(', ')}`
