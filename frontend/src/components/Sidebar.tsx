@@ -63,7 +63,7 @@ export function Sidebar() {
             {isMobile && (
                 <button
                     onClick={() => setIsCollapsed(!isCollapsed)}
-                    className="fixed left-4 top-16 z-50 p-2.5 btn-primary shadow-lg"
+                    className="fixed left-4 top-16 z-50 p-2.5 btn-primary shadow-lg print:hidden"
                     aria-label="Toggle menu"
                 >
                     <Menu className="w-5 h-5" />
@@ -73,7 +73,7 @@ export function Sidebar() {
             {/* Overlay for mobile when expanded */}
             {isMobile && !isCollapsed && (
                 <div
-                    className="fixed inset-0 bg-black/50 z-30 top-14"
+                    className="fixed inset-0 bg-black/50 z-30 top-14 print:hidden"
                     onClick={() => setIsCollapsed(true)}
                 />
             )}
@@ -83,7 +83,7 @@ export function Sidebar() {
                     isMobile 
                         ? (isCollapsed ? '-translate-x-full' : 'translate-x-0')
                         : (isCollapsed ? 'w-16' : 'w-64')
-                } ${isMobile ? 'w-64' : ''} bg-slate-900 h-[calc(100vh-3.5rem)] fixed left-0 top-14 overflow-y-auto transition-all duration-300 ease-in-out z-40`}
+                } ${isMobile ? 'w-64' : ''} bg-slate-900 h-[calc(100vh-3.5rem)] fixed left-0 top-14 overflow-y-auto transition-all duration-300 ease-in-out z-40 print:hidden`}
             >
                 <nav className="p-4 pt-6 space-y-4">
                     {/* Pipeline Section */}

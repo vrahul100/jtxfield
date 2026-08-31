@@ -254,7 +254,7 @@ ${workerLines}`;
     return (
         <div className="space-y-6">
             {/* Top Toolbar: Project Selector + Actions */}
-            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-white p-4 rounded-xl border border-slate-200 shadow-xs print:hidden">
                 <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 w-full md:w-auto">
                     <label className="text-xs font-bold text-slate-700 whitespace-nowrap flex items-center gap-1.5">
                         <FolderKanban className="w-4 h-4 text-sky-600" />
@@ -327,9 +327,9 @@ ${workerLines}`;
 
             {/* Cumulative Project KPI Ribbon */}
             {stats && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 print:grid-cols-5 print:gap-2 print:break-inside-avoid">
                     {/* Hours */}
-                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs">
+                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs print:border-slate-300 print:p-2.5 print:shadow-none">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Cumulative Hours</span>
                             <Clock className="w-4 h-4 text-sky-600" />
@@ -339,7 +339,7 @@ ${workerLines}`;
                     </div>
 
                     {/* Labor Cost */}
-                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs">
+                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs print:border-slate-300 print:p-2.5 print:shadow-none">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Total Labor Cost</span>
                             <DollarSign className="w-4 h-4 text-emerald-600" />
@@ -349,7 +349,7 @@ ${workerLines}`;
                     </div>
 
                     {/* Crew Members */}
-                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs">
+                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs print:border-slate-300 print:p-2.5 print:shadow-none">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Total Active Crew</span>
                             <Users className="w-4 h-4 text-blue-600" />
@@ -359,7 +359,7 @@ ${workerLines}`;
                     </div>
 
                     {/* Photos */}
-                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs">
+                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs print:border-slate-300 print:p-2.5 print:shadow-none">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">Site Evidence</span>
                             <Camera className="w-4 h-4 text-purple-600" />
@@ -369,7 +369,7 @@ ${workerLines}`;
                     </div>
 
                     {/* Scope Flags / CO */}
-                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs">
+                    <div className="card p-4 bg-white border-2 border-slate-200 rounded-xl shadow-xs print:border-slate-300 print:p-2.5 print:shadow-none">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-700">Flagged / COs</span>
                             <AlertTriangle className="w-4 h-4 text-amber-600" />
@@ -381,7 +381,7 @@ ${workerLines}`;
             )}
 
             {/* Timeframe Filter Toolbar */}
-            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs">
+            <div className="flex flex-col sm:flex-row justify-between items-stretch sm:items-center gap-3 bg-white p-3.5 rounded-xl border border-slate-200 shadow-xs print:hidden">
                 <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-xs font-bold text-slate-600 mr-1 flex items-center gap-1">
                         <Calendar className="w-3.5 h-3.5" />
@@ -403,24 +403,39 @@ ${workerLines}`;
                 </div>
             </div>
 
+            {/* Print-Only Document Cover Header */}
+            <div className="hidden print:flex justify-between items-start border-b-2 border-slate-900 pb-3 mb-2">
+                <div className="flex items-center gap-2.5">
+                    <img src="/logo.png" alt="Jentyx" className="h-8 w-auto object-contain" />
+                    <div>
+                        <div className="text-base font-black text-slate-950 tracking-tight leading-tight">Jentyx Work</div>
+                        <div className="text-xs text-slate-600 font-semibold">{nodeName ? `${nodeName} • ` : ''}Executive Progress Report</div>
+                    </div>
+                </div>
+                <div className="text-right text-xs">
+                    <div className="font-bold text-slate-900">Printed: {new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</div>
+                    <div className="text-[11px] text-slate-500 font-medium">Customer Progress Verification</div>
+                </div>
+            </div>
+
             {/* GC-TO-CUSTOMER PROGRESS REPORT */}
-            <div className="card p-5 sm:p-7 bg-white border-2 border-sky-200 rounded-2xl shadow-md space-y-5">
+            <div className="card p-5 sm:p-7 bg-white border-2 border-sky-200 rounded-2xl shadow-md space-y-5 print:border-0 print:shadow-none print:p-0 print:space-y-4">
                 
                 {/* Header: From [Start] to [End] */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b-2 border-slate-100 pb-4">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 border-b-2 border-slate-100 pb-4 print:border-b print:border-slate-300 print:pb-2">
                     <div>
                         <span className="text-xs font-black uppercase tracking-wider text-sky-600 block mb-1">
                             {projectName ? `${projectName} — Progress Report` : 'Project Progress Report'}
                         </span>
                         <h2 className="text-xl sm:text-2xl font-black text-slate-950 tracking-tight flex items-center gap-2">
-                            <Calendar className="w-5 h-5 text-sky-600" />
+                            <Calendar className="w-5 h-5 text-sky-600 print:hidden" />
                             From {report?.period || 'Selected Timeframe'}
                         </h2>
                     </div>
 
                     <div className="flex items-center gap-2">
                         {report && (
-                            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-right">
+                            <div className="px-3 py-1.5 bg-slate-100 border border-slate-200 rounded-lg text-right print:border-slate-300 print:bg-white">
                                 <span className="text-[10px] font-bold text-slate-500 block leading-none">Total Hours</span>
                                 <span className="text-sm font-black text-slate-900">{report.totalHours} hrs</span>
                             </div>
@@ -428,7 +443,7 @@ ${workerLines}`;
                         <button
                             onClick={handleCopyCustomerReport}
                             disabled={!report}
-                            className="btn-primary btn-sm"
+                            className="btn-primary btn-sm print:hidden"
                         >
                             {copiedReport ? (
                                 <>
@@ -455,7 +470,7 @@ ${workerLines}`;
                     <div className="space-y-6">
                         
                         {/* Full Summarization of What Work Was Done (Key Bullets) */}
-                        <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-3">
+                        <div className="p-4 sm:p-5 bg-slate-50 border border-slate-200 rounded-xl space-y-3 print:bg-white print:border-slate-300 print:break-inside-avoid print:p-3">
                             <span className="text-xs font-extrabold uppercase tracking-wider text-slate-600 block">
                                 Overall Work Summarization (Key Highlights)
                             </span>
@@ -496,7 +511,7 @@ ${workerLines}`;
                                     {report.workerReports.map((w, idx) => (
                                         <div 
                                             key={idx} 
-                                            className="p-4 bg-white border-2 border-slate-200 hover:border-sky-300 rounded-xl flex flex-col sm:flex-row justify-between items-start gap-3 transition-colors shadow-2xs"
+                                            className="p-4 bg-white border-2 border-slate-200 hover:border-sky-300 rounded-xl flex flex-col sm:flex-row justify-between items-start gap-3 transition-colors shadow-2xs print:border-slate-300 print:shadow-none print:break-inside-avoid print:p-3 print:mb-2"
                                         >
                                             <div className="flex-1 space-y-2">
                                                 <div className="flex items-center gap-2 flex-wrap">

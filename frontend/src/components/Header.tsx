@@ -27,16 +27,16 @@ export function Header() {
     };
 
     return (
-        <header className="bg-white border-b border-slate-200 h-14 flex items-center px-3 sm:px-6 fixed top-0 left-0 right-0 z-20 shadow-xs">
+        <header className="bg-white border-b border-slate-200 h-14 flex items-center px-3 sm:px-6 fixed top-0 left-0 right-0 z-20 shadow-xs print:hidden">
             <div className="flex items-center justify-between w-full">
                 {/* Logo */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                    <div className="w-8 h-8 rounded-lg flex items-center justify-center">
-                        <img src="logo.png" alt="" className="w-8 h-8 object-contain" />
+                    <div className="w-12 h-12 rounded-lg flex items-center justify-center">
+                        <img src="logo.png" alt="" className="w-16 h-16 object-contain" />
                     </div>
                     <div className="hidden sm:flex items-baseline gap-1.5">
                         <h1 className="text-lg font-bold text-slate-900 tracking-tight">Jentyx</h1>
-                        <span className="text-xs font-medium text-slate-500">Field Operations</span>
+                        <span className="text-lg font-medium text-slate-500">Work</span>
                     </div>
                 </div>
 

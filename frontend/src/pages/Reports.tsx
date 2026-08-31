@@ -143,7 +143,7 @@ export function Reports() {
             <div className="relative space-y-6 max-w-7xl w-full mx-auto pb-16 px-2 sm:px-4">
                 
                 {/* Page Header */}
-                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 pt-1">
+                <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 border-b border-slate-200 pb-4 pt-1 print:hidden">
                     <div>
                         <h1 className="text-2xl sm:text-3xl font-black text-slate-950 tracking-tight">
                             Reports & Analytics
@@ -177,7 +177,7 @@ export function Reports() {
                 </div>
 
                 {/* Primary Navigation Tabs */}
-                <div className="border-b border-slate-200">
+                <div className="border-b border-slate-200 print:hidden">
                     <nav className="-mb-px flex gap-2 sm:gap-6 overflow-x-auto">
                         <button
                             onClick={() => handleTabChange('project-report')}

@@ -13,7 +13,7 @@ export function ProjectTimeline() {
         <Layout>
             <div className="flex-1 flex flex-col min-h-0 overflow-y-auto space-y-6 max-w-7xl w-full mx-auto pb-16 px-2 sm:px-4">
                 {/* Back to Reports navigation header */}
-                <div className="flex items-center gap-3 pt-2">
+                <div className="flex items-center gap-3 pt-2 print:hidden">
                     <button
                         onClick={() => navigate('/reports')}
                         className="btn-secondary btn-sm"
