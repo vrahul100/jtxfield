@@ -61,7 +61,7 @@ describe('AI Service', () => {
                     ]
                 }
             ],
-            model: "openai/gpt-oss-20b",
+            model: process.env.VISION_MODEL || 'qwen/qwen3.6-27b',
             temperature: 0.1,
             response_format: { type: "json_object" }
         })

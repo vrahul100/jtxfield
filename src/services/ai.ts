@@ -65,8 +65,8 @@ export async function parseChangeOrder(
             { role: "user", content: userContent }
         ],
         model: imageUrl
-            ? (process.env.VISION_MODEL  )
-            : (process.env.GENERAL_MODEL ),
+            ? (process.env.VISION_MODEL || 'qwen/qwen3.6-27b')
+            : (process.env.GENERAL_MODEL || 'openai/gpt-oss-20b'),
         temperature: 0.1,
         response_format: { type: "json_object" }
     });

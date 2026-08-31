@@ -172,8 +172,8 @@ export async function extractMessageInfo(
 
         // Use vision model if images provided
         const model = images.length > 0
-            ? (process.env.VISION_MODEL   )
-            : (process.env.GENERAL_MODEL );
+            ? (process.env.VISION_MODEL || 'qwen/qwen3.6-27b')
+            : (process.env.GENERAL_MODEL || 'openai/gpt-oss-20b');
 
         console.log(`[EXTRACTION] Using model: ${model} (${images.length} images)`);
 
@@ -202,7 +202,7 @@ export async function extractMessageInfo(
                     console.warn('[EXTRACTION] Repair failed, requesting LLM fix...');
                     try {
                         const fixCompletion = await getGroq().chat.completions.create({
-                            model: process.env.GENERAL_MODEL ,
+                            model: process.env.GENERAL_MODEL || 'openai/gpt-oss-20b',
                             messages: [
                                 { role: 'user', content: `You generated invalid JSON. Fix this and return ONLY valid JSON:\n\n${rawResponse}` }
                             ],
